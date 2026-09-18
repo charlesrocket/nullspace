@@ -27,6 +27,7 @@ generated = wl_mod.scan_xml(
 exe = executable(
   'nullspace',
   'nullspace.c',
+  'wallpaper.c',
   generated,
   dependencies: [
     wayland_client,

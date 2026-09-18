@@ -1,3 +1,5 @@
+#include "wallpaper.h"
+
 #include <dev/evdev/input-event-codes.h>
 #include <river-window-management-v1-client-protocol.h>
 #include <river-xkb-bindings-v1-client-protocol.h>
@@ -17,6 +19,11 @@ struct Output {
     struct river_output_v1 *obj;
     bool removed;
     struct wl_list link; // WindowManager.outputs
+
+    int32_t width;
+    int32_t height;
+
+    struct WallpaperOutput *wallpaper;
 };
 
 struct Window {
@@ -98,12 +105,17 @@ struct WindowManager {
     struct wl_list outputs; // Output
     struct wl_list windows; // Window
     struct wl_list seats;   // Seat
+
+    enum Layout layout;
 };
 
 struct WindowManager wm;
+struct Wallpaper wallpaper;
 
 struct river_window_manager_v1 *window_manager_v1;
 struct river_xkb_bindings_v1 *xkb_bindings_v1;
+struct wl_compositor *compositor;
+struct wl_shm *shm;
 
 static void output_handle_removed(void *data, struct river_output_v1 *obj) {
     struct Output *output = data;
@@ -117,9 +129,18 @@ static void output_handle_wl_output(
 static void output_handle_position(
     void *data, struct river_output_v1 *obj, int32_t x, int32_t y
 ) {}
+
 static void output_handle_dimensions(
     void *data, struct river_output_v1 *obj, int32_t width, int32_t height
-) {}
+) {
+    struct Output *output = data;
+    output->width = width;
+    output->height = height;
+
+    if (output->wallpaper != NULL) {
+        wallpaper_output_set_dimensions(output->wallpaper, width, height);
+    }
+}
 
 const struct river_output_v1_listener river_output_listener = {
     .removed = output_handle_removed,
@@ -130,6 +151,9 @@ const struct river_output_v1_listener river_output_listener = {
 
 static void output_maybe_destroy(struct Output *output) {
     if (!output->removed) { return; }
+    if (output->wallpaper != NULL) {
+        wallpaper_output_destroy(output->wallpaper);
+    }
     river_output_v1_destroy(output->obj);
     wl_list_remove(&output->link);
     free(output);
@@ -320,12 +344,14 @@ static void xkb_binding_create(
     binding->obj = river_xkb_bindings_v1_get_xkb_binding(
         xkb_bindings_v1, seat->obj, keysym, mods
     );
+
     binding->seat = seat;
     binding->action = action;
 
     river_xkb_binding_v1_add_listener(
         binding->obj, &river_xkb_binding_listener, binding
     );
+
     river_xkb_binding_v1_enable(binding->obj);
 
     wl_list_insert(seat->xkb_bindings.prev, &binding->link);
@@ -365,6 +391,7 @@ static void pointer_binding_create(
     river_pointer_binding_v1_add_listener(
         binding->obj, &river_pointer_binding_listener, binding
     );
+
     river_pointer_binding_v1_enable(binding->obj);
 
     wl_list_insert(seat->pointer_bindings.prev, &binding->link);
@@ -443,6 +470,7 @@ static void seat_maybe_destroy(struct Seat *seat) {
     }
 
     struct PointerBinding *pointer_binding, *pointer_binding_tmp;
+
     wl_list_for_each_safe(
         pointer_binding, pointer_binding_tmp, &seat->pointer_bindings, link
     ) {
@@ -455,7 +483,7 @@ static void seat_maybe_destroy(struct Seat *seat) {
 }
 
 static void seat_focus(struct Seat *seat, struct Window *window) {
-    // Focus the top window (if any) when there is no explicit target.
+    // Focus the top window (if any) when there is no explicit target
     if (window == NULL && !wl_list_empty(&wm.windows)) {
         window = wl_container_of(wm.windows.prev, window, link);
     }
@@ -677,14 +705,19 @@ wm_handle_manage_start(void *data, struct river_window_manager_v1 *obj) {
     wl_list_for_each(window, &wm.windows, link) { window_manage(window); }
     wl_list_for_each(seat, &wm.seats, link) { seat_manage(seat); }
 
+    // Apply the active layout. Tiled layout overrides
+    // any per-window positioning.
+    if (wm.layout == LAYOUT_TILED) { layout_tiled_apply(); }
+
     river_window_manager_v1_manage_finish(window_manager_v1);
 }
 
 static void
 wm_handle_render_start(void *data, struct river_window_manager_v1 *obj) {
     struct Seat *seat;
-    wl_list_for_each(seat, &wm.seats, link) { seat_render(seat); }
 
+    wl_list_for_each(seat, &wm.seats, link) { seat_render(seat); }
+    wallpaper_manage(&wallpaper, !wl_list_empty(&wm.windows));
     river_window_manager_v1_render_finish(window_manager_v1);
 }
 
@@ -710,6 +743,10 @@ static void wm_handle_output(
     output->obj = river_output;
 
     river_output_v1_add_listener(output->obj, &river_output_listener, output);
+
+    if (wallpaper.loaded) {
+        output->wallpaper = wallpaper_output_create(&wallpaper, river_output);
+    }
 
     wl_list_insert(wm.outputs.prev, &output->link);
 }
@@ -768,6 +805,11 @@ static void handle_global(
         xkb_bindings_v1 = wl_registry_bind(
             registry, name, &river_xkb_bindings_v1_interface, 1
         );
+    } else if (strcmp(interface, wl_compositor_interface.name) == 0) {
+        compositor =
+            wl_registry_bind(registry, name, &wl_compositor_interface, 4);
+    } else if (strcmp(interface, wl_shm_interface.name) == 0) {
+        shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
     }
 }
 
@@ -783,7 +825,7 @@ int main(void) {
     struct wl_display *display = wl_display_connect(NULL);
 
     if (display == NULL) {
-        fprintf(stderr, "failed to connect to Wayland server\n");
+        fprintf(stderr, "Failed to connect to Wayland server\n");
         return 1;
     }
 
@@ -798,7 +840,7 @@ int main(void) {
     wl_registry_add_listener(registry, &registry_listener, NULL);
 
     if (wl_display_roundtrip(display) < 0) {
-        fprintf(stderr, "roundtrip failed\n");
+        fprintf(stderr, "Roundtrip failed\n");
         return 1;
     }
 
@@ -811,13 +853,45 @@ int main(void) {
         return 1;
     }
 
+    if (compositor == NULL || shm == NULL) {
+        fprintf(
+            stderr, "wl_compositor or wl_shm not supported by the Wayland "
+                    "server; wallpaper support will be unavailable\n"
+        );
+    }
+
     wm_init();
+
+    if (compositor != NULL && shm != NULL) {
+        wallpaper_init(&wallpaper, compositor, shm, window_manager_v1);
+
+        const char *wallpaper_path = getenv("NSP_WALLPAPER");
+        char default_path[4096];
+
+        if (wallpaper_path == NULL) {
+            const char *home = getenv("HOME");
+
+            if (home != NULL) {
+                snprintf(
+                    default_path, sizeof(default_path),
+                    "%s/.config/river/wallpaper.ppm", home
+                );
+                wallpaper_path = default_path;
+            }
+        }
+
+        if (wallpaper_path != NULL) {
+            if (!wallpaper_load_ppm(&wallpaper, wallpaper_path)) {
+                fprintf(stderr, "Wallpaper: continuing without a wallpaper\n");
+            }
+        }
+    }
 
     river_window_manager_v1_add_listener(window_manager_v1, &wm_listener, NULL);
 
     while (true) {
         if (wl_display_dispatch(display) < 0) {
-            fprintf(stderr, "dispatch failed\n");
+            fprintf(stderr, "Dispatch failed\n");
             return 1;
         }
     }
