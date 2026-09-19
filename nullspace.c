@@ -17,14 +17,21 @@
 
 struct Output {
     struct river_output_v1 *obj;
-    bool removed;
     struct wl_list link; // WindowManager.outputs
+    struct WallpaperOutput *wallpaper;
 
     int32_t width;
     int32_t height;
-
-    struct WallpaperOutput *wallpaper;
+    bool removed;
 };
+
+enum Layout {
+    LAYOUT_TILING,
+    LAYOUT_FLOATING,
+    LAYOUT_LAST = LAYOUT_FLOATING,
+};
+
+#define TILED_GAP 8
 
 struct Window {
     struct river_window_v1 *obj;
@@ -42,6 +49,9 @@ struct Window {
     struct Seat *pointer_resize_requested;
     uint32_t pointer_resize_requested_edges;
 
+    enum Layout decoration_state;
+    bool decoration_state_set;
+
     struct wl_list link; // WindowManager.windows
 };
 
@@ -52,6 +62,7 @@ enum Action {
     ACTION_FOCUS_NEXT,
     ACTION_MOVE,
     ACTION_RESIZE,
+    ACTION_CYCLE_LAYOUT,
     ACTION_EXIT,
 };
 
@@ -83,14 +94,15 @@ struct Seat {
     struct Window *focused;
     struct Window *hovered;
     struct Window *interacted;
+    // For SEAT_OP_MOVE and SEAT_OP_RESIZE
+    struct Window *op_window;
 
     struct wl_list xkb_bindings;     // XkbBinding
     struct wl_list pointer_bindings; // PointerBinding
     enum Action pending_action;
 
     enum SeatOp op;
-    // For SEAT_OP_MOVE and SEAT_OP_RESIZE
-    struct Window *op_window;
+
     int32_t op_start_x, op_start_y;
     int32_t op_dx, op_dy;
     bool op_release;
@@ -154,9 +166,22 @@ static void output_maybe_destroy(struct Output *output) {
     if (output->wallpaper != NULL) {
         wallpaper_output_destroy(output->wallpaper);
     }
+
     river_output_v1_destroy(output->obj);
     wl_list_remove(&output->link);
     free(output);
+}
+
+static struct Output *tiling_output(void) {
+    struct Output *output;
+    wl_list_for_each(output, &wm.outputs, link) {
+        if (output->removed) { continue; }
+        if (output->width <= 0 || output->height <= 0) { continue; }
+
+        return output;
+    }
+
+    return NULL;
 }
 
 static void window_handle_closed(void *data, struct river_window_v1 *obj) {
@@ -303,6 +328,30 @@ static void window_manage(struct Window *window) {
         river_window_v1_propose_dimensions(window->obj, 0, 0);
     }
 
+    if (!window->decoration_state_set
+        || window->decoration_state != wm.layout) {
+        if (wm.layout == LAYOUT_TILING) {
+            river_window_v1_use_ssd(window->obj);
+            river_window_v1_set_tiled(
+                window->obj,
+                RIVER_WINDOW_V1_EDGES_TOP | RIVER_WINDOW_V1_EDGES_BOTTOM
+                    | RIVER_WINDOW_V1_EDGES_LEFT | RIVER_WINDOW_V1_EDGES_RIGHT
+            );
+        } else {
+            river_window_v1_use_csd(window->obj);
+            river_window_v1_set_tiled(window->obj, RIVER_WINDOW_V1_EDGES_NONE);
+        }
+
+        window->decoration_state = wm.layout;
+        window->decoration_state_set = true;
+    }
+
+    if (wm.layout == LAYOUT_TILING) {
+        window->pointer_move_requested = NULL;
+        window->pointer_resize_requested = NULL;
+        return;
+    }
+
     if (window->pointer_move_requested != NULL) {
         seat_pointer_move(window->pointer_move_requested, window);
         window->pointer_move_requested = NULL;
@@ -313,7 +362,74 @@ static void window_manage(struct Window *window) {
             window->pointer_resize_requested, window,
             window->pointer_resize_requested_edges
         );
+
         window->pointer_resize_requested = NULL;
+    }
+}
+
+static void distribute_evenly(
+    int32_t total, int32_t n, int32_t gap, int32_t *sizes, int32_t *starts
+) {
+    int32_t reserved = gap * (n + 1);
+    int32_t available = total - reserved;
+
+    if (available < n) { available = n; } // keep sizes >= 1px
+
+    int32_t base = available / n;
+    int32_t remainder = available % n;
+    int32_t pos = gap;
+
+    for (int32_t i = 0; i < n; i++) {
+        int32_t size = base + (i < remainder ? 1 : 0);
+        sizes[i] = size;
+        starts[i] = pos;
+        pos += size + gap;
+    }
+}
+
+static void layout_tiled_apply(void) {
+    struct Output *output = tiling_output();
+    if (output == NULL) { return; }
+
+    int32_t count = 0;
+    struct Window *window;
+    wl_list_for_each(window, &wm.windows, link) { count++; }
+
+    if (count == 0) { return; }
+
+    int32_t out_w = output->width;
+    int32_t out_h = output->height;
+
+    // cols = ceil(sqrt(count)), rows = ceil(count / cols)
+    int32_t cols = 1;
+    while (cols * cols < count) { cols++; }
+    int32_t rows = (count + cols - 1) / cols;
+
+    int32_t row_heights[rows];
+    int32_t row_y[rows];
+    distribute_evenly(out_h, rows, TILED_GAP, row_heights, row_y);
+
+    int32_t index = 0; // 0-based position of the current window overall
+
+    wl_list_for_each(window, &wm.windows, link) {
+        int32_t row = index / cols;
+        int32_t col = index % cols;
+        int32_t row_start = row * cols;
+        int32_t row_cols = count - row_start < cols ? count - row_start : cols;
+        int32_t col_widths[row_cols];
+        int32_t col_x[row_cols];
+
+        distribute_evenly(out_w, row_cols, TILED_GAP, col_widths, col_x);
+
+        int32_t w = col_widths[col];
+        int32_t h = row_heights[row];
+        int32_t x = col_x[col];
+        int32_t y = row_y[row];
+
+        window_set_position(window, x, y);
+        river_window_v1_propose_dimensions(window->obj, w, h);
+
+        index++;
     }
 }
 
@@ -553,19 +669,25 @@ static void seat_action(struct Seat *seat, enum Action action) {
 
             break;
         case ACTION_MOVE:
-            if (seat->op == SEAT_OP_NONE && seat->hovered != NULL) {
+            // Interactive move is only in the floating layout;
+            if (wm.layout == LAYOUT_FLOATING && seat->op == SEAT_OP_NONE
+                && seat->hovered != NULL) {
                 seat_pointer_move(seat, seat->hovered);
             }
 
             break;
         case ACTION_RESIZE:
-            if (seat->op == SEAT_OP_NONE && seat->hovered != NULL) {
+            if (wm.layout == LAYOUT_FLOATING && seat->op == SEAT_OP_NONE
+                && seat->hovered != NULL) {
                 seat_pointer_resize(
                     seat, seat->hovered,
                     RIVER_WINDOW_V1_EDGES_BOTTOM | RIVER_WINDOW_V1_EDGES_RIGHT
                 );
             }
 
+            break;
+        case ACTION_CYCLE_LAYOUT:
+            wm.layout = (wm.layout + 1) % (LAYOUT_LAST + 1);
             break;
         case ACTION_EXIT:
             river_window_manager_v1_exit_session(window_manager_v1);
@@ -578,10 +700,11 @@ static void seat_manage(struct Seat *seat) {
         seat->new = false;
 
         const uint32_t super = RIVER_SEAT_V1_MODIFIERS_MOD4;
-        xkb_binding_create(seat, super, XKB_KEY_space, ACTION_SPAWN_FOOT);
+        xkb_binding_create(seat, super, XKB_KEY_Return, ACTION_SPAWN_FOOT);
         xkb_binding_create(seat, super, XKB_KEY_q, ACTION_CLOSE);
         xkb_binding_create(seat, super, XKB_KEY_n, ACTION_FOCUS_NEXT);
-        xkb_binding_create(seat, super, XKB_KEY_Escape, ACTION_EXIT);
+        xkb_binding_create(seat, super, XKB_KEY_l, ACTION_CYCLE_LAYOUT);
+        xkb_binding_create(seat, super, XKB_KEY_r, ACTION_EXIT);
 
         pointer_binding_create(seat, super, BTN_LEFT, ACTION_MOVE);
         pointer_binding_create(seat, super, BTN_RIGHT, ACTION_RESIZE);
@@ -646,6 +769,8 @@ static void seat_manage(struct Seat *seat) {
 }
 
 static void seat_render(struct Seat *seat) {
+    if (wm.layout == LAYOUT_TILING) { return; }
+
     switch (seat->op) {
         case SEAT_OP_NONE: break;
         case SEAT_OP_MOVE:
@@ -707,7 +832,7 @@ wm_handle_manage_start(void *data, struct river_window_manager_v1 *obj) {
 
     // Apply the active layout. Tiled layout overrides
     // any per-window positioning.
-    if (wm.layout == LAYOUT_TILED) { layout_tiled_apply(); }
+    if (wm.layout == LAYOUT_TILING) { layout_tiled_apply(); }
 
     river_window_manager_v1_manage_finish(window_manager_v1);
 }
@@ -789,6 +914,9 @@ static void wm_init(void) {
     wl_list_init(&wm.outputs);
     wl_list_init(&wm.windows);
     wl_list_init(&wm.seats);
+
+    // Default layout is tiled (even split).
+    wm.layout = LAYOUT_TILING;
 }
 
 static void handle_global(
