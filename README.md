@@ -1,10 +1,8 @@
 # `nullspace`
 
-Tiny river window manager implemented in C.
+Tiling window manager for FreeBSD.
 
 ## Dependencies
-
-The following system dependencies are required:
 
 - pkg-config
 - meson
@@ -12,14 +10,14 @@ The following system dependencies are required:
 - wayland
 - xkbcommon
 
-## Building
+## Build
 
 ```sh
 meson setup build
 ninja -C build
 ```
 
-## Running
+## Usage
 
 ```
 river -c ./build/nullspace
