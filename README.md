@@ -22,3 +22,7 @@ ninja -C build
 ```
 river -c ./build/nullspace
 ```
+
+## Contributing
+
+Patches are accepted via [Codeberg](https://codeberg.org/charlesrocket/nullspace) or e-mail.
