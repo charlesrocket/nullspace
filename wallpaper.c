@@ -170,8 +170,11 @@ scale_cover(const uint8_t *src, int sw, int sh, uint8_t *dst, int dw, int dh) {
             if (sx < 0) { sx = 0; }
             if (sx >= sw) { sx = sw - 1; }
 
-            const uint8_t *sp = &src[((size_t)sy * sw + sx) * 4];
-            uint8_t *dp = &dst[((size_t)y * dw + x) * 4];
+            const uint8_t *sp =
+                &src[((size_t)sy * (size_t)sw + (size_t)sx) * 4];
+
+            uint8_t *dp = &dst[((size_t)y * (size_t)dw + (size_t)x) * 4];
+
             dp[0] = sp[0];
             dp[1] = sp[1];
             dp[2] = sp[2];
@@ -183,12 +186,12 @@ scale_cover(const uint8_t *src, int sw, int sh, uint8_t *dst, int dw, int dh) {
 static void box_blur(uint8_t *pixels, int w, int h, int radius) {
     if (radius <= 0 || w <= 0 || h <= 0) { return; }
 
-    uint8_t *scratch = malloc((size_t)w * h * 4);
+    uint8_t *scratch = malloc((size_t)w * (size_t)h * 4);
     if (scratch == NULL) { return; }
 
     for (int y = 0; y < h; y++) {
-        uint8_t *row = &pixels[(size_t)y * w * 4];
-        uint8_t *out_row = &scratch[(size_t)y * w * 4];
+        uint8_t *row = &pixels[(size_t)y * (size_t)w * 4];
+        uint8_t *out_row = &scratch[(size_t)y * (size_t)w * 4];
 
         for (int c = 0; c < 3; c++) {
             long sum = 0;
@@ -222,12 +225,16 @@ static void box_blur(uint8_t *pixels, int w, int h, int radius) {
 
             for (int y = -radius; y <= radius; y++) {
                 int cy = y < 0 ? 0 : (y >= h ? h - 1 : y);
-                sum += scratch[((size_t)cy * w + x) * 4 + c];
+
+                sum += scratch
+                    [((size_t)cy * (size_t)w + (size_t)x) * 4 + (size_t)c];
+
                 count++;
             }
 
             for (int y = 0; y < h; y++) {
-                pixels[((size_t)y * w + x) * 4 + c] = (uint8_t)(sum / count);
+                pixels[((size_t)y * (size_t)w + (size_t)x) * 4 + (size_t)c] =
+                    (uint8_t)(sum / count);
 
                 int add_y = y + radius + 1;
                 int rem_y = y - radius;
@@ -235,8 +242,11 @@ static void box_blur(uint8_t *pixels, int w, int h, int radius) {
                 if (add_y >= h) { add_y = h - 1; }
                 if (rem_y < 0) { rem_y = 0; }
 
-                sum += scratch[((size_t)add_y * w + x) * 4 + c];
-                sum -= scratch[((size_t)rem_y * w + x) * 4 + c];
+                sum += scratch
+                    [((size_t)add_y * (size_t)w + (size_t)x) * 4 + (size_t)c];
+
+                sum -= scratch
+                    [((size_t)rem_y * (size_t)w + (size_t)x) * 4 + (size_t)c];
             }
         }
     }
@@ -341,7 +351,7 @@ wpo_alloc_buffers(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
 
 static void
 wpo_prepare_variants(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
-    size_t image_size = (size_t)wpo->width * wpo->height * 4;
+    size_t image_size = (size_t)wpo->width * (size_t)wpo->height * 4;
 
     free(wpo->cached_sharp);
     free(wpo->cached_blurred);
@@ -363,7 +373,7 @@ wpo_prepare_variants(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
 
     for (int v = 0; v < 2; v++) {
         uint8_t *buf = variants[v];
-        for (size_t i = 0; i < (size_t)wpo->width * wpo->height; i++) {
+        for (size_t i = 0; i < (size_t)wpo->width * (size_t)wpo->height; i++) {
             uint8_t *px = &buf[i * 4];
             uint8_t r = px[0];
             px[0] = px[2];
@@ -377,7 +387,7 @@ wpo_redraw(struct Wallpaper *wp, struct WallpaperOutput *wpo, bool blurred) {
     if (!wp->loaded || wpo->pool_data == NULL) { return; }
     if (wpo->cached_sharp == NULL) { wpo_prepare_variants(wp, wpo); }
 
-    size_t image_size = (size_t)wpo->width * wpo->height * 4;
+    size_t image_size = (size_t)wpo->width * (size_t)wpo->height * 4;
     int idx = wpo->next_buffer;
     uint8_t *dst = wpo->pool_data + image_size * (size_t)idx;
     memcpy(dst, blurred ? wpo->cached_blurred : wpo->cached_sharp, image_size);
@@ -440,6 +450,7 @@ void wallpaper_output_destroy(struct WallpaperOutput *wpo) {
     if (wpo->shell_surface != NULL) {
         river_shell_surface_v1_destroy(wpo->shell_surface);
     }
+
     if (wpo->surface != NULL) { wl_surface_destroy(wpo->surface); }
 
     wl_list_remove(&wpo->link);
