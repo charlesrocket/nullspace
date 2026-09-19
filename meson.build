@@ -12,6 +12,17 @@ project(
 cc = meson.get_compiler('c')
 add_project_arguments(cc.get_supported_arguments([
 	'-D_POSIX_C_SOURCE=200809L',
+	'-Wshadow',
+	'-Wconversion',
+	'-Wnull-dereference',
+	'-Wdouble-promotion',
+	'-Wfloat-equal',
+	'-Woverloaded-virtual',
+	'-Wsign-conversion',
+	'-Wredundant-decls',
+	'-Wswitch',
+	'-Wunreachable-code',
+	'-Wno-extra-semi',
 	'-Wno-unused-parameter',
 ]), language: 'c')
 
