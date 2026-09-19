@@ -1,10 +1,10 @@
 #ifndef NULLSPACE_H
 #define NULLSPACE_H
 
-#include "nullspace.h"
 #include "wallpaper.h"
 
 #include <dev/evdev/input-event-codes.h>
+#include <river-layer-shell-v1-client-protocol.h>
 #include <river-window-management-v1-client-protocol.h>
 #include <river-xkb-bindings-v1-client-protocol.h>
 #include <signal.h>
@@ -21,11 +21,20 @@
 
 struct Output {
     struct river_output_v1 *obj;
+    struct river_layer_shell_output_v1 *layer_shell;
     struct wl_list link; // WindowManager.outputs
     struct WallpaperOutput *wallpaper;
 
     int32_t width;
     int32_t height;
+    // Output position in the global coordinate space
+    int32_t pos_x;
+    int32_t pos_y;
+    int32_t area_x;
+    int32_t area_y;
+    int32_t area_width;
+    int32_t area_height;
+    bool area_set;
     bool removed;
 };
 
@@ -92,8 +101,8 @@ enum SeatOp {
 
 struct Seat {
     struct river_seat_v1 *obj;
-    bool new;
-    bool removed;
+    struct river_layer_shell_seat_v1 *layer_shell;
+    struct wl_list link; // WindowManager.seats
 
     struct Window *focused;
     struct Window *hovered;
@@ -103,18 +112,20 @@ struct Seat {
 
     struct wl_list xkb_bindings;     // XkbBinding
     struct wl_list pointer_bindings; // PointerBinding
-    enum Action pending_action;
 
+    enum Action pending_action;
     enum SeatOp op;
 
     int32_t op_start_x, op_start_y;
     int32_t op_dx, op_dy;
-    bool op_release;
     // For SEAT_OP_RESIZE only
     int32_t op_start_width, op_start_height;
     uint32_t op_edges;
 
-    struct wl_list link; // WindowManager.seats
+    bool op_release;
+
+    bool new;
+    bool removed;
 };
 
 struct WindowManager {
@@ -130,6 +141,7 @@ struct Wallpaper wallpaper;
 
 struct river_window_manager_v1 *window_manager_v1;
 struct river_xkb_bindings_v1 *xkb_bindings_v1;
+struct river_layer_shell_v1 *layer_shell_v1;
 struct wl_compositor *compositor;
 struct wl_shm *shm;
 

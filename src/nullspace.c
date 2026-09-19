@@ -2,21 +2,6 @@
 
 #include "wallpaper.h"
 
-#include <dev/evdev/input-event-codes.h>
-#include <river-window-management-v1-client-protocol.h>
-#include <river-xkb-bindings-v1-client-protocol.h>
-#include <signal.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <wayland-client-core.h>
-#include <wayland-client-protocol.h>
-#include <xkbcommon/xkbcommon-keysyms.h>
-#include <xkbcommon/xkbcommon.h>
-
 static void output_handle_removed(void *data, struct river_output_v1 *obj) {
     struct Output *output = data;
     output->removed = true;
@@ -26,9 +11,14 @@ static void output_handle_removed(void *data, struct river_output_v1 *obj) {
 static void output_handle_wl_output(
     void *data, struct river_output_v1 *obj, uint32_t name
 ) {}
+
 static void output_handle_position(
     void *data, struct river_output_v1 *obj, int32_t x, int32_t y
-) {}
+) {
+    struct Output *output = data;
+    output->pos_x = x;
+    output->pos_y = y;
+}
 
 static void output_handle_dimensions(
     void *data, struct river_output_v1 *obj, int32_t width, int32_t height
@@ -49,15 +39,55 @@ const struct river_output_v1_listener river_output_listener = {
     .dimensions = output_handle_dimensions,
 };
 
+static void layer_shell_output_handle_non_exclusive_area(
+    void *data, struct river_layer_shell_output_v1 *obj, int32_t x, int32_t y,
+    int32_t width, int32_t height
+) {
+    struct Output *output = data;
+    output->area_x = x;
+    output->area_y = y;
+    output->area_width = width;
+    output->area_height = height;
+    output->area_set = true;
+}
+
+static const struct river_layer_shell_output_v1_listener
+    river_layer_shell_output_listener = {
+        .non_exclusive_area = layer_shell_output_handle_non_exclusive_area,
+};
+
 static void output_maybe_destroy(struct Output *output) {
     if (!output->removed) { return; }
     if (output->wallpaper != NULL) {
         wallpaper_output_destroy(output->wallpaper);
     }
 
+    if (output->layer_shell != NULL) {
+        river_layer_shell_output_v1_destroy(output->layer_shell);
+    }
+
     river_output_v1_destroy(output->obj);
     wl_list_remove(&output->link);
     free(output);
+}
+
+static void output_usable_area(
+    struct Output *output, int32_t *x, int32_t *y, int32_t *w, int32_t *h
+) {
+    if (!output->area_set || output->area_width <= 0
+        || output->area_height <= 0) {
+        *x = output->pos_x;
+        *y = output->pos_y;
+        *w = output->width;
+        *h = output->height;
+
+        return;
+    }
+
+    *x = output->area_x;
+    *y = output->area_y;
+    *w = output->area_width;
+    *h = output->area_height;
 }
 
 static struct Output *tiling_output(void) {
@@ -285,8 +315,9 @@ static void layout_tiled_apply(void) {
 
     if (count == 0) { return; }
 
-    int32_t out_w = output->width;
-    int32_t out_h = output->height;
+    // Tile only within the exclusive zone
+    int32_t area_x, area_y, out_w, out_h;
+    output_usable_area(output, &area_x, &area_y, &out_w, &out_h);
 
     // cols = ceil(sqrt(count)), rows = ceil(count / cols)
     int32_t cols = 1;
@@ -311,8 +342,8 @@ static void layout_tiled_apply(void) {
 
         int32_t w = col_widths[col];
         int32_t h = row_heights[row];
-        int32_t x = col_x[col];
-        int32_t y = row_y[row];
+        int32_t x = area_x + col_x[col];
+        int32_t y = area_y + row_y[row];
 
         window_set_position(window, x, y);
         river_window_v1_propose_dimensions(window->obj, w, h);
@@ -462,6 +493,25 @@ const struct river_seat_v1_listener river_seat_listener = {
     .pointer_position = seat_handle_pointer_position,
 };
 
+static void layer_shell_seat_handle_focus_exclusive(
+    void *data, struct river_layer_shell_seat_v1 *obj
+) {}
+
+static void layer_shell_seat_handle_focus_non_exclusive(
+    void *data, struct river_layer_shell_seat_v1 *obj
+) {}
+
+static void layer_shell_seat_handle_focus_none(
+    void *data, struct river_layer_shell_seat_v1 *obj
+) {}
+
+static const struct river_layer_shell_seat_v1_listener
+    river_layer_shell_seat_listener = {
+        .focus_exclusive = layer_shell_seat_handle_focus_exclusive,
+        .focus_non_exclusive = layer_shell_seat_handle_focus_non_exclusive,
+        .focus_none = layer_shell_seat_handle_focus_none,
+};
+
 static void seat_maybe_destroy(struct Seat *seat) {
     if (!seat->removed) { return; }
 
@@ -479,6 +529,10 @@ static void seat_maybe_destroy(struct Seat *seat) {
         pointer_binding, pointer_binding_tmp, &seat->pointer_bindings, link
     ) {
         pointer_binding_destroy(pointer_binding);
+    }
+
+    if (seat->layer_shell != NULL) {
+        river_layer_shell_seat_v1_destroy(seat->layer_shell);
     }
 
     river_seat_v1_destroy(seat->obj);
@@ -757,6 +811,15 @@ static void wm_handle_output(
 
     river_output_v1_add_listener(output->obj, &river_output_listener, output);
 
+    if (layer_shell_v1 != NULL) {
+        output->layer_shell =
+            river_layer_shell_v1_get_output(layer_shell_v1, river_output);
+
+        river_layer_shell_output_v1_add_listener(
+            output->layer_shell, &river_layer_shell_output_listener, output
+        );
+    }
+
     if (wallpaper.loaded) {
         output->wallpaper = wallpaper_output_create(&wallpaper, river_output);
     }
@@ -776,6 +839,15 @@ static void wm_handle_seat(
     wl_list_init(&seat->pointer_bindings);
 
     river_seat_v1_add_listener(seat->obj, &river_seat_listener, seat);
+
+    if (layer_shell_v1 != NULL) {
+        seat->layer_shell =
+            river_layer_shell_v1_get_seat(layer_shell_v1, river_seat);
+
+        river_layer_shell_seat_v1_add_listener(
+            seat->layer_shell, &river_layer_shell_seat_listener, seat
+        );
+    }
 
     wl_list_insert(wm.seats.prev, &seat->link);
 }
@@ -820,6 +892,10 @@ static void handle_global(
     } else if (strcmp(interface, river_xkb_bindings_v1_interface.name) == 0) {
         xkb_bindings_v1 = wl_registry_bind(
             registry, name, &river_xkb_bindings_v1_interface, 1
+        );
+    } else if (strcmp(interface, river_layer_shell_v1_interface.name) == 0) {
+        layer_shell_v1 = wl_registry_bind(
+            registry, name, &river_layer_shell_v1_interface, 1
         );
     } else if (strcmp(interface, wl_compositor_interface.name) == 0) {
         compositor =
@@ -869,10 +945,17 @@ int main(void) {
         return 1;
     }
 
+    if (layer_shell_v1 == NULL) {
+        fprintf(
+            stderr, "river_layer_shell_v1 not supported by the Wayland "
+                    "server (layer surfaces will be unavailable)\n"
+        );
+    }
+
     if (compositor == NULL || shm == NULL) {
         fprintf(
             stderr, "wl_compositor or wl_shm not supported by the Wayland "
-                    "server; wallpaper support will be unavailable\n"
+                    "server (wallpaper support will be unavailable)\n"
         );
     }
 
