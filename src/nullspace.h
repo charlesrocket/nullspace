@@ -66,6 +66,7 @@ struct Window {
     bool decoration_state_set;
 
     struct wl_list link; // WindowManager.windows
+    struct wl_list focus_link; // WindowManager.focus_stack
 };
 
 enum Action {
@@ -129,20 +130,12 @@ struct Seat {
 };
 
 struct WindowManager {
-    struct wl_list outputs; // Output
-    struct wl_list windows; // Window
-    struct wl_list seats;   // Seat
+    struct wl_list outputs;     // Output
+    struct wl_list windows;     // Window, creation order (tile order)
+    struct wl_list focus_stack; // Window, most recently focused last
+    struct wl_list seats;       // Seat
 
     enum Layout layout;
 };
-
-struct WindowManager wm;
-struct Wallpaper wallpaper;
-
-struct river_window_manager_v1 *window_manager_v1;
-struct river_xkb_bindings_v1 *xkb_bindings_v1;
-struct river_layer_shell_v1 *layer_shell_v1;
-struct wl_compositor *compositor;
-struct wl_shm *shm;
 
 #endif // NULLSPACE_H

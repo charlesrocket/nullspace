@@ -2,6 +2,15 @@
 
 #include "wallpaper.h"
 
+struct WindowManager wm;
+struct Wallpaper wallpaper;
+
+struct river_window_manager_v1 *window_manager_v1;
+struct river_xkb_bindings_v1 *xkb_bindings_v1;
+struct river_layer_shell_v1 *layer_shell_v1;
+struct wl_compositor *compositor;
+struct wl_shm *shm;
+
 static void output_handle_removed(void *data, struct river_output_v1 *obj) {
     struct Output *output = data;
     output->removed = true;
@@ -216,6 +225,8 @@ static void window_maybe_destroy(struct Window *window) {
 
     wl_list_for_each(seat, &wm.seats, link) {
         if (seat->focused == window) { seat->focused = NULL; }
+        if (seat->hovered == window) { seat->hovered = NULL; }
+        if (seat->interacted == window) { seat->interacted = NULL; }
 
         if (seat->op_window == window) {
             river_seat_v1_op_end(seat->obj);
@@ -226,6 +237,7 @@ static void window_maybe_destroy(struct Window *window) {
 
     river_window_v1_destroy(window->obj);
     wl_list_remove(&window->link);
+    wl_list_remove(&window->focus_link);
     free(window);
 }
 
@@ -540,19 +552,38 @@ static void seat_maybe_destroy(struct Seat *seat) {
     free(seat);
 }
 
+static struct Window *focus_stack_top(void) {
+    if (wl_list_empty(&wm.focus_stack)) { return NULL; }
+
+    struct Window *window;
+    window = wl_container_of(wm.focus_stack.prev, window, focus_link);
+    return window;
+}
+
+static struct Window *window_next(struct Window *window) {
+    if (wl_list_empty(&wm.windows)) { return NULL; }
+
+    struct wl_list *next = window != NULL ? window->link.next : wm.windows.next;
+
+    if (next == &wm.windows) { next = wm.windows.next; }
+
+    struct Window *result;
+    result = wl_container_of(next, result, link);
+
+    return result;
+}
+
 static void seat_focus(struct Seat *seat, struct Window *window) {
     // Focus the top window (if any) when there is no explicit target
-    if (window == NULL && !wl_list_empty(&wm.windows)) {
-        window = wl_container_of(wm.windows.prev, window, link);
-    }
+    if (window == NULL) { window = focus_stack_top(); }
 
     if (seat->focused == window) { return; }
 
     if (window != NULL) {
         river_seat_v1_focus_window(seat->obj, window->obj);
         river_node_v1_place_top(window->node);
-        wl_list_remove(&window->link);
-        wl_list_insert(wm.windows.prev, &window->link);
+        wl_list_remove(&window->focus_link);
+        wl_list_insert(wm.focus_stack.prev, &window->focus_link);
     } else {
         river_seat_v1_clear_focus(seat->obj);
     }
@@ -602,14 +633,12 @@ static void seat_action(struct Seat *seat, enum Action action) {
 
             break;
         case ACTION_FOCUS_NEXT:
-            if (!wl_list_empty(&wm.windows)) {
-                // Focus the bottom window
-                struct Window *window =
-                    wl_container_of(wm.windows.next, window, link);
-                seat_focus(seat, window);
-            }
+            {
+                struct Window *window = window_next(seat->focused);
+                if (window != NULL) { seat_focus(seat, window); }
 
-            break;
+                break;
+            }
         case ACTION_MOVE:
             // Interactive move is only in the floating layout;
             if (wm.layout == LAYOUT_FLOATING && seat->op == SEAT_OP_NONE
@@ -629,7 +658,7 @@ static void seat_action(struct Seat *seat, enum Action action) {
 
             break;
         case ACTION_CYCLE_LAYOUT:
-            wm.layout = (wm.layout + 1) % (LAYOUT_LAST + 1);
+            wm.layout = (enum Layout)((wm.layout + 1) % (LAYOUT_LAST + 1));
             break;
         case ACTION_EXIT:
             river_window_manager_v1_exit_session(window_manager_v1);
@@ -644,7 +673,7 @@ static void seat_manage(struct Seat *seat) {
         const uint32_t super = RIVER_SEAT_V1_MODIFIERS_MOD4;
         xkb_binding_create(seat, super, XKB_KEY_Return, ACTION_SPAWN_FOOT);
         xkb_binding_create(seat, super, XKB_KEY_q, ACTION_CLOSE);
-        xkb_binding_create(seat, super, XKB_KEY_n, ACTION_FOCUS_NEXT);
+        xkb_binding_create(seat, super, XKB_KEY_f, ACTION_FOCUS_NEXT);
         xkb_binding_create(seat, super, XKB_KEY_l, ACTION_CYCLE_LAYOUT);
         xkb_binding_create(seat, super, XKB_KEY_r, ACTION_EXIT);
 
@@ -652,9 +681,6 @@ static void seat_manage(struct Seat *seat) {
         pointer_binding_create(seat, super, BTN_RIGHT, ACTION_RESIZE);
     }
 
-    // If no window was interacted with in the current manage sequence,
-    // intentionally pass NULL to ensure the window on top has focus.
-    // This is necessary to handle new windows for example.
     seat_focus(seat, seat->interacted);
     seat->interacted = NULL;
 
@@ -673,40 +699,43 @@ static void seat_manage(struct Seat *seat) {
 
             break;
         case SEAT_OP_RESIZE:
-            if (seat->op_release) {
-                river_window_v1_inform_resize_end(seat->op_window->obj);
-                river_seat_v1_op_end(seat->obj);
-                seat->op = SEAT_OP_NONE;
-                seat->op_window = NULL;
+            {
+                if (seat->op_release) {
+                    river_window_v1_inform_resize_end(seat->op_window->obj);
+                    river_seat_v1_op_end(seat->obj);
+                    seat->op = SEAT_OP_NONE;
+                    seat->op_window = NULL;
+                    break;
+                }
+
+                int32_t width = seat->op_start_width;
+                int32_t height = seat->op_start_height;
+
+                if ((seat->op_edges & RIVER_WINDOW_V1_EDGES_LEFT) != 0) {
+                    width -= seat->op_dx;
+                }
+
+                if ((seat->op_edges & RIVER_WINDOW_V1_EDGES_RIGHT) != 0) {
+                    width += seat->op_dx;
+                }
+
+                if ((seat->op_edges & RIVER_WINDOW_V1_EDGES_TOP) != 0) {
+                    height -= seat->op_dy;
+                }
+
+                if ((seat->op_edges & RIVER_WINDOW_V1_EDGES_BOTTOM) != 0) {
+                    height += seat->op_dy;
+                }
+
+                river_window_v1_propose_dimensions(
+                    seat->op_window->obj, width > 1 ? width : 1,
+                    height > 1 ? height : 1
+                );
+
                 break;
             }
-
-            int32_t width = seat->op_start_width;
-            int32_t height = seat->op_start_height;
-
-            if ((seat->op_edges & RIVER_WINDOW_V1_EDGES_LEFT) != 0) {
-                width -= seat->op_dx;
-            }
-
-            if ((seat->op_edges & RIVER_WINDOW_V1_EDGES_RIGHT) != 0) {
-                width += seat->op_dx;
-            }
-
-            if ((seat->op_edges & RIVER_WINDOW_V1_EDGES_TOP) != 0) {
-                height -= seat->op_dy;
-            }
-
-            if ((seat->op_edges & RIVER_WINDOW_V1_EDGES_BOTTOM) != 0) {
-                height += seat->op_dy;
-            }
-
-            river_window_v1_propose_dimensions(
-                seat->op_window->obj, width > 1 ? width : 1,
-                height > 1 ? height : 1
-            );
-
-            break;
     }
+
     seat->op_release = false;
 }
 
@@ -722,20 +751,22 @@ static void seat_render(struct Seat *seat) {
             );
 
             break;
-        case SEAT_OP_RESIZE:;
-            int32_t x = seat->op_start_x;
-            int32_t y = seat->op_start_y;
+        case SEAT_OP_RESIZE:
+            {
+                int32_t x = seat->op_start_x;
+                int32_t y = seat->op_start_y;
 
-            if ((seat->op_edges & RIVER_WINDOW_V1_EDGES_LEFT) != 0) {
-                x += seat->op_start_width - seat->op_window->width;
+                if ((seat->op_edges & RIVER_WINDOW_V1_EDGES_LEFT) != 0) {
+                    x += seat->op_start_width - seat->op_window->width;
+                }
+
+                if ((seat->op_edges & RIVER_WINDOW_V1_EDGES_TOP) != 0) {
+                    y += seat->op_start_height - seat->op_window->height;
+                }
+
+                window_set_position(seat->op_window, x, y);
+                break;
             }
-
-            if ((seat->op_edges & RIVER_WINDOW_V1_EDGES_TOP) != 0) {
-                y += seat->op_start_height - seat->op_window->height;
-            }
-
-            window_set_position(seat->op_window, x, y);
-            break;
     }
 }
 
@@ -800,6 +831,7 @@ static void wm_handle_window(
     river_window_v1_add_listener(window->obj, &river_window_listener, window);
 
     wl_list_insert(wm.windows.prev, &window->link);
+    wl_list_insert(wm.focus_stack.prev, &window->focus_link);
 }
 
 static void wm_handle_output(
@@ -873,6 +905,7 @@ static const struct river_window_manager_v1_listener wm_listener = {
 static void wm_init(void) {
     wl_list_init(&wm.outputs);
     wl_list_init(&wm.windows);
+    wl_list_init(&wm.focus_stack);
     wl_list_init(&wm.seats);
 
     // Default layout is tiled (even split).
