@@ -26,6 +26,9 @@ struct WallpaperOutput {
     struct wl_buffer *buffers[2];
     int next_buffer;
 
+    uint8_t *cached_sharp;
+    uint8_t *cached_blurred;
+
     bool configured; // node placed + first buffer committed
     bool needs_redraw;
 

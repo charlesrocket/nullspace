@@ -94,7 +94,7 @@ ppm_load(const char *path, uint8_t **out_rgba, int *out_w, int *out_h) {
     }
 
     if (fread(rgb, 1, pixel_count * 3, f) != pixel_count * 3) {
-        fprintf(stderr, "wallpaper: truncated pixel data in '%s'\n", path);
+        fprintf(stderr, "Wallpaper: truncated pixel data in '%s'\n", path);
         free(rgb);
         fclose(f);
         return false;
@@ -125,7 +125,7 @@ ppm_load(const char *path, uint8_t **out_rgba, int *out_w, int *out_h) {
     return true;
 
 parse_error:
-    fprintf(stderr, "wallpaper: malformed PPM header in '%s'\n", path);
+    fprintf(stderr, "Wallpaper: malformed PPM header in '%s'\n", path);
     fclose(f);
     return false;
 }
@@ -256,7 +256,7 @@ static int create_shm_fd(size_t size) {
 
     if (fd < 0) {
         fprintf(
-            stderr, "wallpaper: shm_open(SHM_ANON) failed: %s\n",
+            stderr, "Wallpaper: shm_open(SHM_ANON) failed: %s\n",
             strerror(errno)
         );
 
@@ -264,7 +264,7 @@ static int create_shm_fd(size_t size) {
     }
 
     if (ftruncate(fd, (off_t)size) < 0) {
-        fprintf(stderr, "wallpaper: ftruncate failed: %s\n", strerror(errno));
+        fprintf(stderr, "Wallpaper: ftruncate failed: %s\n", strerror(errno));
         close(fd);
         return -1;
     }
@@ -340,39 +340,53 @@ wpo_alloc_buffers(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
 }
 
 static void
-wpo_redraw(struct Wallpaper *wp, struct WallpaperOutput *wpo, bool blurred) {
-    if (!wp->loaded || wpo->pool_data == NULL) { return; }
+wpo_prepare_variants(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
+    size_t image_size = (size_t)wpo->width * wpo->height * 4;
 
-    size_t stride = (size_t)wpo->width * 4;
-    size_t image_size = stride * (size_t)wpo->height;
-    int idx = wpo->next_buffer;
-    uint8_t *dst_rgba = wpo->pool_data + image_size * (size_t)idx;
+    free(wpo->cached_sharp);
+    free(wpo->cached_blurred);
+    wpo->cached_sharp = malloc(image_size);
+    wpo->cached_blurred = malloc(image_size);
 
     scale_cover(
-        wp->image_pixels, wp->image_width, wp->image_height, dst_rgba,
+        wp->image_pixels, wp->image_width, wp->image_height, wpo->cached_sharp,
         wpo->width, wpo->height
     );
 
-    if (blurred) {
-        for (int p = 0; p < BLUR_PASSES; p++) {
-            box_blur(dst_rgba, wpo->width, wpo->height, BLUR_RADIUS);
+    memcpy(wpo->cached_blurred, wpo->cached_sharp, image_size);
+
+    for (int p = 0; p < BLUR_PASSES; p++) {
+        box_blur(wpo->cached_blurred, wpo->width, wpo->height, BLUR_RADIUS);
+    }
+
+    uint8_t *variants[2] = {wpo->cached_sharp, wpo->cached_blurred};
+
+    for (int v = 0; v < 2; v++) {
+        uint8_t *buf = variants[v];
+        for (size_t i = 0; i < (size_t)wpo->width * wpo->height; i++) {
+            uint8_t *px = &buf[i * 4];
+            uint8_t r = px[0];
+            px[0] = px[2];
+            px[2] = r;
         }
     }
+}
 
-    for (size_t i = 0; i < (size_t)wpo->width * wpo->height; i++) {
-        uint8_t *px = &dst_rgba[i * 4];
-        uint8_t r = px[0];
-        px[0] = px[2];
-        px[2] = r;
-    }
+static void
+wpo_redraw(struct Wallpaper *wp, struct WallpaperOutput *wpo, bool blurred) {
+    if (!wp->loaded || wpo->pool_data == NULL) { return; }
+    if (wpo->cached_sharp == NULL) { wpo_prepare_variants(wp, wpo); }
+
+    size_t image_size = (size_t)wpo->width * wpo->height * 4;
+    int idx = wpo->next_buffer;
+    uint8_t *dst = wpo->pool_data + image_size * (size_t)idx;
+    memcpy(dst, blurred ? wpo->cached_blurred : wpo->cached_sharp, image_size);
 
     wpo->next_buffer = 1 - idx;
-
     river_shell_surface_v1_sync_next_commit(wpo->shell_surface);
     wl_surface_attach(wpo->surface, wpo->buffers[idx], 0, 0);
     wl_surface_damage_buffer(wpo->surface, 0, 0, wpo->width, wpo->height);
     wl_surface_commit(wpo->surface);
-
     wpo->needs_redraw = false;
 }
 
