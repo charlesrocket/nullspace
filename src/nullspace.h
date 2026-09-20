@@ -1,7 +1,9 @@
 #ifndef NULLSPACE_H
 #define NULLSPACE_H
 
+#ifdef WALLPAPER
 #include "wallpaper.h"
+#endif
 
 #include <dev/evdev/input-event-codes.h>
 #include <river-layer-shell-v1-client-protocol.h>
@@ -25,7 +27,9 @@ struct Output {
     struct river_output_v1 *obj;
     struct river_layer_shell_output_v1 *layer_shell;
     struct wl_list link; // WindowManager.outputs
+#ifdef WALLPAPER
     struct WallpaperOutput *wallpaper;
+#endif
 
     int32_t width;
     int32_t height;

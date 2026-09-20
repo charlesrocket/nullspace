@@ -1,0 +1,6 @@
+option(
+  'wallpaper',
+  type: 'boolean',
+  value: true,
+  description: 'Enable wallpaper support',
+)

@@ -1,16 +1,20 @@
 #include "nullspace.h"
 
 #include "trimming/trimming.h"
+
+#ifdef WALLPAPER
 #include "wallpaper.h"
 
-struct WindowManager wm;
 struct Wallpaper wallpaper;
+struct wl_shm *shm;
+#endif
+
+struct WindowManager wm;
 
 struct river_window_manager_v1 *window_manager_v1;
 struct river_xkb_bindings_v1 *xkb_bindings_v1;
 struct river_layer_shell_v1 *layer_shell_v1;
 struct wl_compositor *compositor;
-struct wl_shm *shm;
 
 static void output_handle_removed(void *data, struct river_output_v1 *obj) {
     struct Output *output = data;
@@ -37,9 +41,11 @@ static void output_handle_dimensions(
     output->width = width;
     output->height = height;
 
+#ifdef WALLPAPER
     if (output->wallpaper != NULL) {
         wallpaper_output_set_dimensions(output->wallpaper, width, height);
     }
+#endif
 }
 
 const struct river_output_v1_listener river_output_listener = {
@@ -68,9 +74,11 @@ static const struct river_layer_shell_output_v1_listener
 
 static void output_maybe_destroy(struct Output *output) {
     if (!output->removed) { return; }
+#ifdef WALLPAPER
     if (output->wallpaper != NULL) {
         wallpaper_output_destroy(output->wallpaper);
     }
+#endif
 
     if (output->layer_shell != NULL) {
         river_layer_shell_output_v1_destroy(output->layer_shell);
@@ -862,7 +870,9 @@ wm_handle_render_start(void *data, struct river_window_manager_v1 *obj) {
     struct Seat *seat;
 
     wl_list_for_each(seat, &wm.seats, link) { seat_render(seat); }
+#ifdef WALLPAPER
     wallpaper_manage(&wallpaper, !wl_list_empty(&wm.windows));
+#endif
     river_window_manager_v1_render_finish(window_manager_v1);
 }
 
@@ -899,9 +909,11 @@ static void wm_handle_output(
         );
     }
 
+#ifdef WALLPAPER
     if (wallpaper.loaded) {
         output->wallpaper = wallpaper_output_create(&wallpaper, river_output);
     }
+#endif
 
     wl_list_insert(wm.outputs.prev, &output->link);
 }
@@ -975,7 +987,6 @@ static void wm_init(void) {
         trimming_set_config(wm.trimming_tree, &cfg);
     }
 }
-
 static void handle_global(
     void *data, struct wl_registry *registry, uint32_t name,
     const char *interface, uint32_t version
@@ -997,8 +1008,10 @@ static void handle_global(
     } else if (strcmp(interface, wl_compositor_interface.name) == 0) {
         compositor =
             wl_registry_bind(registry, name, &wl_compositor_interface, 4);
+#ifdef WALLPAPER
     } else if (strcmp(interface, wl_shm_interface.name) == 0) {
         shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
+#endif
     }
 }
 
@@ -1048,15 +1061,25 @@ int main(void) {
         );
     }
 
-    if (compositor == NULL || shm == NULL) {
-        fprintf(
-            stderr, "wl_compositor or wl_shm not supported by the Wayland "
-                    "server (wallpaper support will be unavailable)\n"
-        );
+    if (compositor == NULL) {
+        fprintf(stderr, "wl_compositor not supported by the Wayland server\n");
+        return 1;
     }
+
+#ifdef WALLPAPER
+    if (shm == NULL) {
+        fprintf(
+            stderr, "wl_shm not supported by the Wayland server "
+                    "(wallpaper support will be unavailable)\n"
+        );
+
+        return 1;
+    }
+#endif
 
     wm_init();
 
+#ifdef HAVE_WALLPAPER
     if (compositor != NULL && shm != NULL) {
         wallpaper_init(&wallpaper, compositor, shm, window_manager_v1);
 
@@ -1081,6 +1104,7 @@ int main(void) {
             }
         }
     }
+#endif
 
     river_window_manager_v1_add_listener(window_manager_v1, &wm_listener, NULL);
 

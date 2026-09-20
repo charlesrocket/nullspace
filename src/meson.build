@@ -1,9 +1,15 @@
-exe = executable(
-  'nullspace',
+src_files = files(
   'nullspace.c',
   'trimming/trimming.c',
-  'wallpaper.c',
-  generated,
+) + generated
+
+if get_option('wallpaper')
+  src_files += files('wallpaper.c')
+endif
+
+exe = executable(
+  'nullspace',
+  src_files,
   dependencies: [
     wayland_client,
     xkbcommon,

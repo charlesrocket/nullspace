@@ -5,7 +5,7 @@ name: CI
 jobs:
   release:
     name: Create release
-    #needs: test
+    needs: test
     if: >-
       forgejo.ref_type == 'tag' &&
       forgejo.repository_owner == 'charlesrocket'

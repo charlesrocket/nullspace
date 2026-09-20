@@ -25,6 +25,10 @@ add_project_arguments(cc.get_supported_arguments([
   '-Wno-unused-parameter',
 ]), language: 'c')
 
+if get_option('wallpaper')
+  add_project_arguments('-DWALLPAPER', language: 'c')
+endif
+
 wayland_client = dependency('wayland-client')
 xkbcommon = dependency('xkbcommon')
 
