@@ -1,5 +1,6 @@
 #include "nullspace.h"
 
+#include "trimming/trimming.h"
 #include "wallpaper.h"
 
 struct WindowManager wm;
@@ -221,6 +222,11 @@ const struct river_window_v1_listener river_window_listener = {
 static void window_maybe_destroy(struct Window *window) {
     if (!window->closed) { return; }
 
+    if (wm.trimming_tree != NULL && window->in_trimming_tree) {
+        trimming_remove(wm.trimming_tree, window);
+        window->in_trimming_tree = false;
+    }
+
     struct Seat *seat;
 
     wl_list_for_each(seat, &wm.seats, link) {
@@ -260,7 +266,8 @@ static void window_manage(struct Window *window) {
 
     if (!window->decoration_state_set
         || window->decoration_state != wm.layout) {
-        if (wm.layout == LAYOUT_TILING) {
+
+        if (wm.layout == LAYOUT_TRIMMING) {
             river_window_v1_use_ssd(window->obj);
             river_window_v1_set_tiled(
                 window->obj,
@@ -276,7 +283,7 @@ static void window_manage(struct Window *window) {
         window->decoration_state_set = true;
     }
 
-    if (wm.layout == LAYOUT_TILING) {
+    if (wm.layout == LAYOUT_TRIMMING) {
         window->pointer_move_requested = NULL;
         window->pointer_resize_requested = NULL;
         return;
@@ -297,23 +304,61 @@ static void window_manage(struct Window *window) {
     }
 }
 
-static void distribute_evenly(
-    int32_t total, int32_t n, int32_t gap, int32_t *sizes, int32_t *starts
-) {
-    int32_t reserved = gap * (n + 1);
-    int32_t available = total - reserved;
+static struct Seat *first_seat_with_pointer(void) {
+    struct Seat *seat;
+    wl_list_for_each(seat, &wm.seats, link) {
+        if (seat->pointer_set) { return seat; }
+    }
 
-    if (available < n) { available = n; } // keep sizes >= 1px
+    return NULL;
+}
 
-    int32_t base = available / n;
-    int32_t remainder = available % n;
-    int32_t pos = gap;
+static struct Window *last_focused_in_tree(void) {
+    if (wl_list_empty(&wm.focus_stack)) { return NULL; }
 
-    for (int32_t i = 0; i < n; i++) {
-        int32_t size = base + (i < remainder ? 1 : 0);
-        sizes[i] = size;
-        starts[i] = pos;
-        pos += size + gap;
+    struct wl_list *cur = wm.focus_stack.prev;
+    while (cur != &wm.focus_stack) {
+        struct Window *w = wl_container_of(cur, w, focus_link);
+        if (w->in_trimming_tree) { return w; }
+        cur = cur->prev;
+    }
+
+    return NULL;
+}
+
+static void
+trimming_sync(int32_t fb_x, int32_t fb_y, int32_t fb_w, int32_t fb_h) {
+    if (wm.trimming_tree == NULL) { return; }
+
+    struct Window *window;
+    wl_list_for_each(window, &wm.windows, link) {
+        if (window->in_trimming_tree) { continue; }
+
+        struct Window *focused = last_focused_in_tree();
+        struct Seat *seat = first_seat_with_pointer();
+
+        int32_t cx, cy;
+        if (seat != NULL && seat->pointer_set) {
+            cx = seat->pointer_x;
+            cy = seat->pointer_y;
+        } else {
+            cx = fb_x + fb_w;
+            cy = fb_y + fb_h;
+        }
+
+        int32_t fx = fb_x, fy = fb_y, fw = fb_w, fh = fb_h;
+        if (focused != NULL && focused->width > 0 && focused->height > 0) {
+            fx = focused->x;
+            fy = focused->y;
+            fw = focused->width;
+            fh = focused->height;
+        }
+
+        trimming_insert(
+            wm.trimming_tree, window, focused, cx, cy, fx, fy, fw, fh
+        );
+
+        window->in_trimming_tree = true;
     }
 }
 
@@ -321,47 +366,43 @@ static void layout_tiled_apply(void) {
     struct Output *output = tiling_output();
     if (output == NULL) { return; }
 
-    int32_t count = 0;
-    struct Window *window;
-    wl_list_for_each(window, &wm.windows, link) { count++; }
-
-    if (count == 0) { return; }
-
     // Tile only within the exclusive zone
     int32_t area_x, area_y, out_w, out_h;
     output_usable_area(output, &area_x, &area_y, &out_w, &out_h);
+    if (out_w <= 0 || out_h <= 0) { return; }
 
-    // cols = ceil(sqrt(count)), rows = ceil(count / cols)
-    int32_t cols = 1;
-    while (cols * cols < count) { cols++; }
-    int32_t rows = (count + cols - 1) / cols;
+    trimming_sync(area_x, area_y, out_w, out_h);
 
-    int32_t row_heights[rows];
-    int32_t row_y[rows];
-    distribute_evenly(out_h, rows, TILED_GAP, row_heights, row_y);
+    size_t cap = trimming_leaf_count(wm.trimming_tree);
 
-    int32_t index = 0; // 0-based position of the current window overall
+    if (cap == 0) { return; }
 
-    wl_list_for_each(window, &wm.windows, link) {
-        int32_t row = index / cols;
-        int32_t col = index % cols;
-        int32_t row_start = row * cols;
-        int32_t row_cols = count - row_start < cols ? count - row_start : cols;
-        int32_t col_widths[row_cols];
-        int32_t col_x[row_cols];
+    struct TrimmingPlacement *placements =
+        calloc(cap, sizeof(struct TrimmingPlacement));
+    if (placements == NULL) { return; }
 
-        distribute_evenly(out_w, row_cols, TILED_GAP, col_widths, col_x);
+    struct TrimmingLayoutParams lp = {
+        .x = area_x,
+        .y = area_y,
+        .width = out_w,
+        .height = out_h,
+        .gap_outer_h = wm.tiled_gap_outer_h,
+        .gap_outer_v = wm.tiled_gap_outer_v,
+        .gap_inner_h = wm.tiled_gap_inner_h,
+        .gap_inner_v = wm.tiled_gap_inner_v,
+    };
 
-        int32_t w = col_widths[col];
-        int32_t h = row_heights[row];
-        int32_t x = area_x + col_x[col];
-        int32_t y = area_y + row_y[row];
+    size_t n = trimming_layout(wm.trimming_tree, &lp, placements, cap);
 
-        window_set_position(window, x, y);
-        river_window_v1_propose_dimensions(window->obj, w, h);
-
-        index++;
+    for (size_t i = 0; i < n; i++) {
+        struct Window *w = placements[i].handle;
+        window_set_position(w, placements[i].x, placements[i].y);
+        river_window_v1_propose_dimensions(
+            w->obj, placements[i].width, placements[i].height
+        );
     }
+
+    free(placements);
 }
 
 static void
@@ -484,6 +525,7 @@ static void seat_handle_op_release(void *data, struct river_seat_v1 *obj) {
 // Ignored events
 static void
 seat_handle_wl_seat(void *data, struct river_seat_v1 *obj, uint32_t id) {}
+
 static void seat_handle_shell_surface_interaction(
     void *data, struct river_seat_v1 *obj,
     struct river_shell_surface_v1 *river_shell_surface
@@ -491,7 +533,12 @@ static void seat_handle_shell_surface_interaction(
 
 static void seat_handle_pointer_position(
     void *data, struct river_seat_v1 *obj, int32_t x, int32_t y
-) {}
+) {
+    struct Seat *seat = data;
+    seat->pointer_x = x;
+    seat->pointer_y = y;
+    seat->pointer_set = true;
+}
 
 const struct river_seat_v1_listener river_seat_listener = {
     .removed = seat_handle_removed,
@@ -740,7 +787,7 @@ static void seat_manage(struct Seat *seat) {
 }
 
 static void seat_render(struct Seat *seat) {
-    if (wm.layout == LAYOUT_TILING) { return; }
+    if (wm.layout == LAYOUT_TRIMMING) { return; }
 
     switch (seat->op) {
         case SEAT_OP_NONE: break;
@@ -805,7 +852,7 @@ wm_handle_manage_start(void *data, struct river_window_manager_v1 *obj) {
 
     // Apply the active layout. Tiled layout overrides
     // any per-window positioning.
-    if (wm.layout == LAYOUT_TILING) { layout_tiled_apply(); }
+    if (wm.layout == LAYOUT_TRIMMING) { layout_tiled_apply(); }
 
     river_window_manager_v1_manage_finish(window_manager_v1);
 }
@@ -908,8 +955,25 @@ static void wm_init(void) {
     wl_list_init(&wm.focus_stack);
     wl_list_init(&wm.seats);
 
-    // Default layout is tiled (even split).
-    wm.layout = LAYOUT_TILING;
+    wm.layout = LAYOUT_TRIMMING;
+    wm.tiled_gap_outer_h = 8;
+    wm.tiled_gap_outer_v = 8;
+    wm.tiled_gap_inner_h = 8;
+    wm.tiled_gap_inner_v = 8;
+    wm.trimming_tree = trimming_create();
+
+    if (wm.trimming_tree != NULL) {
+        struct TrimmingConfig cfg = {0};
+
+        cfg.manual_split = false;
+        cfg.preserve_split = false;
+        cfg.smart_split = false;
+        cfg.hsplit = 0;
+        cfg.vsplit = 0;
+        cfg.split_ratio = 0.5f;
+
+        trimming_set_config(wm.trimming_tree, &cfg);
+    }
 }
 
 static void handle_global(
@@ -957,7 +1021,6 @@ int main(void) {
     // Avoid passing WAYLAND_DEBUG on to our children.
     // It only matters if it's set when the display is created.
     unsetenv("WAYLAND_DEBUG");
-
     // Ensure children are automatically reaped.
     signal(SIGCHLD, SIG_IGN);
 

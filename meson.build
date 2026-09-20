@@ -11,19 +11,18 @@ project(
 
 cc = meson.get_compiler('c')
 add_project_arguments(cc.get_supported_arguments([
-	'-D_POSIX_C_SOURCE=200809L',
-	'-Wshadow',
-	'-Wconversion',
-	'-Wnull-dereference',
-	'-Wdouble-promotion',
-	'-Wfloat-equal',
-	'-Woverloaded-virtual',
-	'-Wsign-conversion',
-	'-Wredundant-decls',
-	'-Wswitch',
-	'-Wunreachable-code',
-	'-Wno-extra-semi',
-	'-Wno-unused-parameter',
+  '-D_POSIX_C_SOURCE=200809L',
+  '-Wshadow',
+  '-Wconversion',
+  '-Wnull-dereference',
+  '-Wdouble-promotion',
+  '-Wfloat-equal',
+  '-Wsign-conversion',
+  '-Wredundant-decls',
+  '-Wswitch',
+  '-Wunreachable-code',
+  '-Wno-extra-semi',
+  '-Wno-unused-parameter',
 ]), language: 'c')
 
 wayland_client = dependency('wayland-client')
@@ -36,14 +35,4 @@ generated = wl_mod.scan_xml(
   'protocol/river-layer-shell-v1.xml',
 )
 
-exe = executable(
-  'nullspace',
-  'src/nullspace.c',
-  'src/wallpaper.c',
-  generated,
-  dependencies: [
-    wayland_client,
-    xkbcommon,
-  ],
-  install: true,
-)
+subdir('src')

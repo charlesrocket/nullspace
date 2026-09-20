@@ -19,6 +19,8 @@
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include <xkbcommon/xkbcommon.h>
 
+struct TrimmingTree;
+
 struct Output {
     struct river_output_v1 *obj;
     struct river_layer_shell_output_v1 *layer_shell;
@@ -39,34 +41,33 @@ struct Output {
 };
 
 enum Layout {
-    LAYOUT_TILING,
+    LAYOUT_TRIMMING,
     LAYOUT_FLOATING,
     LAYOUT_LAST = LAYOUT_FLOATING,
 };
 
-#define TILED_GAP 8
-
 struct Window {
     struct river_window_v1 *obj;
     struct river_node_v1 *node;
-
-    bool new;
-    bool closed;
+    struct wl_list link;       // WindowManager.windows
+    struct wl_list focus_link; // WindowManager.focus_stack
+    struct Seat *pointer_move_requested;
+    struct Seat *pointer_resize_requested;
 
     int32_t x;
     int32_t y;
     int32_t width;
     int32_t height;
 
-    struct Seat *pointer_move_requested;
-    struct Seat *pointer_resize_requested;
     uint32_t pointer_resize_requested_edges;
 
     enum Layout decoration_state;
-    bool decoration_state_set;
 
-    struct wl_list link; // WindowManager.windows
-    struct wl_list focus_link; // WindowManager.focus_stack
+    bool decoration_state_set;
+    bool in_trimming_tree;
+
+    bool new;
+    bool closed;
 };
 
 enum Action {
@@ -123,6 +124,10 @@ struct Seat {
     int32_t op_start_width, op_start_height;
     uint32_t op_edges;
 
+    int32_t pointer_x;
+    int32_t pointer_y;
+    bool pointer_set;
+
     bool op_release;
 
     bool new;
@@ -134,8 +139,14 @@ struct WindowManager {
     struct wl_list windows;     // Window, creation order (tile order)
     struct wl_list focus_stack; // Window, most recently focused last
     struct wl_list seats;       // Seat
+    struct TrimmingTree *trimming_tree;
 
     enum Layout layout;
+
+    int32_t tiled_gap_outer_h;
+    int32_t tiled_gap_outer_v;
+    int32_t tiled_gap_inner_h;
+    int32_t tiled_gap_inner_v;
 };
 
 #endif // NULLSPACE_H
