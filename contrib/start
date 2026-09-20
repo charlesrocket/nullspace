@@ -1,0 +1,15 @@
+#!/bin/sh
+
+export XDG_CURRENT_DESKTOP="nullspace"
+export XDG_SESSION_TYPE="wayland"
+
+if [ -z "$XDG_RUNTIME_DIR" ]; then
+    XDG_RUNTIME_DIR="/tmp/$(id -u)-runtime-dir"
+
+    mkdir -p "$XDG_RUNTIME_DIR"
+    chmod 0700 "$XDG_RUNTIME_DIR"
+
+    export XDG_RUNTIME_DIR
+fi
+
+exec dbus-run-session river -c nullspace
