@@ -1,14 +1,12 @@
 #include "nullspace.h"
 
 #include "trimming/trimming.h"
-
 #ifdef WALLPAPER
 #include "wallpaper.h"
 
-struct Wallpaper wallpaper;
+struct Wallpaper wp;
 struct wl_shm *shm;
 #endif
-
 struct WindowManager wm;
 
 struct river_window_manager_v1 *window_manager_v1;
@@ -871,7 +869,7 @@ wm_handle_render_start(void *data, struct river_window_manager_v1 *obj) {
 
     wl_list_for_each(seat, &wm.seats, link) { seat_render(seat); }
 #ifdef WALLPAPER
-    wallpaper_manage(&wallpaper, !wl_list_empty(&wm.windows));
+    wallpaper_manage(&wp, !wl_list_empty(&wm.windows));
 #endif
     river_window_manager_v1_render_finish(window_manager_v1);
 }
@@ -910,8 +908,8 @@ static void wm_handle_output(
     }
 
 #ifdef WALLPAPER
-    if (wallpaper.loaded) {
-        output->wallpaper = wallpaper_output_create(&wallpaper, river_output);
+    if (wp.loaded) {
+        output->wallpaper = wallpaper_output_create(&wp, river_output);
     }
 #endif
 
