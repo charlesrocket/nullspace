@@ -12,4 +12,10 @@ if [ -z "$XDG_RUNTIME_DIR" ]; then
     export XDG_RUNTIME_DIR
 fi
 
-exec dbus-run-session river -c nullspace
+if [ -n "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    exec river -c nullspace
+elif command -v dbus-run-session >/dev/null 2>&1; then
+    exec dbus-run-session river -c nullspace
+else
+    exec dbus-launch --exit-with-session river -c nullspace
+fi
