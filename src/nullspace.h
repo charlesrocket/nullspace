@@ -15,6 +15,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/timerfd.h>
+#include <time.h>
 #include <unistd.h>
 #include <wayland-client-core.h>
 #include <wayland-client-protocol.h>
@@ -40,6 +42,7 @@ struct Output {
     int32_t area_y;
     int32_t area_width;
     int32_t area_height;
+
     bool area_set;
     bool removed;
 };
@@ -146,6 +149,12 @@ struct WindowManager {
     struct TrimmingTree *trimming_tree;
 
     enum Layout layout;
+
+    // Animation frame pacing. Instead of sending manage_dirty back-to-back
+    // (which spins the manage/render state machine as fast as clients can
+    // answer), animation ticks are driven by this timer so at most one manage
+    // sequence is requested per frame interval.
+    int64_t anim_frame_ns; // frame interval in nanoseconds
 
     int32_t tiled_gap_outer_h;
     int32_t tiled_gap_outer_v;

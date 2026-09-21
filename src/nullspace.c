@@ -14,6 +14,15 @@ struct river_xkb_bindings_v1 *xkb_bindings_v1;
 struct river_layer_shell_v1 *layer_shell_v1;
 struct wl_compositor *compositor;
 
+#define ANIM_DURATION_OPEN  200 // ms, grow-in
+#define ANIM_DURATION_CLOSE 200 // ms, shrink-out
+#define ANIM_DURATION_TILE  200 // ms, tiled layout transitions
+
+// Animation tick rate. Override with the NSP_ANIM_HZ environment variable.
+#define ANIM_DEFAULT_HZ     60
+#define ANIM_MIN_HZ         30
+#define ANIM_MAX_HZ         120
+
 static void output_handle_removed(void *data, struct river_output_v1 *obj) {
     struct Output *output = data;
     output->removed = true;
@@ -118,9 +127,272 @@ static struct Output *tiling_output(void) {
     return NULL;
 }
 
+// Animations:
+// `window->x/y` is the last position given to the compositor, and
+// `window->prop_w/prop_h` is the last proposed size. `window_set_position()`
+// and `wndow_send_size()` are the only writers, and new animations start from
+// these values.
+
+static struct timespec wm_now(void) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return now;
+}
+
+static int64_t timespec_to_ns(const struct timespec *ts) {
+    return (int64_t)ts->tv_sec * 1000000000LL + (int64_t)ts->tv_nsec;
+}
+
+static double ease_out_cubic(double t) {
+    const double f = t - 1.0;
+    return f * f * f + 1.0;
+}
+
+static double animation_progress(
+    const struct WindowAnimation *a, const struct timespec *now
+) {
+    if (a->duration_ms <= 0) { return 1.0; }
+
+    const int64_t elapsed_ns =
+        timespec_to_ns(now) - timespec_to_ns(&a->start_time);
+    const int64_t duration_ns = (int64_t)a->duration_ms * 1000000LL;
+
+    if (elapsed_ns <= 0) { return 0.0; }
+    if (elapsed_ns >= duration_ns) { return 1.0; }
+
+    return (double)elapsed_ns / (double)duration_ns;
+}
+
+static void window_set_position(struct Window *window, int32_t x, int32_t y) {
+    if (window->pos_valid && window->x == x && window->y == y) { return; }
+
+    river_node_v1_set_position(window->node, x, y);
+
+    window->x = x;
+    window->y = y;
+    window->pos_valid = true;
+}
+
+static void window_send_size(struct Window *window, int32_t w, int32_t h) {
+    if (w < 1) { w = 1; }
+    if (h < 1) { h = 1; }
+
+    river_window_v1_propose_dimensions(window->obj, w, h);
+
+    window->prop_w = w;
+    window->prop_h = h;
+    window->prop_valid = true;
+}
+
+// Non-interactive cases
+static void window_propose_size(struct Window *window, int32_t w, int32_t h) {
+    if (w < 1) { w = 1; }
+    if (h < 1) { h = 1; }
+
+    // Do not send the same size twice.
+    if (window->prop_valid && window->prop_w == w && window->prop_h == h) {
+        return;
+    }
+
+    window_send_size(window, w, h);
+}
+
+// Start an animation from the current rectangle.
+static void window_animate(
+    struct Window *window, const struct timespec *now, int32_t target_x,
+    int32_t target_y, int32_t target_w, int32_t target_h, int32_t duration
+) {
+    struct WindowAnimation *a = &window->anim;
+
+    a->start_x = window->x;
+    a->start_y = window->y;
+    a->start_w = window->prop_w;
+    a->start_h = window->prop_h;
+
+    a->target_x = target_x;
+    a->target_y = target_y;
+    a->target_w = target_w;
+    a->target_h = target_h;
+    a->duration_ms = duration;
+    a->active = true;
+    a->start_time = *now;
+}
+
+// Start an animation from an explicit rectangle.
+static void window_animate_from(
+    struct Window *window, const struct timespec *now, int32_t from_x,
+    int32_t from_y, int32_t from_w, int32_t from_h, int32_t target_x,
+    int32_t target_y, int32_t target_w, int32_t target_h, int32_t duration
+) {
+    struct WindowAnimation *a = &window->anim;
+
+    a->start_x = from_x;
+    a->start_y = from_y;
+    a->start_w = from_w;
+    a->start_h = from_h;
+    a->target_x = target_x;
+    a->target_y = target_y;
+    a->target_w = target_w;
+    a->target_h = target_h;
+    a->duration_ms = duration;
+    a->active = true;
+    a->start_time = *now;
+}
+
+static void window_animation_cancel(struct Window *window) {
+    window->anim.active = false;
+}
+
+// Drive an in-flight animation to its end state.
+static void window_animation_finish(struct Window *window) {
+    struct WindowAnimation *a = &window->anim;
+    if (!a->active) { return; }
+
+    a->active = false;
+
+    window_set_position(window, a->target_x, a->target_y);
+
+    if (!window->closed) {
+        window_propose_size(window, a->target_w, a->target_h);
+    }
+}
+
+static void
+window_animation_update(struct Window *window, const struct timespec *now) {
+    struct WindowAnimation *a = &window->anim;
+    if (!a->active) { return; }
+
+    double t = animation_progress(a, now);
+    bool last = t >= 1.0;
+
+    // Do not rely on the easing curve evaluating to even `1.0`.
+    double e = last ? 1.0 : ease_out_cubic(t);
+
+    // Round to avoid pixel stalls.
+    int32_t x = a->start_x + (int32_t)lround((a->target_x - a->start_x) * e);
+    int32_t y = a->start_y + (int32_t)lround((a->target_y - a->start_y) * e);
+
+    window_set_position(window, x, y);
+
+    // The server ignores every request on a closed river_window_v1 except
+    // destroy, so a closing window can only animate its node position.
+    if (!window->closed) {
+        int32_t w =
+            a->start_w + (int32_t)lround((a->target_w - a->start_w) * e);
+        int32_t h =
+            a->start_h + (int32_t)lround((a->target_h - a->start_h) * e);
+        window_propose_size(window, w, h);
+    }
+
+    if (last) { a->active = false; }
+}
+
+// We arm a timer and request the next
+// manage sequence only when it fires.
+
+static int64_t anim_frame_interval_ns(void) {
+    long hz = ANIM_DEFAULT_HZ;
+
+    const char *env = getenv("NSP_ANIM_HZ");
+    if (env != NULL && env[0] != '\0') {
+        char *end = NULL;
+        long v = strtol(env, &end, 10);
+
+        if (end != env && *end == '\0' && v >= ANIM_MIN_HZ
+            && v <= ANIM_MAX_HZ) {
+            hz = v;
+        } else {
+            fprintf(
+                stderr, "NSP_ANIM_HZ=%s is invalid (range is %d-%d)\n", env,
+                ANIM_MIN_HZ, ANIM_MAX_HZ
+            );
+        }
+    }
+
+    return 1000000000LL / hz;
+}
+
+static void anim_timer_init(void) {
+    wm.anim_frame_ns = anim_frame_interval_ns();
+    wm.anim_timer_armed = false;
+    wm.anim_timer_fd =
+        timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
+
+    if (wm.anim_timer_fd < 0) {
+        perror("timerfd_create");
+        fprintf(
+            stderr, "falling back to unpaced animation (busy manage_dirty)\n"
+        );
+    }
+}
+
+static void anim_timer_arm(
+    struct river_window_manager_v1 *manager, const struct timespec *now
+) {
+    if (wm.anim_timer_armed) { return; }
+
+    if (wm.anim_timer_fd < 0) {
+        // No timer available, fire at will!
+        river_window_manager_v1_manage_dirty(manager);
+        return;
+    }
+
+    int64_t now_ns = timespec_to_ns(now);
+    int64_t frame = wm.anim_frame_ns;
+
+    // Next multiple of `frame` strictly after now.
+    int64_t delay_ns = (now_ns / frame + 1) * frame - now_ns;
+
+    // TODO
+    if (delay_ns < 1000) { delay_ns = 1000; }
+
+    struct itimerspec spec = {
+        .it_value =
+            {
+                       .tv_sec = (time_t)(delay_ns / 1000000000LL),
+                       .tv_nsec = (long)(delay_ns % 1000000000LL),
+                       },
+        // Re-armed by the next manage pass if any animations remain.
+    };
+
+    if (timerfd_settime(wm.anim_timer_fd, 0, &spec, NULL) < 0) {
+        perror("timerfd_settime");
+        river_window_manager_v1_manage_dirty(manager);
+        return;
+    }
+
+    wm.anim_timer_armed = true;
+}
+
+static void anim_timer_fire(struct river_window_manager_v1 *manager) {
+    uint64_t expirations;
+
+    // Lock
+    ssize_t n = read(wm.anim_timer_fd, &expirations, sizeof(expirations));
+    (void)n;
+
+    wm.anim_timer_armed = false;
+
+    // Exactly one manage sequence per frame interval.
+    river_window_manager_v1_manage_dirty(manager);
+}
+
 static void window_handle_closed(void *data, struct river_window_v1 *obj) {
     struct Window *window = data;
+    if (window->closed) { return; }
     window->closed = true;
+
+    if (!window->mapped) {
+        window_animation_cancel(window);
+        return;
+    }
+
+    // Shrink to center.
+    struct timespec now = wm_now();
+    window_animate(
+        window, &now, window->x + window->prop_w / 2,
+        window->y + window->prop_h / 2, 1, 1, ANIM_DURATION_CLOSE
+    );
 }
 
 static void window_handle_dimensions(
@@ -227,6 +499,7 @@ const struct river_window_v1_listener river_window_listener = {
 
 static void window_maybe_destroy(struct Window *window) {
     if (!window->closed) { return; }
+    if (window->anim.active) { return; } // still shrinking
 
     if (wm.trimming_tree != NULL && window->in_trimming_tree) {
         trimming_remove(wm.trimming_tree, window);
@@ -266,8 +539,9 @@ seat_pointer_resize(struct Seat *seat, struct Window *window, uint32_t edges);
 static void window_manage(struct Window *window) {
     if (window->new) {
         window->new = false;
+        // Expand the new window.
         window_set_position(window, 0, 0);
-        river_window_v1_propose_dimensions(window->obj, 0, 0);
+        window_propose_size(window, 1, 1);
     }
 
     if (!window->decoration_state_set
@@ -339,6 +613,7 @@ trimming_sync(int32_t fb_x, int32_t fb_y, int32_t fb_w, int32_t fb_h) {
     struct Window *window;
     wl_list_for_each(window, &wm.windows, link) {
         if (window->in_trimming_tree) { continue; }
+        if (window->closed) { continue; }
 
         struct Window *focused = last_focused_in_tree();
         struct Seat *seat = first_seat_with_pointer();
@@ -380,7 +655,6 @@ static void layout_tiled_apply(void) {
     trimming_sync(area_x, area_y, out_w, out_h);
 
     size_t cap = trimming_leaf_count(wm.trimming_tree);
-
     if (cap == 0) { return; }
 
     struct TrimmingPlacement *placements =
@@ -627,7 +901,7 @@ static struct Window *window_next(struct Window *window) {
 }
 
 static void seat_focus(struct Seat *seat, struct Window *window) {
-    // Focus the top window (if any) when there is no explicit target
+    // Focus the top window (if any) when there is no explicit target.
     if (window == NULL) { window = focus_stack_top(); }
 
     if (seat->focused == window) { return; }
@@ -780,10 +1054,7 @@ static void seat_manage(struct Seat *seat) {
                     height += seat->op_dy;
                 }
 
-                river_window_v1_propose_dimensions(
-                    seat->op_window->obj, width > 1 ? width : 1,
-                    height > 1 ? height : 1
-                );
+                window_send_size(seat->op_window, width, height);
 
                 break;
             }
@@ -852,8 +1123,14 @@ wm_handle_manage_start(void *data, struct river_window_manager_v1 *obj) {
         seat_maybe_destroy(seat);
     }
 
+    struct timespec now = wm_now(); // keep in sync
+
     // Carry out window management policy
-    wl_list_for_each(window, &wm.windows, link) { window_manage(window); }
+    wl_list_for_each(window, &wm.windows, link) {
+        if (window->closed) { continue; }
+        window_manage(window);
+    }
+
     wl_list_for_each(seat, &wm.seats, link) { seat_manage(seat); }
 
     // Apply the active layout. Tiled layout overrides
@@ -869,7 +1146,16 @@ wm_handle_render_start(void *data, struct river_window_manager_v1 *obj) {
 
     wl_list_for_each(seat, &wm.seats, link) { seat_render(seat); }
 #ifdef WALLPAPER
-    wallpaper_manage(&wp, !wl_list_empty(&wm.windows));
+    bool has_window = false;
+    struct Window *window;
+    wl_list_for_each(window, &wm.windows, link) {
+        if (!window->closed) {
+            has_window = true;
+            break;
+        }
+    }
+
+    wallpaper_manage(&wp, has_window);
 #endif
     river_window_manager_v1_render_finish(window_manager_v1);
 }
@@ -965,6 +1251,8 @@ static void wm_init(void) {
     wl_list_init(&wm.focus_stack);
     wl_list_init(&wm.seats);
 
+    wm.anim_timer_fd = -1;
+
     wm.layout = LAYOUT_TRIMMING;
     wm.tiled_gap_outer_h = 8;
     wm.tiled_gap_outer_v = 8;
@@ -984,7 +1272,10 @@ static void wm_init(void) {
 
         trimming_set_config(wm.trimming_tree, &cfg);
     }
+
+    anim_timer_init();
 }
+
 static void handle_global(
     void *data, struct wl_registry *registry, uint32_t name,
     const char *interface, uint32_t version
@@ -1077,9 +1368,9 @@ int main(void) {
 
     wm_init();
 
-#ifdef HAVE_WALLPAPER
+#ifdef WALLPAPER
     if (compositor != NULL && shm != NULL) {
-        wallpaper_init(&wallpaper, compositor, shm, window_manager_v1);
+        wallpaper_init(&wp, compositor, shm, window_manager_v1);
 
         const char *wallpaper_path = getenv("NSP_WALLPAPER");
         char default_path[4096];
@@ -1097,7 +1388,7 @@ int main(void) {
         }
 
         if (wallpaper_path != NULL) {
-            if (!wallpaper_load_ppm(&wallpaper, wallpaper_path)) {
+            if (!wallpaper_load_ppm(&wp, wallpaper_path)) {
                 fprintf(stderr, "Wallpaper: continuing without a wallpaper\n");
             }
         }
