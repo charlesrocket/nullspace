@@ -1,6 +1,9 @@
 src_files = files(
   'nullspace.c',
-  'trimming/trimming.c',
+  'layouts/layout.c',
+  'layouts/trimming.c',
+  'layouts/vertical.c',
+  'layouts/horizontal.c',
 ) + generated
 
 if get_option('wallpaper')
@@ -19,8 +22,8 @@ exe = executable(
 
 trimming_test = executable(
   'test_trimming',
-  'trimming/test_trimming.c',
-  'trimming/trimming.c',
+  'layouts/test_trimming.c',
+  'layouts/trimming.c',
 )
 
 test('trimming', trimming_test)

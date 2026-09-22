@@ -8,17 +8,19 @@
 struct TrimmingTree;
 
 struct TrimmingConfig {
+    float split_ratio;
+
+    int hsplit; // 0 = auto (cursor), 1 = second, 2 = first
+    int vsplit;
+
     bool manual_split;
     bool preserve_split;
     bool smart_split;
-    int hsplit; // 0 = auto (cursor), 1 = second, 2 = first
-    int vsplit;
-    float split_ratio;
 };
 
 struct TrimmingPlacement {
-    void *handle;
     int32_t x, y, width, height;
+    void *handle;
 };
 
 struct TrimmingLayoutParams {

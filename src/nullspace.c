@@ -1,6 +1,9 @@
 #include "nullspace.h"
 
-#include "trimming/trimming.h"
+#include "layouts/horizontal.h"
+#include "layouts/layout.h"
+#include "layouts/trimming.h"
+#include "layouts/vertical.h"
 #ifdef WALLPAPER
 #include "wallpaper.h"
 
@@ -18,9 +21,9 @@ struct wl_compositor *compositor;
 #define ANIM_DURATION_CLOSE 200 // ms, shrink-out
 #define ANIM_DURATION_TILE  200 // ms, tiled layout transitions
 
-// Animation tick rate. Override with the NSP_ANIM_HZ environment variable.
-#define ANIM_DEFAULT_HZ     60
-#define ANIM_MIN_HZ         30
+// Animation tick rate. Override with the `NSP_ANIM_HZ` environment variable.
+#define ANIM_DEFAULT_HZ     80
+#define ANIM_MIN_HZ         60
 #define ANIM_MAX_HZ         120
 
 static void output_handle_removed(void *data, struct river_output_v1 *obj) {
@@ -96,26 +99,7 @@ static void output_maybe_destroy(struct Output *output) {
     free(output);
 }
 
-static void output_usable_area(
-    struct Output *output, int32_t *x, int32_t *y, int32_t *w, int32_t *h
-) {
-    if (!output->area_set || output->area_width <= 0
-        || output->area_height <= 0) {
-        *x = output->pos_x;
-        *y = output->pos_y;
-        *w = output->width;
-        *h = output->height;
-
-        return;
-    }
-
-    *x = output->area_x;
-    *y = output->area_y;
-    *w = output->area_width;
-    *h = output->area_height;
-}
-
-static struct Output *tiling_output(void) {
+struct Output *tiling_output(void) {
     struct Output *output;
     wl_list_for_each(output, &wm.outputs, link) {
         if (output->removed) { continue; }
@@ -243,6 +227,35 @@ static void window_animation_cancel(struct Window *window) {
     window->anim.active = false;
 }
 
+static void window_maybe_destroy(struct Window *window) {
+    if (!window->closed) { return; }
+    if (window->anim.active) { return; } // still shrinking
+
+    if (wm.trimming_tree != NULL && window->in_trimming_tree) {
+        trimming_remove(wm.trimming_tree, window);
+        window->in_trimming_tree = false;
+    }
+
+    struct Seat *seat;
+
+    wl_list_for_each(seat, &wm.seats, link) {
+        if (seat->focused == window) { seat->focused = NULL; }
+        if (seat->hovered == window) { seat->hovered = NULL; }
+        if (seat->interacted == window) { seat->interacted = NULL; }
+
+        if (seat->op_window == window) {
+            river_seat_v1_op_end(seat->obj);
+            seat->op = SEAT_OP_NONE;
+            seat->op_window = NULL;
+        }
+    }
+
+    river_window_v1_destroy(window->obj);
+    wl_list_remove(&window->link);
+    wl_list_remove(&window->focus_link);
+    free(window);
+}
+
 // Drive an in-flight animation to its end state.
 static void window_animation_finish(struct Window *window) {
     struct WindowAnimation *a = &window->anim;
@@ -257,10 +270,14 @@ static void window_animation_finish(struct Window *window) {
     }
 }
 
-static void
+// Advances the window's in-flight animation by one tick.
+//
+// Returns true if the window is still animating afterward, false otherwise.
+// MUST check the return value instead of reading `window->anim.active`.
+static bool
 window_animation_update(struct Window *window, const struct timespec *now) {
     struct WindowAnimation *a = &window->anim;
-    if (!a->active) { return; }
+    if (!a->active) { return false; }
 
     double t = animation_progress(a, now);
     bool last = t >= 1.0;
@@ -274,8 +291,6 @@ window_animation_update(struct Window *window, const struct timespec *now) {
 
     window_set_position(window, x, y);
 
-    // The server ignores every request on a closed river_window_v1 except
-    // destroy, so a closing window can only animate its node position.
     if (!window->closed) {
         int32_t w =
             a->start_w + (int32_t)lround((a->target_w - a->start_w) * e);
@@ -284,7 +299,13 @@ window_animation_update(struct Window *window, const struct timespec *now) {
         window_propose_size(window, w, h);
     }
 
-    if (last) { a->active = false; }
+    if (!last) { return true; }
+
+    a->active = false;
+    bool closed = window->closed;
+
+    if (closed) { window_maybe_destroy(window); }
+    return false;
 }
 
 // We arm a timer and request the next
@@ -382,6 +403,11 @@ static void window_handle_closed(void *data, struct river_window_v1 *obj) {
     if (window->closed) { return; }
     window->closed = true;
 
+    if (wm.trimming_tree != NULL && window->in_trimming_tree) {
+        trimming_remove(wm.trimming_tree, window);
+        window->in_trimming_tree = false;
+    }
+
     if (!window->mapped) {
         window_animation_cancel(window);
         return;
@@ -401,6 +427,7 @@ static void window_handle_dimensions(
     struct Window *window = data;
     window->width = width;
     window->height = height;
+    window->mapped = true;
 }
 
 static void window_handle_pointer_move_requested(
@@ -497,41 +524,6 @@ const struct river_window_v1_listener river_window_listener = {
     .identifier = window_handle_identifier,
 };
 
-static void window_maybe_destroy(struct Window *window) {
-    if (!window->closed) { return; }
-    if (window->anim.active) { return; } // still shrinking
-
-    if (wm.trimming_tree != NULL && window->in_trimming_tree) {
-        trimming_remove(wm.trimming_tree, window);
-        window->in_trimming_tree = false;
-    }
-
-    struct Seat *seat;
-
-    wl_list_for_each(seat, &wm.seats, link) {
-        if (seat->focused == window) { seat->focused = NULL; }
-        if (seat->hovered == window) { seat->hovered = NULL; }
-        if (seat->interacted == window) { seat->interacted = NULL; }
-
-        if (seat->op_window == window) {
-            river_seat_v1_op_end(seat->obj);
-            seat->op = SEAT_OP_NONE;
-            seat->op_window = NULL;
-        }
-    }
-
-    river_window_v1_destroy(window->obj);
-    wl_list_remove(&window->link);
-    wl_list_remove(&window->focus_link);
-    free(window);
-}
-
-static void window_set_position(struct Window *window, int32_t x, int32_t y) {
-    river_node_v1_set_position(window->node, x, y);
-    window->x = x;
-    window->y = y;
-}
-
 static void seat_pointer_move(struct Seat *seat, struct Window *window);
 static void
 seat_pointer_resize(struct Seat *seat, struct Window *window, uint32_t edges);
@@ -547,7 +539,7 @@ static void window_manage(struct Window *window) {
     if (!window->decoration_state_set
         || window->decoration_state != wm.layout) {
 
-        if (wm.layout == LAYOUT_TRIMMING) {
+        if (layouts_is_tiled(wm.layout)) {
             river_window_v1_use_ssd(window->obj);
             river_window_v1_set_tiled(
                 window->obj,
@@ -563,7 +555,7 @@ static void window_manage(struct Window *window) {
         window->decoration_state_set = true;
     }
 
-    if (wm.layout == LAYOUT_TRIMMING) {
+    if (layouts_is_tiled(wm.layout)) {
         window->pointer_move_requested = NULL;
         window->pointer_resize_requested = NULL;
         return;
@@ -606,8 +598,7 @@ static struct Window *last_focused_in_tree(void) {
     return NULL;
 }
 
-static void
-trimming_sync(int32_t fb_x, int32_t fb_y, int32_t fb_w, int32_t fb_h) {
+void trimming_sync(int32_t fb_x, int32_t fb_y, int32_t fb_w, int32_t fb_h) {
     if (wm.trimming_tree == NULL) { return; }
 
     struct Window *window;
@@ -635,6 +626,14 @@ trimming_sync(int32_t fb_x, int32_t fb_y, int32_t fb_w, int32_t fb_h) {
             fh = focused->height;
         }
 
+        // Remember the rectangle that is about to be split
+        // so the new window can grow out of the correct edge.
+        window->spawn_parent_x = fx;
+        window->spawn_parent_y = fy;
+        window->spawn_parent_w = fw;
+        window->spawn_parent_h = fh;
+        window->spawn_hint_set = true;
+
         trimming_insert(
             wm.trimming_tree, window, focused, cx, cy, fx, fy, fw, fh
         );
@@ -643,46 +642,120 @@ trimming_sync(int32_t fb_x, int32_t fb_y, int32_t fb_w, int32_t fb_h) {
     }
 }
 
-static void layout_tiled_apply(void) {
-    struct Output *output = tiling_output();
-    if (output == NULL) { return; }
+static void spawn_start_rect(
+    const struct Window *w, int32_t tx, int32_t ty, int32_t tw, int32_t th,
+    int32_t *sx, int32_t *sy, int32_t *sw, int32_t *sh
+) {
+    // Grow from the center of the target (default/no parent)
+    *sx = tx + tw / 2;
+    *sy = ty + th / 2;
+    *sw = 1;
+    *sh = 1;
 
-    // Tile only within the exclusive zone
-    int32_t area_x, area_y, out_w, out_h;
-    output_usable_area(output, &area_x, &area_y, &out_w, &out_h);
-    if (out_w <= 0 || out_h <= 0) { return; }
+    if (!w->spawn_hint_set) { return; }
 
-    trimming_sync(area_x, area_y, out_w, out_h);
+    int32_t px = w->spawn_parent_x, py = w->spawn_parent_y;
+    int32_t pw = w->spawn_parent_w, ph = w->spawn_parent_h;
 
-    size_t cap = trimming_leaf_count(wm.trimming_tree);
-    if (cap == 0) { return; }
+    // Centers of target and parent.
+    int32_t tcx = tx + tw / 2, tcy = ty + th / 2;
+    int32_t pcx = px + pw / 2, pcy = py + ph / 2;
 
-    struct TrimmingPlacement *placements =
-        calloc(cap, sizeof(struct TrimmingPlacement));
-    if (placements == NULL) { return; }
+    int32_t dx = tcx - pcx;
+    int32_t dy = tcy - pcy;
 
-    struct TrimmingLayoutParams lp = {
-        .x = area_x,
-        .y = area_y,
-        .width = out_w,
-        .height = out_h,
-        .gap_outer_h = wm.tiled_gap_outer_h,
-        .gap_outer_v = wm.tiled_gap_outer_v,
-        .gap_inner_h = wm.tiled_gap_inner_h,
-        .gap_inner_v = wm.tiled_gap_inner_v,
-    };
+    // Given the final target rectangle, and the rectangle of the window it
+    // split from, compute a zero-thickness starting rectangle on the shared
+    // edge so the new window grows along the split axis only.
 
-    size_t n = trimming_layout(wm.trimming_tree, &lp, placements, cap);
+    if (abs(dx) >= abs(dy)) {
+        // Horizontal split
+        // Keep full height, grow in width from shared edge
+        *sh = th;
+        *sy = ty;
+        *sw = 1;
+        // New window is to the right with an anchor at its left edge.
+        *sx = (dx >= 0) ? tx : tx + tw - 1;
+    } else {
+        // Vertical split
+        // Keep full width, grow in height from shared edge
+        *sw = tw;
+        *sx = tx;
+        *sh = 1;
+        *sy = (dy >= 0) ? ty : ty + th - 1;
+    }
+}
 
-    for (size_t i = 0; i < n; i++) {
-        struct Window *w = placements[i].handle;
-        window_set_position(w, placements[i].x, placements[i].y);
-        river_window_v1_propose_dimensions(
-            w->obj, placements[i].width, placements[i].height
+// Drive one window from its current presented rectangle to a target rectangle,
+// using the shared animation path.
+void window_apply_target(
+    struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh,
+    const struct timespec *now
+) {
+    if (nw < 1) { nw = 1; }
+    if (nh < 1) { nh = 1; }
+
+    if (!w->has_placement) {
+        int32_t sx, sy, sw, sh;
+        spawn_start_rect(w, nx, ny, nw, nh, &sx, &sy, &sw, &sh);
+
+        window_set_position(w, sx, sy);
+        window_propose_size(w, sw, sh);
+        w->has_placement = true;
+
+        window_animate_from(
+            w, now, sx, sy, sw, sh, nx, ny, nw, nh, ANIM_DURATION_OPEN
         );
+    } else if (nx != w->last_target_x || ny != w->last_target_y
+               || nw != w->last_target_w || nh != w->last_target_h) {
+        window_animate(w, now, nx, ny, nw, nh, ANIM_DURATION_TILE);
+    } else {
+        return;
     }
 
-    free(placements);
+    w->last_target_x = nx;
+    w->last_target_y = ny;
+    w->last_target_w = nw;
+    w->last_target_h = nh;
+}
+
+static void wm_set_layout(enum Layout layout) {
+    if (wm.layout == layout) { return; }
+
+    struct Window *window;
+
+    // Detach every window from the tree
+    if (wm.layout == LAYOUT_TRIMMING && wm.trimming_tree != NULL) {
+        wl_list_for_each(window, &wm.windows, link) {
+            if (window->in_trimming_tree) {
+                trimming_remove(wm.trimming_tree, window);
+                window->in_trimming_tree = false;
+            }
+        }
+    }
+
+    wm.layout = layout;
+
+    // Ensure all animations are completed.
+    wl_list_for_each(window, &wm.windows, link) {
+        // Let the closing windows finish its own animation
+        if (window->closed) { continue; }
+
+        // Snap to the end state rather than freezing mid-animation
+        // (no infra yet to handle unfinished animations).
+        window_animation_finish(window);
+
+        // The client may have changed the size
+        // while we were busy with something else.
+        window->prop_valid = false;
+
+        // Forces a reset via invalid targets
+        // (too hacky?)
+        window->last_target_x = INT32_MIN;
+        window->last_target_y = INT32_MIN;
+        window->last_target_w = INT32_MIN;
+        window->last_target_h = INT32_MIN;
+    }
 }
 
 static void
@@ -955,7 +1028,20 @@ static void seat_action(struct Seat *seat, enum Action action) {
             break;
         case ACTION_CLOSE:
             if (seat->focused != NULL) {
-                river_window_v1_close(seat->focused->obj);
+                struct Window *closing = seat->focused;
+                river_window_v1_close(closing->obj);
+
+                // Do not wait for the window destroy, we need to
+                // switch the focus right away.
+                struct Window *next = NULL;
+                struct Window *w;
+                wl_list_for_each_reverse(w, &wm.focus_stack, focus_link) {
+                    if (w == closing || w->closed) { continue; }
+                    next = w;
+                    break;
+                }
+
+                seat_focus(seat, next);
             }
 
             break;
@@ -967,7 +1053,7 @@ static void seat_action(struct Seat *seat, enum Action action) {
                 break;
             }
         case ACTION_MOVE:
-            // Interactive move is only in the floating layout;
+            // Interactive move is only in the floating layout
             if (wm.layout == LAYOUT_FLOATING && seat->op == SEAT_OP_NONE
                 && seat->hovered != NULL) {
                 seat_pointer_move(seat, seat->hovered);
@@ -985,7 +1071,7 @@ static void seat_action(struct Seat *seat, enum Action action) {
 
             break;
         case ACTION_CYCLE_LAYOUT:
-            wm.layout = (enum Layout)((wm.layout + 1) % (LAYOUT_LAST + 1));
+            wm_set_layout((enum Layout)((wm.layout + 1) % (LAYOUT_LAST + 1)));
             break;
         case ACTION_EXIT:
             river_window_manager_v1_exit_session(window_manager_v1);
@@ -1064,7 +1150,8 @@ static void seat_manage(struct Seat *seat) {
 }
 
 static void seat_render(struct Seat *seat) {
-    if (wm.layout == LAYOUT_TRIMMING) { return; }
+    // Tiled layouts place windows deterministically.
+    if (layouts_is_tiled(wm.layout)) { return; }
 
     switch (seat->op) {
         case SEAT_OP_NONE: break;
@@ -1133,11 +1220,31 @@ wm_handle_manage_start(void *data, struct river_window_manager_v1 *obj) {
 
     wl_list_for_each(seat, &wm.seats, link) { seat_manage(seat); }
 
-    // Apply the active layout. Tiled layout overrides
-    // any per-window positioning.
-    if (wm.layout == LAYOUT_TRIMMING) { layout_tiled_apply(); }
+    // Apply the current layout (overrides any per-window positioning).
+    layout_apply(&now);
+
+    bool any_animation_active = false;
+    struct Window *window_next_safe;
+    wl_list_for_each_safe(window, window_next_safe, &wm.windows, link) {
+        if (window_animation_update(window, &now)) {
+            any_animation_active = true;
+        }
+    }
+
+    bool any_closed_pending = false;
+    wl_list_for_each(window, &wm.windows, link) {
+        if (window->closed) {
+            any_closed_pending = true;
+            break;
+        }
+    }
 
     river_window_manager_v1_manage_finish(window_manager_v1);
+
+    if (any_animation_active || any_closed_pending) {
+        // Pacing the animations.
+        anim_timer_arm(window_manager_v1, &now);
+    }
 }
 
 static void
@@ -1258,6 +1365,14 @@ static void wm_init(void) {
     wm.tiled_gap_outer_v = 8;
     wm.tiled_gap_inner_h = 8;
     wm.tiled_gap_inner_v = 8;
+
+    wm.nmasters = 1;
+    wm.mfact = 0.55f;
+    wm.smart_gaps = false;
+
+    wm.center_overspread = false;
+    wm.center_when_single_stack = true;
+
     wm.trimming_tree = trimming_create();
 
     if (wm.trimming_tree != NULL) {
@@ -1311,6 +1426,70 @@ static const struct wl_registry_listener registry_listener = {
     .global = handle_global,
     .global_remove = handle_global_remove,
 };
+
+static int run_event_loop(struct wl_display *display) {
+    while (true) {
+        while (wl_display_prepare_read(display) != 0) {
+            if (wl_display_dispatch_pending(display) < 0) {
+                fprintf(stderr, "Dispatch failed\n");
+                return 1;
+            }
+        }
+
+        // Flush outgoing requests
+        short wayland_events = POLLIN;
+        if (wl_display_flush(display) < 0) {
+            if (errno == EAGAIN) {
+                wayland_events |= POLLOUT;
+            } else {
+                wl_display_cancel_read(display);
+                perror("wl_display_flush");
+                return 1;
+            }
+        }
+
+        struct pollfd fds[2] = {
+            {.fd = wl_display_get_fd(display), .events = wayland_events},
+            // poll() ignores negative fds, so this is safe if timerfd_create
+            // failed and anim_timer_fd is -1.
+            {          .fd = wm.anim_timer_fd,         .events = POLLIN},
+        };
+
+        int ret;
+        do { ret = poll(fds, 2, -1); } while (ret < 0 && errno == EINTR);
+
+        if (ret < 0) {
+            wl_display_cancel_read(display);
+            perror("poll");
+            return 1;
+        }
+
+        if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            wl_display_cancel_read(display);
+            fprintf(stderr, "Wayland connection lost\n");
+            return 1;
+        }
+
+        if (fds[0].revents & POLLIN) {
+            if (wl_display_read_events(display) < 0) {
+                perror("wl_display_read_events");
+                return 1;
+            }
+        } else {
+            // Nothing to read (e.g. woken by the timer or POLLOUT only).
+            wl_display_cancel_read(display);
+        }
+
+        if (wl_display_dispatch_pending(display) < 0) {
+            fprintf(stderr, "Dispatch failed\n");
+            return 1;
+        }
+
+        if (wm.anim_timer_fd >= 0 && (fds[1].revents & POLLIN)) {
+            anim_timer_fire(window_manager_v1);
+        }
+    }
+}
 
 int main(void) {
     struct wl_display *display = wl_display_connect(NULL);
@@ -1397,12 +1576,5 @@ int main(void) {
 
     river_window_manager_v1_add_listener(window_manager_v1, &wm_listener, NULL);
 
-    while (true) {
-        if (wl_display_dispatch(display) < 0) {
-            fprintf(stderr, "Dispatch failed\n");
-            return 1;
-        }
-    }
-
-    return 0;
+    return run_event_loop(display);
 }

@@ -1,11 +1,17 @@
 #ifndef NULLSPACE_H
 #define NULLSPACE_H
 
+#include "layouts/horizontal.h"
+#include "layouts/layout.h"
+#include "layouts/vertical.h"
 #ifdef WALLPAPER
 #include "wallpaper.h"
 #endif
 
 #include <dev/evdev/input-event-codes.h>
+#include <errno.h>
+#include <math.h>
+#include <poll.h>
 #include <river-layer-shell-v1-client-protocol.h>
 #include <river-window-management-v1-client-protocol.h>
 #include <river-xkb-bindings-v1-client-protocol.h>
@@ -47,10 +53,22 @@ struct Output {
     bool removed;
 };
 
-enum Layout {
-    LAYOUT_TRIMMING,
-    LAYOUT_FLOATING,
-    LAYOUT_LAST = LAYOUT_FLOATING,
+struct WindowAnimation {
+    struct timespec start_time;
+
+    int32_t start_x;
+    int32_t start_y;
+    int32_t start_w;
+    int32_t start_h;
+
+    int32_t target_x;
+    int32_t target_y;
+    int32_t target_w;
+    int32_t target_h;
+
+    int32_t duration_ms; // seconds
+
+    bool active;
 };
 
 struct Window {
@@ -60,18 +78,40 @@ struct Window {
     struct wl_list focus_link; // WindowManager.focus_stack
     struct Seat *pointer_move_requested;
     struct Seat *pointer_resize_requested;
+    struct WindowAnimation anim;
 
+    enum Layout decoration_state;
+
+    uint32_t pointer_resize_requested_edges;
+
+    // Position and dimensions last given to the compositor.
     int32_t x;
     int32_t y;
     int32_t width;
     int32_t height;
 
-    uint32_t pointer_resize_requested_edges;
+    // Size we last proposed to the client.
+    int32_t prop_w;
+    int32_t prop_h;
 
-    enum Layout decoration_state;
+    int32_t last_target_x;
+    int32_t last_target_y;
+    int32_t last_target_w;
+    int32_t last_target_h;
 
+    int32_t spawn_parent_x, spawn_parent_y, spawn_parent_w, spawn_parent_h;
+
+    bool spawn_hint_set; // where a new tiled window should appear
     bool decoration_state_set;
     bool in_trimming_tree;
+    bool has_placement;
+    // The client must report dimensions at least once to receive animations.
+    bool mapped;
+    // False until a proposal has been sent/after something invalidates
+    // the cache (layout switch). While false, `window_propose_size()` always
+    // sends instead of deduplicating.
+    bool prop_valid;
+    bool pos_valid; // false until a position has been sent
 
     bool new;
     bool closed;
@@ -91,15 +131,15 @@ enum Action {
 struct XkbBinding {
     struct river_xkb_binding_v1 *obj;
     struct Seat *seat;
-    enum Action action;
     struct wl_list link;
+    enum Action action;
 };
 
 struct PointerBinding {
     struct river_pointer_binding_v1 *obj;
     struct Seat *seat;
-    enum Action action;
     struct wl_list link;
+    enum Action action;
 };
 
 enum SeatOp {
@@ -125,16 +165,18 @@ struct Seat {
     enum Action pending_action;
     enum SeatOp op;
 
+    uint32_t op_edges;
+
     int32_t op_start_x, op_start_y;
     int32_t op_dx, op_dy;
     // For SEAT_OP_RESIZE only
-    int32_t op_start_width, op_start_height;
-    uint32_t op_edges;
+    int32_t op_start_width;
+    int32_t op_start_height;
 
     int32_t pointer_x;
     int32_t pointer_y;
-    bool pointer_set;
 
+    bool pointer_set;
     bool op_release;
 
     bool new;
@@ -160,6 +202,28 @@ struct WindowManager {
     int32_t tiled_gap_outer_v;
     int32_t tiled_gap_inner_h;
     int32_t tiled_gap_inner_v;
+
+    // Vertical layouts
+    int32_t nmasters;
+
+    int anim_timer_fd; // timerfd, or -1 if unavailable
+
+    float mfact;
+    bool smart_gaps;
+    bool center_overspread; // let masters fill width when n <= nmasters
+    bool center_when_single_stack;
+    bool anim_timer_armed; // a tick is already scheduled
 };
+
+extern struct WindowManager wm;
+
+struct Output *tiling_output(void);
+
+void trimming_sync(int32_t fb_x, int32_t fb_y, int32_t fb_w, int32_t fb_h);
+
+void window_apply_target(
+    struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh,
+    const struct timespec *now
+);
 
 #endif // NULLSPACE_H
