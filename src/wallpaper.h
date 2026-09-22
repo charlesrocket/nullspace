@@ -11,23 +11,33 @@ struct river_window_manager_v1;
 struct river_output_v1;
 struct river_node_v1;
 
-struct WallpaperOutput {
-    struct river_output_v1 *output; // not owned
-    int32_t width, height;          // output dimensions, in wm logical space
+#define WALLPAPER_TOPBAR_FADE_H 42
 
-    struct wl_surface *surface;
+struct wpo_pool {
+    struct wl_shm_pool *handle;
+    int fd;
+    uint8_t *data;
+    size_t size;
+    int32_t width, height;
+    bool valid;
+};
+
+struct WallpaperOutput {
     struct river_shell_surface_v1 *shell_surface;
     struct river_node_v1 *node;
-    struct wl_shm_pool *pool;
-
-    int pool_fd;
-    uint8_t *pool_data;
-    size_t pool_size;
+    struct wl_surface *surface;
     struct wl_buffer *buffers[2];
-    int next_buffer;
+
+    struct river_output_v1 *output; // not owned
 
     uint8_t *cached_sharp;
     uint8_t *cached_blurred;
+
+    int32_t width, height; // output dimensions, in wm logical space
+
+    struct wpo_pool pool;
+
+    int next_buffer;
 
     bool configured; // node placed + first buffer committed
     bool needs_redraw;
@@ -42,10 +52,14 @@ struct Wallpaper {
 
     // Decoded source image (RGBA8, straight alpha), owned.
     uint8_t *image_pixels;
+
+    int32_t blur_top_h;
+    int32_t blur_fade_h;
+
     int image_width, image_height;
 
     bool loaded;
-    bool blurred; // whether the currently-generated buffers are blurred
+    bool blur_all;
 
     struct wl_list outputs; // WallpaperOutput
 };
@@ -65,6 +79,9 @@ void wallpaper_output_set_dimensions(
 );
 
 void wallpaper_output_destroy(struct WallpaperOutput *wpo);
-void wallpaper_manage(struct Wallpaper *wp, bool any_windows_open);
+
+void wallpaper_manage(
+    struct Wallpaper *wp, bool blur_all, int32_t blur_top_h, int32_t blur_fade_h
+);
 
 #endif // WALLPAPER_H

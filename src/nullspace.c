@@ -1134,7 +1134,25 @@ wm_handle_render_start(void *data, struct river_window_manager_v1 *obj) {
         }
     }
 
-    wallpaper_manage(&wp, has_window);
+    int32_t top_zone_h = 0;
+    if (!has_window) {
+        struct Output *output;
+        wl_list_for_each(output, &wm.outputs, link) {
+            if (!output->area_set) { continue; }
+            if (output->width <= 0 || output->height <= 0) { continue; }
+            if (output->area_width <= 0 || output->area_height <= 0) {
+                continue;
+            }
+
+            int32_t strip = output->area_y - output->pos_y;
+
+            if (strip < 0) { strip = 0; }
+            if (strip > output->height) { strip = output->height; }
+            if (strip > top_zone_h) { top_zone_h = strip; }
+        }
+    }
+
+    wallpaper_manage(&wp, has_window, top_zone_h, WALLPAPER_TOPBAR_FADE_H);
 #endif
     river_window_manager_v1_render_finish(window_manager_v1);
 }
