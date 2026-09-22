@@ -1,0 +1,62 @@
+#!/bin/sh
+
+set -eu
+
+prog=${0##*/}
+size=${WALLPAPER_SIZE:-}
+
+while getopts ':s:h' opt; do
+    case $opt in
+        s) size=$OPTARG ;;
+        h) printf 'usage: %s [-s WxH] IMAGE\n' "$prog" >&2; exit 0 ;;
+        :) printf '%s: -%s needs an argument\n' "$prog" "$OPTARG" >&2; exit 2 ;;
+        \?) printf '%s: unknown option -%s\n' "$prog" "$OPTARG" >&2; exit 2 ;;
+    esac
+done
+
+shift $((OPTIND - 1))
+
+[ "$#" -eq 1 ] || { printf 'usage: %s [-s WxH] IMAGE\n' "$prog" >&2; exit 2; }
+
+input=$1
+
+[ -f "$input" ] || { printf '%s: no file: %s\n' "$prog" "$input" >&2; exit 1; }
+
+if [ -z "$size" ]; then
+    if command -v wayland-info >/dev/null 2>&1; then
+        size=$(wayland-info 2>/dev/null | awk '
+            /^interface: .wl_output./ { inout = 1; next }
+            inout && /^[[:space:]]+width:/ {
+                w = ""; h = ""
+                for (i = 1; i <= NF; i++) {
+                    if ($i == "width:")  w = $(i+1)
+                    if ($i == "height:") h = $(i+1)
+                }
+                pending = (w != "" && h != "") ? w "x" h : ""
+            }
+            inout && /flags:.*current/ && pending != "" { print pending; exit }
+        ')
+    fi
+fi
+
+if [ -z "$size" ]; then
+    printf '%s: could not detect output size\n' "$prog" >&2
+    exit 1
+fi
+
+case $size in
+    [0-9]*x[0-9]*) ;;
+    *) printf '%s: bad size: %s\n' "$prog" "$size" >&2; exit 2 ;;
+esac
+w=${size%x*}
+h=${size#*x}
+
+: "${XDG_DATA_HOME:=$HOME/.local/share}"
+outdir=$XDG_DATA_HOME/nullspace
+output=$outdir/wallpaper.ppm
+mkdir -p "$outdir"
+
+exec ffmpeg -hide_banner -loglevel error -nostdin -y \
+    -i "$input" \
+    -vf "scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h}" \
+    "$output"
