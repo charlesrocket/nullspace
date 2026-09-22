@@ -15,6 +15,75 @@
 #include <unistd.h>
 #include <wayland-client-protocol.h>
 
+#define NO_WALLPAPER_BG_R         0x12
+#define NO_WALLPAPER_BG_G         0x12
+#define NO_WALLPAPER_BG_B         0x12
+
+#define NO_WALLPAPER_DOT_R        0x3a
+#define NO_WALLPAPER_DOT_G        0xb5
+#define NO_WALLPAPER_DOT_B        0x5e
+
+#define NO_WALLPAPER_GRID_SPACING 24
+#define NO_WALLPAPER_DOT_RADIUS   1
+
+static void paint_no_wallpaper_pattern(uint8_t *dst, int w, int h) {
+    if (w <= 0 || h <= 0) { return; }
+
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            uint8_t *dp = &dst[((size_t)y * (size_t)w + (size_t)x) * 4];
+
+            dp[0] = NO_WALLPAPER_BG_B;
+            dp[1] = NO_WALLPAPER_BG_G;
+            dp[2] = NO_WALLPAPER_BG_R;
+            dp[3] = 255;
+        }
+    }
+
+    int cols = w / NO_WALLPAPER_GRID_SPACING;
+    int rows = h / NO_WALLPAPER_GRID_SPACING;
+
+    int used_w = cols * NO_WALLPAPER_GRID_SPACING;
+    int used_h = rows * NO_WALLPAPER_GRID_SPACING;
+
+    int offset_x = (w - used_w) / 2 + NO_WALLPAPER_GRID_SPACING / 2;
+    int offset_y = (h - used_h) / 2 + NO_WALLPAPER_GRID_SPACING / 2;
+
+    for (int row = 0; row < rows; row++) {
+        int gy = offset_y + row * NO_WALLPAPER_GRID_SPACING;
+
+        for (int col = 0; col < cols; col++) {
+            int gx = offset_x + col * NO_WALLPAPER_GRID_SPACING;
+
+            for (int dy = -NO_WALLPAPER_DOT_RADIUS;
+                 dy <= NO_WALLPAPER_DOT_RADIUS; dy++) {
+                int py = gy + dy;
+                if (py < 0 || py >= h) { continue; }
+
+                for (int dx = -NO_WALLPAPER_DOT_RADIUS;
+                     dx <= NO_WALLPAPER_DOT_RADIUS; dx++) {
+                    int px = gx + dx;
+                    if (px < 0 || px >= w) { continue; }
+
+                    if (dx * dx + dy * dy
+                        > NO_WALLPAPER_DOT_RADIUS * NO_WALLPAPER_DOT_RADIUS
+                              + 1) {
+                        continue;
+                    }
+
+                    uint8_t *dp =
+                        &dst[((size_t)py * (size_t)w + (size_t)px) * 4];
+
+                    dp[0] = NO_WALLPAPER_DOT_B;
+                    dp[1] = NO_WALLPAPER_DOT_G;
+                    dp[2] = NO_WALLPAPER_DOT_R;
+                    dp[3] = 255;
+                }
+            }
+        }
+    }
+}
+
 static int ppm_read_token(FILE *f, char *buf, size_t buf_size) {
     int c;
     size_t len = 0;
@@ -384,13 +453,20 @@ wpo_prepare_variants(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
 
 static void
 wpo_redraw(struct Wallpaper *wp, struct WallpaperOutput *wpo, bool blurred) {
-    if (!wp->loaded || wpo->pool_data == NULL) { return; }
-    if (wpo->cached_sharp == NULL) { wpo_prepare_variants(wp, wpo); }
+    if (wpo->pool_data == NULL) { return; }
 
     size_t image_size = (size_t)wpo->width * (size_t)wpo->height * 4;
     int idx = wpo->next_buffer;
     uint8_t *dst = wpo->pool_data + image_size * (size_t)idx;
-    memcpy(dst, blurred ? wpo->cached_blurred : wpo->cached_sharp, image_size);
+
+    if (!wp->loaded) {
+        paint_no_wallpaper_pattern(dst, wpo->width, wpo->height);
+    } else {
+        if (wpo->cached_sharp == NULL) { wpo_prepare_variants(wp, wpo); }
+        memcpy(
+            dst, blurred ? wpo->cached_blurred : wpo->cached_sharp, image_size
+        );
+    }
 
     wpo->next_buffer = 1 - idx;
     river_shell_surface_v1_sync_next_commit(wpo->shell_surface);
@@ -399,7 +475,6 @@ wpo_redraw(struct Wallpaper *wp, struct WallpaperOutput *wpo, bool blurred) {
     wl_surface_commit(wpo->surface);
     wpo->needs_redraw = false;
 }
-
 void wallpaper_init(
     struct Wallpaper *wp, struct wl_compositor *compositor, struct wl_shm *shm,
     struct river_window_manager_v1 *wm
@@ -458,8 +533,6 @@ void wallpaper_output_destroy(struct WallpaperOutput *wpo) {
 }
 
 void wallpaper_manage(struct Wallpaper *wp, bool any_windows_open) {
-    if (!wp->loaded) { return; }
-
     bool want_blur = any_windows_open;
     bool blur_state_changed = want_blur != wp->blurred;
     wp->blurred = want_blur;
@@ -479,7 +552,7 @@ void wallpaper_manage(struct Wallpaper *wp, bool any_windows_open) {
             wpo->configured = true;
         }
 
-        if (wpo->needs_redraw || blur_state_changed) {
+        if (wpo->needs_redraw || (wp->loaded && blur_state_changed)) {
             wpo_redraw(wp, wpo, wp->blurred);
         }
     }

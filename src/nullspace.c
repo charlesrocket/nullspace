@@ -1173,9 +1173,8 @@ static void wm_handle_output(
     }
 
 #ifdef WALLPAPER
-    if (wp.loaded) {
-        output->wallpaper = wallpaper_output_create(&wp, river_output);
-    }
+    output->wallpaper = wallpaper_output_create(&wp, river_output);
+
 #endif
 
     wl_list_insert(wm.outputs.prev, &output->link);
