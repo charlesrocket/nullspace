@@ -1,5 +1,6 @@
 #include "nullspace.h"
 
+#include "animation.h"
 #include "layouts/horizontal.h"
 #include "layouts/layout.h"
 #include "layouts/trimming.h"
@@ -16,15 +17,6 @@ struct river_window_manager_v1 *window_manager_v1;
 struct river_xkb_bindings_v1 *xkb_bindings_v1;
 struct river_layer_shell_v1 *layer_shell_v1;
 struct wl_compositor *compositor;
-
-#define ANIM_DURATION_OPEN  200 // ms, grow-in
-#define ANIM_DURATION_CLOSE 200 // ms, shrink-out
-#define ANIM_DURATION_TILE  200 // ms, tiled layout transitions
-
-// Animation tick rate. Override with the `NSP_ANIM_HZ` environment variable.
-#define ANIM_DEFAULT_HZ     80
-#define ANIM_MIN_HZ         60
-#define ANIM_MAX_HZ         120
 
 static void output_handle_removed(void *data, struct river_output_v1 *obj) {
     struct Output *output = data;
@@ -111,40 +103,10 @@ struct Output *tiling_output(void) {
     return NULL;
 }
 
-// Animations:
-// `window->x/y` is the last position given to the compositor, and
-// `window->prop_w/prop_h` is the last proposed size. `window_set_position()`
-// and `wndow_send_size()` are the only writers, and new animations start from
-// these values.
-
 static struct timespec wm_now(void) {
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
     return now;
-}
-
-static int64_t timespec_to_ns(const struct timespec *ts) {
-    return (int64_t)ts->tv_sec * 1000000000LL + (int64_t)ts->tv_nsec;
-}
-
-static double ease_out_cubic(double t) {
-    const double f = t - 1.0;
-    return f * f * f + 1.0;
-}
-
-static double animation_progress(
-    const struct WindowAnimation *a, const struct timespec *now
-) {
-    if (a->duration_ms <= 0) { return 1.0; }
-
-    const int64_t elapsed_ns =
-        timespec_to_ns(now) - timespec_to_ns(&a->start_time);
-    const int64_t duration_ns = (int64_t)a->duration_ms * 1000000LL;
-
-    if (elapsed_ns <= 0) { return 0.0; }
-    if (elapsed_ns >= duration_ns) { return 1.0; }
-
-    return (double)elapsed_ns / (double)duration_ns;
 }
 
 static void window_set_position(struct Window *window, int32_t x, int32_t y) {
@@ -306,96 +268,6 @@ window_animation_update(struct Window *window, const struct timespec *now) {
 
     if (closed) { window_maybe_destroy(window); }
     return false;
-}
-
-// We arm a timer and request the next
-// manage sequence only when it fires.
-
-static int64_t anim_frame_interval_ns(void) {
-    long hz = ANIM_DEFAULT_HZ;
-
-    const char *env = getenv("NSP_ANIM_HZ");
-    if (env != NULL && env[0] != '\0') {
-        char *end = NULL;
-        long v = strtol(env, &end, 10);
-
-        if (end != env && *end == '\0' && v >= ANIM_MIN_HZ
-            && v <= ANIM_MAX_HZ) {
-            hz = v;
-        } else {
-            fprintf(
-                stderr, "NSP_ANIM_HZ=%s is invalid (range is %d-%d)\n", env,
-                ANIM_MIN_HZ, ANIM_MAX_HZ
-            );
-        }
-    }
-
-    return 1000000000LL / hz;
-}
-
-static void anim_timer_init(void) {
-    wm.anim_frame_ns = anim_frame_interval_ns();
-    wm.anim_timer_armed = false;
-    wm.anim_timer_fd =
-        timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
-
-    if (wm.anim_timer_fd < 0) {
-        perror("timerfd_create");
-        fprintf(
-            stderr, "falling back to unpaced animation (busy manage_dirty)\n"
-        );
-    }
-}
-
-static void anim_timer_arm(
-    struct river_window_manager_v1 *manager, const struct timespec *now
-) {
-    if (wm.anim_timer_armed) { return; }
-
-    if (wm.anim_timer_fd < 0) {
-        // No timer available, fire at will!
-        river_window_manager_v1_manage_dirty(manager);
-        return;
-    }
-
-    int64_t now_ns = timespec_to_ns(now);
-    int64_t frame = wm.anim_frame_ns;
-
-    // Next multiple of `frame` strictly after now.
-    int64_t delay_ns = (now_ns / frame + 1) * frame - now_ns;
-
-    // TODO
-    if (delay_ns < 1000) { delay_ns = 1000; }
-
-    struct itimerspec spec = {
-        .it_value =
-            {
-                       .tv_sec = (time_t)(delay_ns / 1000000000LL),
-                       .tv_nsec = (long)(delay_ns % 1000000000LL),
-                       },
-        // Re-armed by the next manage pass if any animations remain.
-    };
-
-    if (timerfd_settime(wm.anim_timer_fd, 0, &spec, NULL) < 0) {
-        perror("timerfd_settime");
-        river_window_manager_v1_manage_dirty(manager);
-        return;
-    }
-
-    wm.anim_timer_armed = true;
-}
-
-static void anim_timer_fire(struct river_window_manager_v1 *manager) {
-    uint64_t expirations;
-
-    // Lock
-    ssize_t n = read(wm.anim_timer_fd, &expirations, sizeof(expirations));
-    (void)n;
-
-    wm.anim_timer_armed = false;
-
-    // Exactly one manage sequence per frame interval.
-    river_window_manager_v1_manage_dirty(manager);
 }
 
 static void window_handle_closed(void *data, struct river_window_v1 *obj) {
