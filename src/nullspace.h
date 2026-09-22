@@ -4,16 +4,14 @@
 #include "layouts/horizontal.h"
 #include "layouts/layout.h"
 #include "layouts/vertical.h"
-#ifdef WALLPAPER
+#include "output.h"
 #include "wallpaper.h"
-#endif
 
 #include <dev/evdev/input-event-codes.h>
 #include <errno.h>
 #include <math.h>
 #include <poll.h>
 #include <river-layer-shell-v1-client-protocol.h>
-#include <river-window-management-v1-client-protocol.h>
 #include <river-xkb-bindings-v1-client-protocol.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -34,28 +32,6 @@
 #define HIDDEN_POS_Y (-1000000)
 
 struct TrimmingTree;
-
-struct Output {
-    struct river_output_v1 *obj;
-    struct river_layer_shell_output_v1 *layer_shell;
-    struct wl_list link; // WindowManager.outputs
-#ifdef WALLPAPER
-    struct WallpaperOutput *wallpaper;
-#endif
-
-    int32_t width;
-    int32_t height;
-    // Output position in the global coordinate space
-    int32_t pos_x;
-    int32_t pos_y;
-    int32_t area_x;
-    int32_t area_y;
-    int32_t area_width;
-    int32_t area_height;
-
-    bool area_set;
-    bool removed;
-};
 
 struct WindowAnimation {
     struct timespec start_time;

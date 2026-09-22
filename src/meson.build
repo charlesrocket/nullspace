@@ -4,6 +4,7 @@ src_files = files(
   'layouts/trimming.c',
   'layouts/vertical.c',
   'layouts/horizontal.c',
+  'output.c',
   'animation.c',
 ) + generated
 

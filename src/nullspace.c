@@ -5,50 +5,16 @@
 #include "layouts/layout.h"
 #include "layouts/trimming.h"
 #include "layouts/vertical.h"
-#ifdef WALLPAPER
 #include "wallpaper.h"
 
 struct Wallpaper wp;
 struct wl_shm *shm;
-#endif
 struct WindowManager wm;
 
 struct river_window_manager_v1 *window_manager_v1;
 struct river_xkb_bindings_v1 *xkb_bindings_v1;
 struct river_layer_shell_v1 *layer_shell_v1;
 struct wl_compositor *compositor;
-
-static void output_handle_removed(void *data, struct river_output_v1 *obj) {
-    struct Output *output = data;
-    output->removed = true;
-}
-
-// Ignored events
-static void output_handle_wl_output(
-    void *data, struct river_output_v1 *obj, uint32_t name
-) {}
-
-static void output_handle_position(
-    void *data, struct river_output_v1 *obj, int32_t x, int32_t y
-) {
-    struct Output *output = data;
-    output->pos_x = x;
-    output->pos_y = y;
-}
-
-static void output_handle_dimensions(
-    void *data, struct river_output_v1 *obj, int32_t width, int32_t height
-) {
-    struct Output *output = data;
-    output->width = width;
-    output->height = height;
-
-#ifdef WALLPAPER
-    if (output->wallpaper != NULL) {
-        wallpaper_output_set_dimensions(output->wallpaper, width, height);
-    }
-#endif
-}
 
 const struct river_output_v1_listener river_output_listener = {
     .removed = output_handle_removed,
@@ -73,23 +39,6 @@ static const struct river_layer_shell_output_v1_listener
     river_layer_shell_output_listener = {
         .non_exclusive_area = layer_shell_output_handle_non_exclusive_area,
 };
-
-static void output_maybe_destroy(struct Output *output) {
-    if (!output->removed) { return; }
-#ifdef WALLPAPER
-    if (output->wallpaper != NULL) {
-        wallpaper_output_destroy(output->wallpaper);
-    }
-#endif
-
-    if (output->layer_shell != NULL) {
-        river_layer_shell_output_v1_destroy(output->layer_shell);
-    }
-
-    river_output_v1_destroy(output->obj);
-    wl_list_remove(&output->link);
-    free(output);
-}
 
 struct Output *tiling_output(void) {
     struct Output *output;
