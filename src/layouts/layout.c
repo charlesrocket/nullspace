@@ -33,7 +33,9 @@ static void output_usable_area(
 static struct Window *layout_focused_window(void) {
     struct Window *window;
     wl_list_for_each_reverse(window, &wm.focus_stack, focus_link) {
-        if (!window->closed) { return window; }
+        if (window->closed) { continue; }
+        if (window->space_hidden) { continue; }
+        return window;
     }
 
     return NULL;
@@ -51,7 +53,7 @@ layout_windows_apply(const struct timespec *now, LayoutCompute compute) {
     size_t n = 0;
     struct Window *w;
     wl_list_for_each(w, &wm.windows, link) {
-        if (!w->closed) { n++; }
+        if (!w->closed && !w->space_hidden) { n++; }
     }
     if (n == 0) { return; }
 
@@ -60,7 +62,7 @@ layout_windows_apply(const struct timespec *now, LayoutCompute compute) {
 
     size_t i = 0;
     wl_list_for_each(w, &wm.windows, link) {
-        if (w->closed) { continue; }
+        if (w->closed || w->space_hidden) { continue; }
         lw[i++].window = w;
     }
 

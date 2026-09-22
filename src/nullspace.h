@@ -29,6 +29,10 @@
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include <xkbcommon/xkbcommon.h>
 
+#define SPACE_COUNT  10
+#define HIDDEN_POS_X (-1000000)
+#define HIDDEN_POS_Y (-1000000)
+
 struct TrimmingTree;
 
 struct Output {
@@ -84,6 +88,9 @@ struct Window {
 
     uint32_t pointer_resize_requested_edges;
 
+    int32_t saved_x;
+    int32_t saved_y;
+
     // Position and dimensions last given to the compositor.
     int32_t x;
     int32_t y;
@@ -101,6 +108,8 @@ struct Window {
 
     int32_t spawn_parent_x, spawn_parent_y, spawn_parent_w, spawn_parent_h;
 
+    int space;
+
     bool spawn_hint_set; // where a new tiled window should appear
     bool decoration_state_set;
     bool in_trimming_tree;
@@ -115,6 +124,8 @@ struct Window {
 
     bool new;
     bool closed;
+    // space_hidden == (space != wm.current_space).
+    bool space_hidden;
 };
 
 enum Action {
@@ -126,6 +137,16 @@ enum Action {
     ACTION_RESIZE,
     ACTION_CYCLE_LAYOUT,
     ACTION_EXIT,
+    ACTION_SPACE_1,
+    ACTION_SPACE_2,
+    ACTION_SPACE_3,
+    ACTION_SPACE_4,
+    ACTION_SPACE_5,
+    ACTION_SPACE_6,
+    ACTION_SPACE_7,
+    ACTION_SPACE_8,
+    ACTION_SPACE_9,
+    ACTION_SPACE_10,
 };
 
 struct XkbBinding {
@@ -192,10 +213,9 @@ struct WindowManager {
 
     enum Layout layout;
 
-    // Animation frame pacing. Instead of sending manage_dirty back-to-back
-    // (which spins the manage/render state machine as fast as clients can
-    // answer), animation ticks are driven by this timer so at most one manage
-    // sequence is requested per frame interval.
+    int current_space;
+
+    // Limit animation ticks (less aggressive on resources).
     int64_t anim_frame_ns; // frame interval in nanoseconds
 
     int32_t tiled_gap_outer_h;

@@ -400,6 +400,9 @@ static void seat_pointer_move(struct Seat *seat, struct Window *window);
 static void
 seat_pointer_resize(struct Seat *seat, struct Window *window, uint32_t edges);
 
+static struct Window *focus_stack_top(void);
+static void seat_focus(struct Seat *seat, struct Window *window);
+
 static void window_manage(struct Window *window) {
     if (window->new) {
         window->new = false;
@@ -463,7 +466,7 @@ static struct Window *last_focused_in_tree(void) {
     struct wl_list *cur = wm.focus_stack.prev;
     while (cur != &wm.focus_stack) {
         struct Window *w = wl_container_of(cur, w, focus_link);
-        if (w->in_trimming_tree) { return w; }
+        if (w->in_trimming_tree && !w->space_hidden) { return w; }
         cur = cur->prev;
     }
 
@@ -477,6 +480,7 @@ void trimming_sync(int32_t fb_x, int32_t fb_y, int32_t fb_w, int32_t fb_h) {
     wl_list_for_each(window, &wm.windows, link) {
         if (window->in_trimming_tree) { continue; }
         if (window->closed) { continue; }
+        if (window->space_hidden) { continue; }
 
         struct Window *focused = last_focused_in_tree();
         struct Seat *seat = first_seat_with_pointer();
@@ -564,6 +568,7 @@ void window_apply_target(
     struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh,
     const struct timespec *now
 ) {
+    if (w->space_hidden) { return; }
     if (nw < 1) { nw = 1; }
     if (nh < 1) { nh = 1; }
 
@@ -627,6 +632,70 @@ static void wm_set_layout(enum Layout layout) {
         window->last_target_y = INT32_MIN;
         window->last_target_w = INT32_MIN;
         window->last_target_h = INT32_MIN;
+    }
+}
+
+static void wm_switch_space(int space) {
+    if (space < 0 || space >= SPACE_COUNT) { return; }
+    if (space == wm.current_space) { return; }
+
+    struct Window *window;
+
+    wl_list_for_each(window, &wm.windows, link) {
+        if (window->closed) { continue; }
+
+        if (window->space == space) {
+            // Reveal
+            if (window->space_hidden) {
+                window->space_hidden = false;
+
+                if (window->pos_valid) {
+                    window_set_position(
+                        window, window->saved_x, window->saved_y
+                    );
+                }
+
+                // Force re-target
+                window->last_target_x = INT32_MIN;
+                window->last_target_y = INT32_MIN;
+                window->last_target_w = INT32_MIN;
+                window->last_target_h = INT32_MIN;
+            }
+        } else {
+            // Hide
+            if (!window->space_hidden) {
+                window->space_hidden = true;
+
+                if (window->pos_valid) {
+                    window->saved_x = window->x;
+                    window->saved_y = window->y;
+                } else {
+                    window->saved_x = 0;
+                    window->saved_y = 0;
+                }
+
+                window_animation_cancel(window);
+                window_set_position(window, HIDDEN_POS_X, HIDDEN_POS_Y);
+            }
+        }
+    }
+
+    if (wm.trimming_tree != NULL) {
+        wl_list_for_each(window, &wm.windows, link) {
+            if (window->in_trimming_tree && window->space_hidden) {
+                trimming_remove(wm.trimming_tree, window);
+                window->in_trimming_tree = false;
+            }
+        }
+    }
+
+    wm.current_space = space;
+
+    // Refocus if needed
+    struct Seat *seat;
+    wl_list_for_each(seat, &wm.seats, link) {
+        if (seat->focused != NULL && !seat->focused->space_hidden) { continue; }
+        seat_focus(seat, focus_stack_top());
     }
 }
 
@@ -827,22 +896,29 @@ static void seat_maybe_destroy(struct Seat *seat) {
 static struct Window *focus_stack_top(void) {
     if (wl_list_empty(&wm.focus_stack)) { return NULL; }
 
-    struct Window *window;
-    window = wl_container_of(wm.focus_stack.prev, window, focus_link);
-    return window;
+    struct wl_list *cur = wm.focus_stack.prev;
+    while (cur != &wm.focus_stack) {
+        struct Window *w = wl_container_of(cur, w, focus_link);
+        if (!w->closed && !w->space_hidden) { return w; }
+        cur = cur->prev;
+    }
+
+    return NULL;
 }
 
 static struct Window *window_next(struct Window *window) {
     if (wl_list_empty(&wm.windows)) { return NULL; }
 
-    struct wl_list *next = window != NULL ? window->link.next : wm.windows.next;
+    struct wl_list *start = (window != NULL) ? &window->link : &wm.windows;
+    struct wl_list *cur = start->next;
 
-    if (next == &wm.windows) { next = wm.windows.next; }
+    while (cur != &wm.windows) {
+        struct Window *w = wl_container_of(cur, w, link);
+        if (!w->closed && !w->space_hidden) { return w; }
+        cur = cur->next;
+    }
 
-    struct Window *result;
-    result = wl_container_of(next, result, link);
-
-    return result;
+    return NULL;
 }
 
 static void seat_focus(struct Seat *seat, struct Window *window) {
@@ -909,6 +985,7 @@ static void seat_action(struct Seat *seat, enum Action action) {
                 struct Window *w;
                 wl_list_for_each_reverse(w, &wm.focus_stack, focus_link) {
                     if (w == closing || w->closed) { continue; }
+                    if (w->space_hidden) { continue; }
                     next = w;
                     break;
                 }
@@ -927,14 +1004,14 @@ static void seat_action(struct Seat *seat, enum Action action) {
         case ACTION_MOVE:
             // Interactive move is only in the floating layout
             if (wm.layout == LAYOUT_FLOATING && seat->op == SEAT_OP_NONE
-                && seat->hovered != NULL) {
+                && seat->hovered != NULL && !seat->hovered->space_hidden) {
                 seat_pointer_move(seat, seat->hovered);
             }
 
             break;
         case ACTION_RESIZE:
             if (wm.layout == LAYOUT_FLOATING && seat->op == SEAT_OP_NONE
-                && seat->hovered != NULL) {
+                && seat->hovered != NULL && !seat->hovered->space_hidden) {
                 seat_pointer_resize(
                     seat, seat->hovered,
                     RIVER_WINDOW_V1_EDGES_BOTTOM | RIVER_WINDOW_V1_EDGES_RIGHT
@@ -948,6 +1025,16 @@ static void seat_action(struct Seat *seat, enum Action action) {
         case ACTION_EXIT:
             river_window_manager_v1_exit_session(window_manager_v1);
             break;
+        case ACTION_SPACE_1: wm_switch_space(0); break;
+        case ACTION_SPACE_2: wm_switch_space(1); break;
+        case ACTION_SPACE_3: wm_switch_space(2); break;
+        case ACTION_SPACE_4: wm_switch_space(3); break;
+        case ACTION_SPACE_5: wm_switch_space(4); break;
+        case ACTION_SPACE_6: wm_switch_space(5); break;
+        case ACTION_SPACE_7: wm_switch_space(6); break;
+        case ACTION_SPACE_8: wm_switch_space(7); break;
+        case ACTION_SPACE_9: wm_switch_space(8); break;
+        case ACTION_SPACE_10: wm_switch_space(9); break;
     }
 }
 
@@ -961,6 +1048,16 @@ static void seat_manage(struct Seat *seat) {
         xkb_binding_create(seat, super, XKB_KEY_f, ACTION_FOCUS_NEXT);
         xkb_binding_create(seat, super, XKB_KEY_l, ACTION_CYCLE_LAYOUT);
         xkb_binding_create(seat, super, XKB_KEY_r, ACTION_EXIT);
+        xkb_binding_create(seat, super, XKB_KEY_1, ACTION_SPACE_1);
+        xkb_binding_create(seat, super, XKB_KEY_2, ACTION_SPACE_2);
+        xkb_binding_create(seat, super, XKB_KEY_3, ACTION_SPACE_3);
+        xkb_binding_create(seat, super, XKB_KEY_4, ACTION_SPACE_4);
+        xkb_binding_create(seat, super, XKB_KEY_5, ACTION_SPACE_5);
+        xkb_binding_create(seat, super, XKB_KEY_6, ACTION_SPACE_6);
+        xkb_binding_create(seat, super, XKB_KEY_7, ACTION_SPACE_7);
+        xkb_binding_create(seat, super, XKB_KEY_8, ACTION_SPACE_8);
+        xkb_binding_create(seat, super, XKB_KEY_9, ACTION_SPACE_9);
+        xkb_binding_create(seat, super, XKB_KEY_0, ACTION_SPACE_10);
 
         pointer_binding_create(seat, super, BTN_LEFT, ACTION_MOVE);
         pointer_binding_create(seat, super, BTN_RIGHT, ACTION_RESIZE);
@@ -1028,6 +1125,7 @@ static void seat_render(struct Seat *seat) {
     switch (seat->op) {
         case SEAT_OP_NONE: break;
         case SEAT_OP_MOVE:
+            if (seat->op_window->space_hidden) { break; }
             window_set_position(
                 seat->op_window, seat->op_start_x + seat->op_dx,
                 seat->op_start_y + seat->op_dy
@@ -1036,6 +1134,8 @@ static void seat_render(struct Seat *seat) {
             break;
         case SEAT_OP_RESIZE:
             {
+                if (seat->op_window->space_hidden) { break; }
+
                 int32_t x = seat->op_start_x;
                 int32_t y = seat->op_start_y;
 
@@ -1128,7 +1228,7 @@ wm_handle_render_start(void *data, struct river_window_manager_v1 *obj) {
     bool has_window = false;
     struct Window *window;
     wl_list_for_each(window, &wm.windows, link) {
-        if (!window->closed) {
+        if (!window->closed && !window->space_hidden) {
             has_window = true;
             break;
         }
@@ -1165,6 +1265,7 @@ static void wm_handle_window(
     window->obj = river_window;
     window->node = river_window_v1_get_node(window->obj);
     window->new = true;
+    window->space = wm.current_space;
 
     river_window_v1_add_listener(window->obj, &river_window_listener, window);
 
@@ -1248,6 +1349,7 @@ static void wm_init(void) {
     wl_list_init(&wm.seats);
 
     wm.anim_timer_fd = -1;
+    wm.current_space = 0;
 
     wm.layout = LAYOUT_TRIMMING;
     wm.tiled_gap_outer_h = 8;
@@ -1449,7 +1551,7 @@ int main(void) {
             if (home != NULL) {
                 snprintf(
                     default_path, sizeof(default_path),
-                    "%s/.config/river/wallpaper.ppm", home
+                    "%s/.local/share/nullspace/wallpaper.ppm", home
                 );
                 wallpaper_path = default_path;
             }
@@ -1457,7 +1559,7 @@ int main(void) {
 
         if (wallpaper_path != NULL) {
             if (!wallpaper_load_ppm(&wp, wallpaper_path)) {
-                fprintf(stderr, "Wallpaper: continuing without a wallpaper\n");
+                fprintf(stderr, "Wallpaper: using default pattern\n");
             }
         }
     }
