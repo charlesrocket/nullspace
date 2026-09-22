@@ -126,6 +126,7 @@ struct Window {
     bool closed;
     // space_hidden == (space != wm.current_space).
     bool space_hidden;
+    bool space_anim;
 };
 
 enum Action {

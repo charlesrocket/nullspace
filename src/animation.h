@@ -12,14 +12,15 @@
 // and `window_send_size()` are the only writers, and new animations start
 // from these values.
 
+#define ANIM_DURATION_SPACE 200 // ms
 #define ANIM_DURATION_OPEN  200 // ms, grow-in
 #define ANIM_DURATION_CLOSE 200 // ms, shrink-out
 #define ANIM_DURATION_TILE  200 // ms, tiled layout transitions
 
 // Animation tick rate. Override with the `NSP_ANIM_HZ` environment variable.
-#define ANIM_DEFAULT_HZ     80
+#define ANIM_DEFAULT_HZ     100
 #define ANIM_MIN_HZ         60
-#define ANIM_MAX_HZ         120
+#define ANIM_MAX_HZ         720
 
 int64_t timespec_to_ns(const struct timespec *ts);
 

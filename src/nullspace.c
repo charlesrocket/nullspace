@@ -585,7 +585,9 @@ void window_apply_target(
         );
     } else if (nx != w->last_target_x || ny != w->last_target_y
                || nw != w->last_target_w || nh != w->last_target_h) {
-        window_animate(w, now, nx, ny, nw, nh, ANIM_DURATION_TILE);
+        int duration = w->space_anim ? ANIM_DURATION_SPACE : ANIM_DURATION_TILE;
+        w->space_anim = false;
+        window_animate(w, now, nx, ny, nw, nh, duration);
     } else {
         return;
     }
@@ -639,6 +641,29 @@ static void wm_switch_space(int space) {
     if (space < 0 || space >= SPACE_COUNT) { return; }
     if (space == wm.current_space) { return; }
 
+    // +1: left-to-right
+    // -1: right-to-left
+    int dir = (space > wm.current_space) ? -1 : 1; // animation direction
+
+    struct Output *output = tiling_output();
+    int32_t left = HIDDEN_POS_X;
+    int32_t right = HIDDEN_POS_X;
+
+    if (output != NULL) {
+        int32_t x, w;
+        if (output->area_set && output->area_width > 0) {
+            x = output->area_x;
+            w = output->area_width;
+        } else {
+            x = output->pos_x;
+            w = output->width;
+        }
+
+        left = x - w;
+        right = x + w;
+    }
+
+    struct timespec now = wm_now();
     struct Window *window;
 
     wl_list_for_each(window, &wm.windows, link) {
@@ -648,18 +673,24 @@ static void wm_switch_space(int space) {
             // Reveal
             if (window->space_hidden) {
                 window->space_hidden = false;
+                window_animation_cancel(window);
 
-                if (window->pos_valid) {
-                    window_set_position(
-                        window, window->saved_x, window->saved_y
+                int32_t start_x = (dir > 0) ? left : right;
+                window_set_position(window, start_x, window->y);
+
+                if (wm.layout == LAYOUT_FLOATING) {
+                    window_animate_from(
+                        window, &now, start_x, window->y, window->prop_w,
+                        window->prop_h, window->saved_x, window->saved_y,
+                        window->prop_w, window->prop_h, ANIM_DURATION_SPACE
                     );
+                } else {
+                    window->space_anim = true;
+                    window->last_target_x = INT32_MIN;
+                    window->last_target_y = INT32_MIN;
+                    window->last_target_w = INT32_MIN;
+                    window->last_target_h = INT32_MIN;
                 }
-
-                // Force re-target
-                window->last_target_x = INT32_MIN;
-                window->last_target_y = INT32_MIN;
-                window->last_target_w = INT32_MIN;
-                window->last_target_h = INT32_MIN;
             }
         } else {
             // Hide
@@ -675,7 +706,12 @@ static void wm_switch_space(int space) {
                 }
 
                 window_animation_cancel(window);
-                window_set_position(window, HIDDEN_POS_X, HIDDEN_POS_Y);
+
+                int32_t target_x = (dir > 0) ? right : left;
+                window_animate(
+                    window, &now, target_x, window->y, window->prop_w,
+                    window->prop_h, ANIM_DURATION_SPACE
+                );
             }
         }
     }
