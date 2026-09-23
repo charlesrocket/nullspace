@@ -1,6 +1,5 @@
 #ifndef OUTPUT_H
 #define OUTPUT_H
-#endif
 
 #include "wallpaper.h"
 
@@ -47,3 +46,5 @@ void output_handle_position(
 void output_handle_dimensions(
     void *data, struct river_output_v1 *obj, int32_t width, int32_t height
 );
+
+#endif // OUTPUT_H

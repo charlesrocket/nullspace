@@ -1276,10 +1276,7 @@ static void wm_handle_output(
         );
     }
 
-#ifdef WALLPAPER
-    output->wallpaper = wallpaper_output_create(&wp, river_output);
-
-#endif
+    output->wallpaper = wallpaper_output_create(&wp);
 
     wl_list_insert(wm.outputs.prev, &output->link);
 }

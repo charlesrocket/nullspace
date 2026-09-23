@@ -353,21 +353,6 @@ static int create_shm_fd(size_t size) {
     return fd;
 }
 
-static void wpo_pool_reset(struct wpo_pool *p) {
-    p->handle = NULL;
-    p->fd = -1;
-    p->data = NULL;
-    p->size = 0;
-    p->width = 0;
-    p->height = 0;
-    p->valid = false;
-}
-
-static bool wpo_pool_matches(const struct WallpaperOutput *wpo) {
-    return wpo->pool.valid && wpo->pool.width == wpo->width
-        && wpo->pool.height == wpo->height;
-}
-
 static void wpo_destroy_cached_variants(struct WallpaperOutput *wpo) {
     free(wpo->cached_sharp);
     wpo->cached_sharp = NULL;
@@ -376,26 +361,40 @@ static void wpo_destroy_cached_variants(struct WallpaperOutput *wpo) {
     wpo->cached_blurred = NULL;
 }
 
-static void wpo_destroy_buffers(struct WallpaperOutput *wpo) {
-    for (int i = 0; i < 2; i++) {
-        if (wpo->buffers[i] != NULL) {
-            wl_buffer_destroy(wpo->buffers[i]);
-            wpo->buffers[i] = NULL;
-        }
+static void buffer_handle_release(void *data, struct wl_buffer *buffer) {
+    struct WallpaperOutput *wpo = data;
+    wpo->busy = false;
+
+    if (wpo->deferred) {
+        wpo->deferred = false;
+        river_window_manager_v1_manage_dirty(wpo->wp->wm);
+    }
+}
+
+static const struct wl_buffer_listener buffer_listener = {
+    .release = buffer_handle_release,
+};
+
+static void wpo_destroy_buffer(struct WallpaperOutput *wpo) {
+    if (wpo->buffer != NULL) {
+        wl_buffer_destroy(wpo->buffer);
+        wpo->buffer = NULL;
     }
 
-    if (wpo->pool.handle != NULL) { wl_shm_pool_destroy(wpo->pool.handle); }
+    if (wpo->data != NULL) {
+        munmap(wpo->data, wpo->size);
+        wpo->data = NULL;
+    }
 
-    if (wpo->pool.data != NULL) { munmap(wpo->pool.data, wpo->pool.size); }
-
-    if (wpo->pool.fd >= 0) { close(wpo->pool.fd); }
-
-    wpo_pool_reset(&wpo->pool);
+    wpo->size = 0;
+    wpo->busy = false;
+    wpo->deferred = false;
+    wpo->drawn_valid = false;
 }
 
 static bool
-wpo_alloc_buffers(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
-    wpo_destroy_buffers(wpo);
+wpo_alloc_buffer(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
+    wpo_destroy_buffer(wpo);
 
     if (wpo->width <= 0 || wpo->height <= 0) { return false; }
 
@@ -404,54 +403,46 @@ wpo_alloc_buffers(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
         return false;
     }
 
-    size_t image_size = stride * (size_t)wpo->height;
-    if (image_size > SIZE_MAX / 2) { return false; }
+    size_t size = stride * (size_t)wpo->height;
+    if (size > INT32_MAX) { return false; }
 
-    size_t pool_size = image_size * 2; // two buffers, double-buffered
-    if (pool_size > INT32_MAX) { return false; }
-
-    int fd = create_shm_fd(pool_size);
+    int fd = create_shm_fd(size);
     if (fd < 0) { return false; }
 
-    uint8_t *data =
-        mmap(NULL, pool_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    uint8_t *data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (data == MAP_FAILED) {
         fprintf(stderr, "Wallpaper: mmap failed: %s\n", strerror(errno));
         close(fd);
         return false;
     }
 
-    struct wl_shm_pool *handle =
-        wl_shm_create_pool(wp->shm, fd, (int32_t)pool_size);
-    if (handle == NULL) {
+    struct wl_shm_pool *pool = wl_shm_create_pool(wp->shm, fd, (int32_t)size);
+    if (pool == NULL) {
         fprintf(stderr, "Wallpaper: wl_shm_create_pool failed\n");
-        munmap(data, pool_size);
+        munmap(data, size);
         close(fd);
         return false;
     }
 
-    wpo->pool.handle = handle;
-    wpo->pool.fd = fd;
-    wpo->pool.data = data;
-    wpo->pool.size = pool_size;
-    wpo->pool.width = wpo->width;
-    wpo->pool.height = wpo->height;
-    wpo->pool.valid = true;
+    struct wl_buffer *buffer = wl_shm_pool_create_buffer(
+        pool, 0, wpo->width, wpo->height, (int32_t)stride,
+        WL_SHM_FORMAT_ARGB8888
+    );
 
-    wpo->next_buffer = 0;
+    wl_shm_pool_destroy(pool);
+    close(fd);
 
-    for (int i = 0; i < 2; i++) {
-        wpo->buffers[i] = wl_shm_pool_create_buffer(
-            handle, (int32_t)(image_size * (size_t)i), wpo->width, wpo->height,
-            (int32_t)stride, WL_SHM_FORMAT_ARGB8888
-        );
-
-        if (wpo->buffers[i] == NULL) {
-            fprintf(stderr, "Wallpaper: wl_shm_pool_create_buffer failed\n");
-            wpo_destroy_buffers(wpo);
-            return false;
-        }
+    if (buffer == NULL) {
+        fprintf(stderr, "Wallpaper: wl_shm_pool_create_buffer failed\n");
+        munmap(data, size);
+        return false;
     }
+
+    wl_buffer_add_listener(buffer, &buffer_listener, wpo);
+
+    wpo->buffer = buffer;
+    wpo->data = data;
+    wpo->size = size;
 
     return true;
 }
@@ -460,8 +451,7 @@ static void
 wpo_prepare_variants(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
     size_t image_size = (size_t)wpo->width * (size_t)wpo->height * 4;
 
-    free(wpo->cached_sharp);
-    free(wpo->cached_blurred);
+    wpo_destroy_cached_variants(wpo);
     wpo->cached_sharp = malloc(image_size);
     wpo->cached_blurred = malloc(image_size);
 
@@ -481,6 +471,7 @@ wpo_prepare_variants(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
         box_blur(wpo->cached_blurred, wpo->width, wpo->height, BLUR_RADIUS);
     }
 
+    // Source is R,G,B,A; ARGB8888 little-endian is B,G,R,A in memory.
     uint8_t *variants[2] = {wpo->cached_sharp, wpo->cached_blurred};
 
     for (int v = 0; v < 2; v++) {
@@ -537,16 +528,27 @@ static void wpo_composite(
     }
 }
 
-static void wpo_redraw(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
-    if (wpo->pool.data == NULL) { return; }
+static bool
+wpo_needs_draw(const struct Wallpaper *wp, const struct WallpaperOutput *wpo) {
+    if (!wpo->drawn_valid) { return true; }
+    if (wpo->drawn_w != wpo->width || wpo->drawn_h != wpo->height) {
+        return true;
+    }
 
-    size_t row_bytes = (size_t)wpo->width * 4;
-    size_t image_size = row_bytes * (size_t)wpo->height;
-    int idx = wpo->next_buffer;
-    uint8_t *dst = wpo->pool.data + image_size * (size_t)idx;
+    if (wpo->drawn_loaded != wp->loaded) { return true; }
+
+    if (!wp->loaded) { return false; }
+
+    return wpo->drawn_blur_all != wp->blur_all
+        || wpo->drawn_top_h != wp->blur_top_h
+        || wpo->drawn_fade_h != wp->blur_fade_h;
+}
+
+static void wpo_redraw(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
+    size_t image_size = (size_t)wpo->width * (size_t)wpo->height * 4;
 
     if (!wp->loaded) {
-        paint_no_wallpaper_pattern(dst, wpo->width, wpo->height);
+        paint_no_wallpaper_pattern(wpo->data, wpo->width, wpo->height);
     } else {
         if (wpo->cached_sharp == NULL || wpo->cached_blurred == NULL) {
             wpo_prepare_variants(wp, wpo);
@@ -556,22 +558,28 @@ static void wpo_redraw(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
         }
 
         if (wp->blur_all) {
-            memcpy(dst, wpo->cached_blurred, image_size);
+            memcpy(wpo->data, wpo->cached_blurred, image_size);
         } else if (wp->blur_top_h > 0) {
-            wpo_composite(wpo, dst, wp->blur_top_h, wp->blur_fade_h);
+            wpo_composite(wpo, wpo->data, wp->blur_top_h, wp->blur_fade_h);
         } else {
-            memcpy(dst, wpo->cached_sharp, image_size);
+            memcpy(wpo->data, wpo->cached_sharp, image_size);
         }
     }
 
-    wpo->next_buffer = 1 - idx;
+    wpo->busy = true;
 
     river_shell_surface_v1_sync_next_commit(wpo->shell_surface);
-    wl_surface_attach(wpo->surface, wpo->buffers[idx], 0, 0);
+    wl_surface_attach(wpo->surface, wpo->buffer, 0, 0);
     wl_surface_damage_buffer(wpo->surface, 0, 0, wpo->width, wpo->height);
     wl_surface_commit(wpo->surface);
 
-    wpo->needs_redraw = false;
+    wpo->drawn_w = wpo->width;
+    wpo->drawn_h = wpo->height;
+    wpo->drawn_loaded = wp->loaded;
+    wpo->drawn_blur_all = wp->blur_all;
+    wpo->drawn_top_h = wp->blur_top_h;
+    wpo->drawn_fade_h = wp->blur_fade_h;
+    wpo->drawn_valid = true;
 }
 
 void wallpaper_init(
@@ -586,21 +594,18 @@ void wallpaper_init(
     wl_list_init(&wp->outputs);
 }
 
-struct WallpaperOutput *
-wallpaper_output_create(struct Wallpaper *wp, struct river_output_v1 *output) {
+struct WallpaperOutput *wallpaper_output_create(struct Wallpaper *wp) {
     struct WallpaperOutput *wpo = calloc(1, sizeof(struct WallpaperOutput));
 
     if (wpo == NULL) { return NULL; }
 
-    wpo->output = output;
-    wpo_pool_reset(&wpo->pool);
+    wpo->wp = wp;
 
     wpo->surface = wl_compositor_create_surface(wp->compositor);
     wpo->shell_surface =
         river_window_manager_v1_get_shell_surface(wp->wm, wpo->surface);
 
     wpo->node = river_shell_surface_v1_get_node(wpo->shell_surface);
-    wpo->needs_redraw = true;
 
     wl_list_insert(wp->outputs.prev, &wpo->link);
 
@@ -614,11 +619,23 @@ void wallpaper_output_set_dimensions(
 
     wpo->width = width;
     wpo->height = height;
-    wpo->needs_redraw = true;
+
+    wpo_destroy_cached_variants(wpo);
+}
+
+void wallpaper_output_set_position(
+    struct WallpaperOutput *wpo, int32_t x, int32_t y
+) {
+    if (wpo->pos_valid && wpo->pos_x == x && wpo->pos_y == y) { return; }
+
+    wpo->pos_x = x;
+    wpo->pos_y = y;
+    wpo->pos_valid = true;
+    wpo->position_sent = false;
 }
 
 void wallpaper_output_destroy(struct WallpaperOutput *wpo) {
-    wpo_destroy_buffers(wpo);
+    wpo_destroy_buffer(wpo);
     wpo_destroy_cached_variants(wpo);
 
     if (wpo->node != NULL) { river_node_v1_destroy(wpo->node); }
@@ -643,9 +660,6 @@ void wallpaper_manage(
     if (blur_top_h < 0) { blur_top_h = 0; }
     if (blur_fade_h < 0) { blur_fade_h = 0; }
 
-    bool changed = (wp->blur_all != blur_all) || (wp->blur_top_h != blur_top_h)
-                || (wp->blur_fade_h != blur_fade_h);
-
     wp->blur_all = blur_all;
     wp->blur_top_h = blur_top_h;
     wp->blur_fade_h = blur_fade_h;
@@ -654,22 +668,29 @@ void wallpaper_manage(
 
     wl_list_for_each(wpo, &wp->outputs, link) {
         if (wpo->width <= 0 || wpo->height <= 0) { continue; }
-
-        if (!wpo_pool_matches(wpo)) {
-            wpo_destroy_cached_variants(wpo);
-
-            if (!wpo_alloc_buffers(wp, wpo)) { continue; }
-
-            wpo->needs_redraw = true;
+        if (wpo->buffer != NULL
+            && (wpo->drawn_w != wpo->width || wpo->drawn_h != wpo->height)
+            && wpo->drawn_valid) {
+            wpo_destroy_buffer(wpo);
         }
 
-        if (!wpo->configured) {
+        if (wpo->buffer == NULL && !wpo_alloc_buffer(wp, wpo)) { continue; }
+        if (!wpo->placed) {
             river_node_v1_place_bottom(wpo->node);
-            wpo->configured = true;
+            wpo->placed = true;
         }
 
-        if (wpo->needs_redraw || (wp->loaded && changed)) {
-            wpo_redraw(wp, wpo);
+        if (!wpo->position_sent && wpo->pos_valid) {
+            river_node_v1_set_position(wpo->node, wpo->pos_x, wpo->pos_y);
+            wpo->position_sent = true;
         }
+
+        if (!wpo_needs_draw(wp, wpo)) { continue; }
+        if (wpo->busy) {
+            wpo->deferred = true;
+            continue;
+        }
+
+        wpo_redraw(wp, wpo);
     }
 }
