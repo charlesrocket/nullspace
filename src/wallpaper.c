@@ -33,7 +33,7 @@
 
 #define BLUR_RADIUS                  12
 #define BLUR_PASSES                  2
-#define BLUR_TOP_INSET 8
+#define BLUR_TOP_INSET               8
 
 #define SHM_ANON                     ((char *)1)
 

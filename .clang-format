@@ -12,6 +12,7 @@ BreakBeforeBinaryOperators: NonAssignment
 AlignOperands: AlignAfterOperator
 AlignConsecutiveMacros: AcrossEmptyLinesAndComments
 AlignConsecutiveAssignments: false
+AlignConsecutiveBitFields: true
 AlignArrayOfStructures: Right
 AlignAfterOpenBracket: BlockIndent
 AllowShortBlocksOnASingleLine: Always
