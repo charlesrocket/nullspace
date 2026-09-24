@@ -485,36 +485,56 @@ wpo_prepare_variants(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
     }
 }
 
+#define BLUR_TOP_INSET 8
+
+static uint32_t
+blur_weight(int32_t y, int32_t top, int32_t top_fade, int32_t fade) {
+    int32_t inset = BLUR_TOP_INSET;
+    if (inset > top) { inset = top; }
+    if (top_fade > inset) { top_fade = inset; }
+    if (y < inset - top_fade) { return 0; }
+    if (top_fade > 0 && y < inset) {
+        return (uint32_t)(255 * (y - (inset - top_fade)) / top_fade);
+    }
+
+    if (y < top) { return 255; }
+    if (fade > 0 && y < top + fade) {
+        return (uint32_t)(255 * (top + fade - y) / fade);
+    }
+
+    return 0;
+}
+
 static void wpo_composite(
-    struct WallpaperOutput *wpo, uint8_t *dst, int32_t top, int32_t fade
+    struct WallpaperOutput *wpo, uint8_t *dst, int32_t top, int32_t top_fade,
+    int32_t fade
 ) {
     size_t row_bytes = (size_t)wpo->width * 4;
-    size_t image_size = row_bytes * (size_t)wpo->height;
 
     if (top < 0) { top = 0; }
     if (top > wpo->height) { top = wpo->height; }
+    if (top_fade < 0) { top_fade = 0; }
     if (fade < 0) { fade = 0; }
     if (top + fade > wpo->height) { fade = wpo->height - top; }
 
-    // Sharp everywhere first
-    memcpy(dst, wpo->cached_sharp, image_size);
-
-    if (top == 0 && fade == 0) { return; }
-
-    // Full blur for rows [0, top)
-    if (top > 0) { memcpy(dst, wpo->cached_blurred, (size_t)top * row_bytes); }
-
-    // Gradient for rows [top, top + fade)
-    for (int32_t i = 0; i < fade; i++) {
-        int32_t y = top + i;
-
-        // alpha: 255 at the top of the fade, 0 at the bottom.
-        uint32_t alpha = (uint32_t)(255 * (fade - i) / fade);
-        uint32_t inv = 255 - alpha;
+    for (int32_t y = 0; y < wpo->height; y++) {
+        uint32_t alpha = blur_weight(y, top, top_fade, fade);
 
         uint8_t *sp = wpo->cached_sharp + (size_t)y * row_bytes;
         uint8_t *bp = wpo->cached_blurred + (size_t)y * row_bytes;
         uint8_t *dp = dst + (size_t)y * row_bytes;
+
+        if (alpha == 0) {
+            memcpy(dp, sp, row_bytes);
+            continue;
+        }
+
+        if (alpha == 255) {
+            memcpy(dp, bp, row_bytes);
+            continue;
+        }
+
+        uint32_t inv = 255 - alpha;
 
         for (int32_t x = 0; x < wpo->width; x++) {
             for (int c = 0; c < 3; c++) {
@@ -536,11 +556,11 @@ wpo_needs_draw(const struct Wallpaper *wp, const struct WallpaperOutput *wpo) {
     }
 
     if (wpo->drawn_loaded != wp->loaded) { return true; }
-
     if (!wp->loaded) { return false; }
 
     return wpo->drawn_blur_all != wp->blur_all
         || wpo->drawn_top_h != wp->blur_top_h
+        || wpo->drawn_top_fade_h != wp->blur_top_fade_h
         || wpo->drawn_fade_h != wp->blur_fade_h;
 }
 
@@ -560,7 +580,10 @@ static void wpo_redraw(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
         if (wp->blur_all) {
             memcpy(wpo->data, wpo->cached_blurred, image_size);
         } else if (wp->blur_top_h > 0) {
-            wpo_composite(wpo, wpo->data, wp->blur_top_h, wp->blur_fade_h);
+            wpo_composite(
+                wpo, wpo->data, wp->blur_top_h, wp->blur_top_fade_h,
+                wp->blur_fade_h
+            );
         } else {
             memcpy(wpo->data, wpo->cached_sharp, image_size);
         }
@@ -578,6 +601,7 @@ static void wpo_redraw(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
     wpo->drawn_loaded = wp->loaded;
     wpo->drawn_blur_all = wp->blur_all;
     wpo->drawn_top_h = wp->blur_top_h;
+    wpo->drawn_top_fade_h = wp->blur_top_fade_h;
     wpo->drawn_fade_h = wp->blur_fade_h;
     wpo->drawn_valid = true;
 }
@@ -650,27 +674,30 @@ void wallpaper_output_destroy(struct WallpaperOutput *wpo) {
 }
 
 void wallpaper_manage(
-    struct Wallpaper *wp, bool blur_all, int32_t blur_top_h, int32_t blur_fade_h
+    struct Wallpaper *wp, bool blur_all, int32_t blur_top_h,
+    int32_t blur_top_fade_h, int32_t blur_fade_h
 ) {
     if (blur_all) {
         blur_top_h = 0;
+        blur_top_fade_h = 0;
         blur_fade_h = 0;
     }
 
     if (blur_top_h < 0) { blur_top_h = 0; }
+    if (blur_top_fade_h < 0) { blur_top_fade_h = 0; }
     if (blur_fade_h < 0) { blur_fade_h = 0; }
 
     wp->blur_all = blur_all;
     wp->blur_top_h = blur_top_h;
+    wp->blur_top_fade_h = blur_top_fade_h;
     wp->blur_fade_h = blur_fade_h;
 
     struct WallpaperOutput *wpo;
 
     wl_list_for_each(wpo, &wp->outputs, link) {
         if (wpo->width <= 0 || wpo->height <= 0) { continue; }
-        if (wpo->buffer != NULL
-            && (wpo->drawn_w != wpo->width || wpo->drawn_h != wpo->height)
-            && wpo->drawn_valid) {
+        if (wpo->buffer != NULL && wpo->drawn_valid
+            && (wpo->drawn_w != wpo->width || wpo->drawn_h != wpo->height)) {
             wpo_destroy_buffer(wpo);
         }
 

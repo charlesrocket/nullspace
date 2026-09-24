@@ -6,11 +6,8 @@ src_files = files(
   'layouts/horizontal.c',
   'output.c',
   'animation.c',
+  'wallpaper.c',
 ) + generated
-
-if get_option('wallpaper')
-  src_files += files('wallpaper.c')
-endif
 
 exe = executable(
   'nullspace',

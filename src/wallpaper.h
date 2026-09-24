@@ -22,9 +22,11 @@ struct WallpaperOutput {
     struct wl_buffer *buffer;
     struct Wallpaper *wp;
 
-    int32_t drawn_w, drawn_h, drawn_top_h, drawn_fade_h; // current
     int32_t width, height; // output dimensions, in wm logical space
     int32_t pos_x, pos_y;  // output position, in wm logical space
+
+    int32_t drawn_w, drawn_h, drawn_top_h, drawn_top_fade_h,
+        drawn_fade_h; // current
 
     uint8_t *cached_sharp, *cached_blurred;
     uint8_t *data;
@@ -34,7 +36,6 @@ struct WallpaperOutput {
 
     bool busy;
     bool deferred;
-
     bool pos_valid;
     bool position_sent;
     bool placed;
@@ -51,6 +52,7 @@ struct Wallpaper {
     uint8_t *image_pixels;
 
     int32_t blur_top_h;
+    int32_t blur_top_fade_h;
     int32_t blur_fade_h;
 
     int image_width, image_height;
@@ -81,7 +83,8 @@ void wallpaper_output_set_position(
 void wallpaper_output_destroy(struct WallpaperOutput *wpo);
 
 void wallpaper_manage(
-    struct Wallpaper *wp, bool blur_all, int32_t blur_top_h, int32_t blur_fade_h
+    struct Wallpaper *wp, bool blur_all, int32_t blur_top_h,
+    int32_t blur_top_fade_h, int32_t blur_fade_h
 );
 
 #endif // WALLPAPER_H

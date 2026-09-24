@@ -1209,7 +1209,6 @@ wm_handle_render_start(void *data, struct river_window_manager_v1 *obj) {
     struct Seat *seat;
 
     wl_list_for_each(seat, &wm.seats, link) { seat_render(seat); }
-#ifdef WALLPAPER
     bool has_window = false;
     struct Window *window;
     wl_list_for_each(window, &wm.windows, link) {
@@ -1237,8 +1236,11 @@ wm_handle_render_start(void *data, struct river_window_manager_v1 *obj) {
         }
     }
 
-    wallpaper_manage(&wp, has_window, top_zone_h, WALLPAPER_TOPBAR_FADE_H);
-#endif
+    wallpaper_manage(
+        &wp, has_window, top_zone_h, WALLPAPER_TOPBAR_FADE_H,
+        WALLPAPER_TOPBAR_FADE_H / 2
+    );
+
     river_window_manager_v1_render_finish(window_manager_v1);
 }
 
