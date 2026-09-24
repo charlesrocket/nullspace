@@ -40,6 +40,10 @@ void output_handle_position(
     struct Output *output = data;
     output->pos_x = x;
     output->pos_y = y;
+
+    if (output->wallpaper != NULL) {
+        wallpaper_output_set_position(output->wallpaper, x, y);
+    }
 }
 
 void output_handle_dimensions(

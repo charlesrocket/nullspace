@@ -1387,10 +1387,8 @@ static void handle_global(
     } else if (strcmp(interface, wl_compositor_interface.name) == 0) {
         compositor =
             wl_registry_bind(registry, name, &wl_compositor_interface, 4);
-#ifdef WALLPAPER
     } else if (strcmp(interface, wl_shm_interface.name) == 0) {
         shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
-#endif
     }
 }
 
@@ -1509,7 +1507,6 @@ int main(void) {
         return 1;
     }
 
-#ifdef WALLPAPER
     if (shm == NULL) {
         fprintf(
             stderr, "wl_shm not supported by the Wayland server "
@@ -1518,11 +1515,9 @@ int main(void) {
 
         return 1;
     }
-#endif
 
     wm_init();
 
-#ifdef WALLPAPER
     if (compositor != NULL && shm != NULL) {
         wallpaper_init(&wp, compositor, shm, window_manager_v1);
 
@@ -1547,7 +1542,6 @@ int main(void) {
             }
         }
     }
-#endif
 
     river_window_manager_v1_add_listener(window_manager_v1, &wm_listener, NULL);
 

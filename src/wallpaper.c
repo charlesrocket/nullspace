@@ -17,68 +17,73 @@
 #include <unistd.h>
 #include <wayland-client-protocol.h>
 
-#define NO_WALLPAPER_BG_R         0x12
-#define NO_WALLPAPER_BG_G         0x12
-#define NO_WALLPAPER_BG_B         0x12
+#define DEFAULT_PATTERN_BG_R         0x12
+#define DEFAULT_PATTERN_BG_G         0x12
+#define DEFAULT_PATTERN_BG_B         0x12
 
-#define NO_WALLPAPER_DOT_R        0x3a
-#define NO_WALLPAPER_DOT_G        0xb5
-#define NO_WALLPAPER_DOT_B        0x5e
+#define DEFAULT_PATTERN_DOT_R        0x3a
+#define DEFAULT_PATTERN_DOT_G        0xb5
+#define DEFAULT_PATTERN_DOT_B        0x5e
 
-#define NO_WALLPAPER_GRID_SPACING 24
-#define NO_WALLPAPER_DOT_RADIUS   1
+#define DEFAULT_PATTERN_GRID_SPACING 24
+#define DEFAULT_PATTERN_DOT_RADIUS   1
 
-static void paint_no_wallpaper_pattern(uint8_t *dst, int w, int h) {
+#define BLUR_RADIUS                  12
+#define BLUR_PASSES                  2
+
+#define SHM_ANON                     ((char *)1)
+
+static void paint_default_pattern(uint8_t *dst, int w, int h) {
     if (w <= 0 || h <= 0) { return; }
 
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
             uint8_t *dp = &dst[((size_t)y * (size_t)w + (size_t)x) * 4];
 
-            dp[0] = NO_WALLPAPER_BG_B;
-            dp[1] = NO_WALLPAPER_BG_G;
-            dp[2] = NO_WALLPAPER_BG_R;
+            dp[0] = DEFAULT_PATTERN_BG_B;
+            dp[1] = DEFAULT_PATTERN_BG_G;
+            dp[2] = DEFAULT_PATTERN_BG_R;
             dp[3] = 255;
         }
     }
 
-    int cols = w / NO_WALLPAPER_GRID_SPACING;
-    int rows = h / NO_WALLPAPER_GRID_SPACING;
+    int cols = w / DEFAULT_PATTERN_GRID_SPACING;
+    int rows = h / DEFAULT_PATTERN_GRID_SPACING;
 
-    int used_w = cols * NO_WALLPAPER_GRID_SPACING;
-    int used_h = rows * NO_WALLPAPER_GRID_SPACING;
+    int used_w = cols * DEFAULT_PATTERN_GRID_SPACING;
+    int used_h = rows * DEFAULT_PATTERN_GRID_SPACING;
 
-    int offset_x = (w - used_w) / 2 + NO_WALLPAPER_GRID_SPACING / 2;
-    int offset_y = (h - used_h) / 2 + NO_WALLPAPER_GRID_SPACING / 2;
+    int offset_x = (w - used_w) / 2 + DEFAULT_PATTERN_GRID_SPACING / 2;
+    int offset_y = (h - used_h) / 2 + DEFAULT_PATTERN_GRID_SPACING / 2;
 
     for (int row = 0; row < rows; row++) {
-        int gy = offset_y + row * NO_WALLPAPER_GRID_SPACING;
+        int gy = offset_y + row * DEFAULT_PATTERN_GRID_SPACING;
 
         for (int col = 0; col < cols; col++) {
-            int gx = offset_x + col * NO_WALLPAPER_GRID_SPACING;
+            int gx = offset_x + col * DEFAULT_PATTERN_GRID_SPACING;
 
-            for (int dy = -NO_WALLPAPER_DOT_RADIUS;
-                 dy <= NO_WALLPAPER_DOT_RADIUS; dy++) {
+            for (int dy = -DEFAULT_PATTERN_DOT_RADIUS;
+                 dy <= DEFAULT_PATTERN_DOT_RADIUS; dy++) {
                 int py = gy + dy;
                 if (py < 0 || py >= h) { continue; }
 
-                for (int dx = -NO_WALLPAPER_DOT_RADIUS;
-                     dx <= NO_WALLPAPER_DOT_RADIUS; dx++) {
+                for (int dx = -DEFAULT_PATTERN_DOT_RADIUS;
+                     dx <= DEFAULT_PATTERN_DOT_RADIUS; dx++) {
                     int px = gx + dx;
                     if (px < 0 || px >= w) { continue; }
 
-                    if (dx * dx + dy * dy
-                        > NO_WALLPAPER_DOT_RADIUS * NO_WALLPAPER_DOT_RADIUS
-                              + 1) {
+                    if (dx * dx + dy * dy > DEFAULT_PATTERN_DOT_RADIUS
+                                                    * DEFAULT_PATTERN_DOT_RADIUS
+                                                + 1) {
                         continue;
                     }
 
                     uint8_t *dp =
                         &dst[((size_t)py * (size_t)w + (size_t)px) * 4];
 
-                    dp[0] = NO_WALLPAPER_DOT_B;
-                    dp[1] = NO_WALLPAPER_DOT_G;
-                    dp[2] = NO_WALLPAPER_DOT_R;
+                    dp[0] = DEFAULT_PATTERN_DOT_B;
+                    dp[1] = DEFAULT_PATTERN_DOT_G;
+                    dp[2] = DEFAULT_PATTERN_DOT_R;
                     dp[3] = 255;
                 }
             }
@@ -325,13 +330,6 @@ static void box_blur(uint8_t *pixels, int w, int h, int radius) {
     free(scratch);
 }
 
-#define BLUR_RADIUS 12
-#define BLUR_PASSES 2
-
-#ifndef SHM_ANON
-#define SHM_ANON ((char *)1)
-#endif
-
 static int create_shm_fd(size_t size) {
     int fd = shm_open(SHM_ANON, O_RDWR | O_CREAT, 0600);
 
@@ -568,7 +566,7 @@ static void wpo_redraw(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
     size_t image_size = (size_t)wpo->width * (size_t)wpo->height * 4;
 
     if (!wp->loaded) {
-        paint_no_wallpaper_pattern(wpo->data, wpo->width, wpo->height);
+        paint_default_pattern(wpo->data, wpo->width, wpo->height);
     } else {
         if (wpo->cached_sharp == NULL || wpo->cached_blurred == NULL) {
             wpo_prepare_variants(wp, wpo);
