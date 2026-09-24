@@ -1512,8 +1512,6 @@ int main(void) {
             stderr, "wl_shm not supported by the Wayland server "
                     "(wallpaper support will be unavailable)\n"
         );
-
-        return 1;
     }
 
     wm_init();

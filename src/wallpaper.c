@@ -28,6 +28,9 @@
 #define DEFAULT_PATTERN_GRID_SPACING 24
 #define DEFAULT_PATTERN_DOT_RADIUS   1
 
+#define MAX_DIMENSION                32768
+#define PPM_TOKEN_MAX                12
+
 #define BLUR_RADIUS                  12
 #define BLUR_PASSES                  2
 
@@ -118,6 +121,24 @@ static int ppm_read_token(FILE *f, char *buf, size_t buf_size) {
     return 0;
 }
 
+static bool ppm_read_int(FILE *f, int *out) {
+    char token[64];
+
+    if (ppm_read_token(f, token, sizeof(token)) != 0) { return false; }
+
+    char *end;
+    errno = 0;
+    long v = strtol(token, &end, 10);
+
+    if (errno != 0 || end == token || *end != '\0' || v < INT_MIN
+        || v > INT_MAX) {
+        return false;
+    }
+
+    *out = (int)v;
+    return true;
+}
+
 static bool
 ppm_load(const char *path, uint8_t **out_rgba, int *out_w, int *out_h) {
     FILE *f = fopen(path, "rb");
@@ -141,14 +162,12 @@ ppm_load(const char *path, uint8_t **out_rgba, int *out_w, int *out_h) {
 
     int width, height, maxval;
 
-    if (ppm_read_token(f, token, sizeof(token)) != 0) { goto parse_error; }
-    width = atoi(token);
-
-    if (ppm_read_token(f, token, sizeof(token)) != 0) { goto parse_error; }
-    height = atoi(token);
-
-    if (ppm_read_token(f, token, sizeof(token)) != 0) { goto parse_error; }
-    maxval = atoi(token);
+    if (!ppm_read_int(f, &width) || !ppm_read_int(f, &height)
+        || !ppm_read_int(f, &maxval)) {
+        fprintf(stderr, "Wallpaper: malformed PPM header in '%s'\n", path);
+        fclose(f);
+        return false;
+    }
 
     if (width <= 0 || height <= 0 || maxval != 255) {
         fprintf(
@@ -157,11 +176,28 @@ ppm_load(const char *path, uint8_t **out_rgba, int *out_w, int *out_h) {
             "only maxval=255 supported)\n",
             path, width, height, maxval
         );
+
+        fclose(f);
+        return false;
+    }
+
+    if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+        fprintf(
+            stderr, "Wallpaper: '%s' is too large (%dx%d, max %d)\n", path,
+            width, height, MAX_DIMENSION
+        );
+
         fclose(f);
         return false;
     }
 
     size_t pixel_count = (size_t)width * (size_t)height;
+    if (pixel_count > SIZE_MAX / 4) {
+        fprintf(stderr, "Wallpaper: '%s' dimensions overflow\n", path);
+        fclose(f);
+        return false;
+    }
+
     uint8_t *rgb = malloc(pixel_count * 3);
 
     if (rgb == NULL) {
@@ -199,11 +235,6 @@ ppm_load(const char *path, uint8_t **out_rgba, int *out_w, int *out_h) {
     *out_h = height;
 
     return true;
-
-parse_error:
-    fprintf(stderr, "Wallpaper: malformed PPM header in '%s'\n", path);
-    fclose(f);
-    return false;
 }
 
 bool wallpaper_load_ppm(struct Wallpaper *wp, const char *path) {
