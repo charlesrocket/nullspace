@@ -33,6 +33,7 @@
 
 #define BLUR_RADIUS                  12
 #define BLUR_PASSES                  2
+#define BLUR_TOP_INSET 8
 
 #define SHM_ANON                     ((char *)1)
 
@@ -514,8 +515,6 @@ wpo_prepare_variants(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
     }
 }
 
-#define BLUR_TOP_INSET 8
-
 static uint32_t
 blur_weight(int32_t y, int32_t top, int32_t top_fade, int32_t fade) {
     int32_t inset = BLUR_TOP_INSET;
@@ -647,21 +646,39 @@ void wallpaper_init(
     wl_list_init(&wp->outputs);
 }
 
+static void wpo_destroy_unlinked(struct WallpaperOutput *wpo) {
+    if (wpo->node != NULL) { river_node_v1_destroy(wpo->node); }
+    if (wpo->shell_surface != NULL) {
+        river_shell_surface_v1_destroy(wpo->shell_surface);
+    }
+
+    if (wpo->surface != NULL) { wl_surface_destroy(wpo->surface); }
+
+    free(wpo);
+}
+
 struct WallpaperOutput *wallpaper_output_create(struct Wallpaper *wp) {
     struct WallpaperOutput *wpo = calloc(1, sizeof(struct WallpaperOutput));
-
     if (wpo == NULL) { return NULL; }
 
     wpo->wp = wp;
-
     wpo->surface = wl_compositor_create_surface(wp->compositor);
-    wpo->shell_surface =
-        river_window_manager_v1_get_shell_surface(wp->wm, wpo->surface);
 
-    wpo->node = river_shell_surface_v1_get_node(wpo->shell_surface);
+    if (wpo->surface != NULL) {
+        wpo->shell_surface =
+            river_window_manager_v1_get_shell_surface(wp->wm, wpo->surface);
+    }
+
+    if (wpo->shell_surface != NULL) {
+        wpo->node = river_shell_surface_v1_get_node(wpo->shell_surface);
+    }
+
+    if (wpo->node == NULL) {
+        wpo_destroy_unlinked(wpo);
+        return NULL;
+    }
 
     wl_list_insert(wp->outputs.prev, &wpo->link);
-
     return wpo;
 }
 
