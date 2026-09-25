@@ -1,6 +1,8 @@
 #include "nullspace.h"
 
 #include "animation.h"
+#include "input.h"
+#include "keymap.h"
 #include "layouts/horizontal.h"
 #include "layouts/layout.h"
 #include "layouts/trimming.h"
@@ -14,6 +16,7 @@ struct WindowManager wm;
 struct river_window_manager_v1 *window_manager_v1;
 struct river_xkb_bindings_v1 *xkb_bindings_v1;
 struct river_layer_shell_v1 *layer_shell_v1;
+struct river_input_manager_v1 *input_manager_v1;
 struct wl_compositor *compositor;
 
 const struct river_output_v1_listener river_output_listener = {
@@ -38,6 +41,19 @@ static void layer_shell_output_handle_non_exclusive_area(
 static const struct river_layer_shell_output_v1_listener
     river_layer_shell_output_listener = {
         .non_exclusive_area = layer_shell_output_handle_non_exclusive_area,
+};
+
+static void
+input_manager_handle_finished(void *data, struct river_input_manager_v1 *obj) {}
+
+static void input_manager_handle_input_device(
+    void *data, struct river_input_manager_v1 *obj,
+    struct river_input_device_v1 *device
+) {}
+
+static const struct river_input_manager_v1_listener input_manager_listener = {
+    .finished = input_manager_handle_finished,
+    .input_device = input_manager_handle_input_device,
 };
 
 struct Output *tiling_output(void) {
@@ -586,6 +602,47 @@ static void wm_set_layout(enum Layout layout) {
     }
 }
 
+static void space_offscreen_edges(int32_t *left, int32_t *right) {
+    *left = HIDDEN_POS_X;
+    *right = HIDDEN_POS_X;
+
+    struct Output *output = tiling_output();
+    if (output == NULL) { return; }
+
+    int32_t x, w;
+    if (output->area_set && output->area_width > 0) {
+        x = output->area_x;
+        w = output->area_width;
+    } else {
+        x = output->pos_x;
+        w = output->width;
+    }
+
+    *left = x - w;
+    *right = x + w;
+}
+
+static void window_hide_to_side(
+    struct Window *window, const struct timespec *now, int32_t target_x
+) {
+    if (window->space_hidden) { return; }
+    window->space_hidden = true;
+
+    if (window->pos_valid) {
+        window->saved_x = window->x;
+        window->saved_y = window->y;
+    } else {
+        window->saved_x = 0;
+        window->saved_y = 0;
+    }
+
+    window_animation_cancel(window);
+    window_animate(
+        window, now, target_x, window->y, window->prop_w, window->prop_h,
+        wm.anim.duration_space
+    );
+}
+
 static void wm_switch_space(int space) {
     if (space < 0 || space >= SPACE_COUNT) { return; }
     if (space == wm.current_space) { return; }
@@ -594,23 +651,8 @@ static void wm_switch_space(int space) {
     // -1: right-to-left
     int dir = (space > wm.current_space) ? -1 : 1; // animation direction
 
-    struct Output *output = tiling_output();
-    int32_t left = HIDDEN_POS_X;
-    int32_t right = HIDDEN_POS_X;
-
-    if (output != NULL) {
-        int32_t x, w;
-        if (output->area_set && output->area_width > 0) {
-            x = output->area_x;
-            w = output->area_width;
-        } else {
-            x = output->pos_x;
-            w = output->width;
-        }
-
-        left = x - w;
-        right = x + w;
-    }
+    int32_t left, right;
+    space_offscreen_edges(&left, &right);
 
     struct timespec now = wm_now();
     struct Window *window;
@@ -643,25 +685,7 @@ static void wm_switch_space(int space) {
             }
         } else {
             // Hide
-            if (!window->space_hidden) {
-                window->space_hidden = true;
-
-                if (window->pos_valid) {
-                    window->saved_x = window->x;
-                    window->saved_y = window->y;
-                } else {
-                    window->saved_x = 0;
-                    window->saved_y = 0;
-                }
-
-                window_animation_cancel(window);
-
-                int32_t target_x = (dir > 0) ? right : left;
-                window_animate(
-                    window, &now, target_x, window->y, window->prop_w,
-                    window->prop_h, ANIM_DURATION_SPACE
-                );
-            }
+            window_hide_to_side(window, &now, (dir > 0) ? right : left);
         }
     }
 
@@ -684,84 +708,34 @@ static void wm_switch_space(int space) {
     }
 }
 
-static void
-xkb_binding_handle_pressed(void *data, struct river_xkb_binding_v1 *obj) {
-    struct XkbBinding *binding = data;
-    binding->seat->pending_action = binding->action;
-}
+static void wm_move_window_to_space(struct Seat *seat, int space) {
+    if (space < 0 || space >= SPACE_COUNT) { return; }
 
-static void
-xkb_binding_handle_released(void *data, struct river_xkb_binding_v1 *obj) {}
+    struct Window *window = seat->focused;
+    if (window == NULL || window->closed || window->space_hidden) { return; }
+    if (window->space == space) { return; }
 
-const struct river_xkb_binding_v1_listener river_xkb_binding_listener = {
-    .pressed = xkb_binding_handle_pressed,
-    .released = xkb_binding_handle_released,
-};
+    // Same convention as wm_switch_space(): higher space slides left.
+    int dir = (space > wm.current_space) ? -1 : 1;
 
-static void xkb_binding_destroy(struct XkbBinding *binding) {
-    river_xkb_binding_v1_destroy(binding->obj);
-    wl_list_remove(&binding->link);
-    free(binding);
-}
+    int32_t left, right;
+    space_offscreen_edges(&left, &right);
 
-static void xkb_binding_create(
-    struct Seat *seat, uint32_t mods, xkb_keysym_t keysym, enum Action action
-) {
-    struct XkbBinding *binding = calloc(1, sizeof(struct XkbBinding));
-    binding->obj = river_xkb_bindings_v1_get_xkb_binding(
-        xkb_bindings_v1, seat->obj, keysym, mods
-    );
+    struct timespec now = wm_now();
 
-    binding->seat = seat;
-    binding->action = action;
+    if (wm.trimming_tree != NULL && window->in_trimming_tree) {
+        trimming_remove(wm.trimming_tree, window);
+        window->in_trimming_tree = false;
+    }
 
-    river_xkb_binding_v1_add_listener(
-        binding->obj, &river_xkb_binding_listener, binding
-    );
+    window->space = space;
+    window_hide_to_side(window, &now, (dir > 0) ? right : left);
 
-    river_xkb_binding_v1_enable(binding->obj);
-
-    wl_list_insert(seat->xkb_bindings.prev, &binding->link);
-}
-
-static void pointer_binding_handle_pressed(
-    void *data, struct river_pointer_binding_v1 *obj
-) {
-    struct PointerBinding *binding = data;
-    binding->seat->pending_action = binding->action;
-}
-
-static void pointer_binding_handle_released(
-    void *data, struct river_pointer_binding_v1 *obj
-) {}
-
-const struct river_pointer_binding_v1_listener river_pointer_binding_listener =
-    {
-        .pressed = pointer_binding_handle_pressed,
-        .released = pointer_binding_handle_released,
-};
-
-static void pointer_binding_destroy(struct PointerBinding *binding) {
-    river_pointer_binding_v1_destroy(binding->obj);
-    wl_list_remove(&binding->link);
-    free(binding);
-}
-
-static void pointer_binding_create(
-    struct Seat *seat, uint32_t mods, uint32_t button, enum Action action
-) {
-    struct PointerBinding *binding = calloc(1, sizeof(struct PointerBinding));
-    binding->obj = river_seat_v1_get_pointer_binding(seat->obj, button, mods);
-    binding->seat = seat;
-    binding->action = action;
-
-    river_pointer_binding_v1_add_listener(
-        binding->obj, &river_pointer_binding_listener, binding
-    );
-
-    river_pointer_binding_v1_enable(binding->obj);
-
-    wl_list_insert(seat->pointer_bindings.prev, &binding->link);
+    struct Seat *s;
+    wl_list_for_each(s, &wm.seats, link) {
+        if (s->focused != NULL && !s->focused->space_hidden) { continue; }
+        seat_focus(s, focus_stack_top());
+    }
 }
 
 static void seat_handle_removed(void *data, struct river_seat_v1 *obj) {
@@ -853,21 +827,7 @@ static const struct river_layer_shell_seat_v1_listener
 static void seat_maybe_destroy(struct Seat *seat) {
     if (!seat->removed) { return; }
 
-    struct XkbBinding *xkb_binding, *xkb_binding_tmp;
-
-    wl_list_for_each_safe(
-        xkb_binding, xkb_binding_tmp, &seat->xkb_bindings, link
-    ) {
-        xkb_binding_destroy(xkb_binding);
-    }
-
-    struct PointerBinding *pointer_binding, *pointer_binding_tmp;
-
-    wl_list_for_each_safe(
-        pointer_binding, pointer_binding_tmp, &seat->pointer_bindings, link
-    ) {
-        pointer_binding_destroy(pointer_binding);
-    }
+    input_seat_unbind_all(seat);
 
     if (seat->layer_shell != NULL) {
         river_layer_shell_seat_v1_destroy(seat->layer_shell);
@@ -953,12 +913,22 @@ seat_pointer_resize(struct Seat *seat, struct Window *window, uint32_t edges) {
     seat->op_dy = 0;
 }
 
-static void seat_action(struct Seat *seat, enum Action action) {
+static void
+seat_action(struct Seat *seat, enum Action action, const void *arg) {
     switch (action) {
         case ACTION_NONE: break;
-        case ACTION_SPAWN_FOOT:
-            if (fork() == 0) { execlp("foot", "foot", (char *)0); }
-            break;
+        case ACTION_SPAWN:
+            {
+                const char *const *argv = arg;
+                if (argv == NULL || argv[0] == NULL) { break; }
+
+                if (fork() == 0) {
+                    execvp(argv[0], (char *const *)argv);
+                    _exit(127);
+                }
+
+                break;
+            }
         case ACTION_CLOSE:
             if (seat->focused != NULL) {
                 struct Window *closing = seat->focused;
@@ -1020,39 +990,31 @@ static void seat_action(struct Seat *seat, enum Action action) {
         case ACTION_SPACE_8: wm_switch_space(7); break;
         case ACTION_SPACE_9: wm_switch_space(8); break;
         case ACTION_SPACE_10: wm_switch_space(9); break;
+        case ACTION_MOVE_TO_SPACE_1: wm_move_window_to_space(seat, 0); break;
+        case ACTION_MOVE_TO_SPACE_2: wm_move_window_to_space(seat, 1); break;
+        case ACTION_MOVE_TO_SPACE_3: wm_move_window_to_space(seat, 2); break;
+        case ACTION_MOVE_TO_SPACE_4: wm_move_window_to_space(seat, 3); break;
+        case ACTION_MOVE_TO_SPACE_5: wm_move_window_to_space(seat, 4); break;
+        case ACTION_MOVE_TO_SPACE_6: wm_move_window_to_space(seat, 5); break;
+        case ACTION_MOVE_TO_SPACE_7: wm_move_window_to_space(seat, 6); break;
+        case ACTION_MOVE_TO_SPACE_8: wm_move_window_to_space(seat, 7); break;
+        case ACTION_MOVE_TO_SPACE_9: wm_move_window_to_space(seat, 8); break;
+        case ACTION_MOVE_TO_SPACE_10: wm_move_window_to_space(seat, 9); break;
     }
 }
 
 static void seat_manage(struct Seat *seat) {
     if (seat->new) {
         seat->new = false;
-
-        const uint32_t super = RIVER_SEAT_V1_MODIFIERS_MOD4;
-        xkb_binding_create(seat, super, XKB_KEY_Return, ACTION_SPAWN_FOOT);
-        xkb_binding_create(seat, super, XKB_KEY_q, ACTION_CLOSE);
-        xkb_binding_create(seat, super, XKB_KEY_f, ACTION_FOCUS_NEXT);
-        xkb_binding_create(seat, super, XKB_KEY_l, ACTION_CYCLE_LAYOUT);
-        xkb_binding_create(seat, super, XKB_KEY_r, ACTION_EXIT);
-        xkb_binding_create(seat, super, XKB_KEY_1, ACTION_SPACE_1);
-        xkb_binding_create(seat, super, XKB_KEY_2, ACTION_SPACE_2);
-        xkb_binding_create(seat, super, XKB_KEY_3, ACTION_SPACE_3);
-        xkb_binding_create(seat, super, XKB_KEY_4, ACTION_SPACE_4);
-        xkb_binding_create(seat, super, XKB_KEY_5, ACTION_SPACE_5);
-        xkb_binding_create(seat, super, XKB_KEY_6, ACTION_SPACE_6);
-        xkb_binding_create(seat, super, XKB_KEY_7, ACTION_SPACE_7);
-        xkb_binding_create(seat, super, XKB_KEY_8, ACTION_SPACE_8);
-        xkb_binding_create(seat, super, XKB_KEY_9, ACTION_SPACE_9);
-        xkb_binding_create(seat, super, XKB_KEY_0, ACTION_SPACE_10);
-
-        pointer_binding_create(seat, super, BTN_LEFT, ACTION_MOVE);
-        pointer_binding_create(seat, super, BTN_RIGHT, ACTION_RESIZE);
+        input_seat_bind_all(seat);
     }
 
     seat_focus(seat, seat->interacted);
     seat->interacted = NULL;
 
-    seat_action(seat, seat->pending_action);
+    seat_action(seat, seat->pending_action, seat->pending_arg);
     seat->pending_action = ACTION_NONE;
+    seat->pending_arg = NULL;
 
     switch (seat->op) {
         case SEAT_OP_NONE: break;
@@ -1389,6 +1351,16 @@ static void handle_global(
             wl_registry_bind(registry, name, &wl_compositor_interface, 4);
     } else if (strcmp(interface, wl_shm_interface.name) == 0) {
         shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
+    } else if (strcmp(interface, river_xkb_config_v1_interface.name) == 0) {
+        keymap_bind(registry, name);
+    } else if (strcmp(interface, river_input_manager_v1_interface.name) == 0) {
+        input_manager_v1 = wl_registry_bind(
+            registry, name, &river_input_manager_v1_interface, 1
+        );
+
+        river_input_manager_v1_add_listener(
+            input_manager_v1, &input_manager_listener, NULL
+        );
     }
 }
 
@@ -1478,6 +1450,11 @@ int main(void) {
     // Ensure children are automatically reaped.
     signal(SIGCHLD, SIG_IGN);
 
+    wm_init();
+
+    keymap_init();
+    keymap_set_layout(wm.kb_layout);
+
     struct wl_registry *registry = wl_display_get_registry(display);
     wl_registry_add_listener(registry, &registry_listener, NULL);
 
@@ -1513,8 +1490,6 @@ int main(void) {
                     "(wallpaper support will be unavailable)\n"
         );
     }
-
-    wm_init();
 
     if (compositor != NULL && shm != NULL) {
         wallpaper_init(&wp, compositor, shm, window_manager_v1);

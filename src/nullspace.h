@@ -1,6 +1,8 @@
 #ifndef NULLSPACE_H
 #define NULLSPACE_H
 
+#include "config.h"
+#include "input.h"
 #include "layouts/horizontal.h"
 #include "layouts/layout.h"
 #include "layouts/vertical.h"
@@ -11,8 +13,10 @@
 #include <errno.h>
 #include <math.h>
 #include <poll.h>
+#include <river-input-management-v1-client-protocol.h>
 #include <river-layer-shell-v1-client-protocol.h>
 #include <river-xkb-bindings-v1-client-protocol.h>
+#include <river-xkb-config-v1-client-protocol.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -33,20 +37,28 @@
 
 struct TrimmingTree;
 
+struct AnimConfig {
+    int32_t duration_space; // ms
+    int32_t duration_open;  // ms, grow
+    int32_t duration_close; // ms, shrink
+    int32_t duration_tile;  // ms, layout transitions
+
+    int default_hz;
+    int min_hz, max_hz;
+};
+
+struct WallpaperConfig {
+    const char *home_path;
+    int32_t topbar_fade_h;
+};
+
 struct WindowAnimation {
     struct timespec start_time;
 
-    int32_t start_x;
-    int32_t start_y;
-    int32_t start_w;
-    int32_t start_h;
+    int32_t duration_ms;
 
-    int32_t target_x;
-    int32_t target_y;
-    int32_t target_w;
-    int32_t target_h;
-
-    int32_t duration_ms; // seconds
+    int32_t start_x, start_y, start_w, start_h;
+    int32_t target_x, target_y, target_w, target_h;
 
     bool active;
 };
@@ -56,32 +68,23 @@ struct Window {
     struct river_node_v1 *node;
     struct wl_list link;       // WindowManager.windows
     struct wl_list focus_link; // WindowManager.focus_stack
-    struct Seat *pointer_move_requested;
-    struct Seat *pointer_resize_requested;
+    struct Seat *pointer_move_requested, *pointer_resize_requested;
     struct WindowAnimation anim;
 
     enum Layout decoration_state;
 
     uint32_t pointer_resize_requested_edges;
 
-    int32_t saved_x;
-    int32_t saved_y;
+    int32_t saved_x, saved_y;
 
     // Position and dimensions last given to the compositor.
-    int32_t x;
-    int32_t y;
-    int32_t width;
-    int32_t height;
+    int32_t x, y;
+    int32_t width, height;
 
     // Size we last proposed to the client.
-    int32_t prop_w;
-    int32_t prop_h;
+    int32_t prop_w, prop_h;
 
-    int32_t last_target_x;
-    int32_t last_target_y;
-    int32_t last_target_w;
-    int32_t last_target_h;
-
+    int32_t last_target_x, last_target_y, last_target_w, last_target_h;
     int32_t spawn_parent_x, spawn_parent_y, spawn_parent_w, spawn_parent_h;
 
     int space;
@@ -98,32 +101,9 @@ struct Window {
     bool prop_valid;
     bool pos_valid; // false until a position has been sent
 
-    bool new;
-    bool closed;
+    bool new, closed;
     // space_hidden == (space != wm.current_space).
-    bool space_hidden;
-    bool space_anim;
-};
-
-enum Action {
-    ACTION_NONE,
-    ACTION_SPAWN_FOOT,
-    ACTION_CLOSE,
-    ACTION_FOCUS_NEXT,
-    ACTION_MOVE,
-    ACTION_RESIZE,
-    ACTION_CYCLE_LAYOUT,
-    ACTION_EXIT,
-    ACTION_SPACE_1,
-    ACTION_SPACE_2,
-    ACTION_SPACE_3,
-    ACTION_SPACE_4,
-    ACTION_SPACE_5,
-    ACTION_SPACE_6,
-    ACTION_SPACE_7,
-    ACTION_SPACE_8,
-    ACTION_SPACE_9,
-    ACTION_SPACE_10,
+    bool space_hidden, space_anim;
 };
 
 struct XkbBinding {
@@ -131,6 +111,7 @@ struct XkbBinding {
     struct Seat *seat;
     struct wl_list link;
     enum Action action;
+    const void *arg;
 };
 
 struct PointerBinding {
@@ -138,6 +119,7 @@ struct PointerBinding {
     struct Seat *seat;
     struct wl_list link;
     enum Action action;
+    const void *arg;
 };
 
 enum SeatOp {
@@ -163,6 +145,8 @@ struct Seat {
     enum Action pending_action;
     enum SeatOp op;
 
+    const void *pending_arg;
+
     uint32_t op_edges;
 
     int32_t op_start_x, op_start_y;
@@ -187,12 +171,12 @@ struct WindowManager {
     struct wl_list focus_stack; // Window, most recently focused last
     struct wl_list seats;       // Seat
     struct TrimmingTree *trimming_tree;
+    struct AnimConfig anim;
+    struct WallpaperConfig wallpaper;
 
+    const char *kb_layout;
     enum Layout layout;
 
-    int current_space;
-
-    // Limit animation ticks (less aggressive on resources).
     int64_t anim_frame_ns; // frame interval in nanoseconds
 
     int32_t tiled_gap_outer_h;
@@ -200,19 +184,20 @@ struct WindowManager {
     int32_t tiled_gap_inner_h;
     int32_t tiled_gap_inner_v;
 
-    // Vertical layouts
     int32_t nmasters;
-
-    int anim_timer_fd; // timerfd, or -1 if unavailable
-
+    int current_space;
     float mfact;
+
     bool smart_gaps;
     bool center_overspread; // let masters fill width when n <= nmasters
     bool center_when_single_stack;
+
+    int anim_timer_fd;     // timerfd, or -1 if unavailable
     bool anim_timer_armed; // a tick is already scheduled
 };
 
 extern struct WindowManager wm;
+extern struct river_xkb_bindings_v1 *xkb_bindings_v1;
 
 struct Output *tiling_output(void);
 

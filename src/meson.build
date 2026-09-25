@@ -4,6 +4,8 @@ src_files = files(
   'layouts/trimming.c',
   'layouts/vertical.c',
   'layouts/horizontal.c',
+  'keymap.c',
+  'input.c',
   'output.c',
   'animation.c',
   'wallpaper.c',
