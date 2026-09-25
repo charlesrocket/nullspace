@@ -1,6 +1,8 @@
 #ifndef WALLPAPER_H
 #define WALLPAPER_H
 
+#include "config.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -13,7 +15,7 @@ struct river_window_manager_v1;
 struct river_node_v1;
 struct river_shell_surface_v1;
 
-#define WALLPAPER_TOPBAR_FADE_H 42
+#define WALLPAPER_TOPBAR_FADE_H CFG_WALLPAPER_TOPBAR_FADE_H
 
 struct WallpaperOutput {
     struct river_shell_surface_v1 *shell_surface;

@@ -1,0 +1,40 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+#define CFG_DEFAULT_LAYOUT           LAYOUT_TRIMMING
+
+#define CFG_GAP_OUTER_H              8
+#define CFG_GAP_OUTER_V              8
+#define CFG_GAP_INNER_H              8
+#define CFG_GAP_INNER_V              8
+#define CFG_SMART_GAPS               false
+
+#define CFG_NMASTERS                 1
+#define CFG_MFACT                    0.55f
+#define CFG_CENTER_OVERSPREAD        false
+#define CFG_CENTER_WHEN_SINGLE_STACK true
+
+#define CFG_TRIMMING_MANUAL_SPLIT    false
+#define CFG_TRIMMING_PRESERVE_SPLIT  false
+#define CFG_TRIMMING_SMART_SPLIT     false
+#define CFG_TRIMMING_HSPLIT          0
+#define CFG_TRIMMING_VSPLIT          0
+#define CFG_TRIMMING_SPLIT_RATIO     0.5f
+
+#define CFG_ANIM_DURATION_SPACE      200 // ms
+#define CFG_ANIM_DURATION_OPEN       200 // ms, grow
+#define CFG_ANIM_DURATION_CLOSE      200 // ms, shrink
+#define CFG_ANIM_DURATION_TILE       200 // ms, layout transitions
+
+#define CFG_ANIM_DEFAULT_HZ          100
+#define CFG_ANIM_MIN_HZ              60
+#define CFG_ANIM_MAX_HZ              720
+
+#define CFG_WALLPAPER_HOME_PATH      ".local/share/nullspace/wallpaper.ppm"
+#define CFG_WALLPAPER_TOPBAR_FADE_H  42
+
+#define CFG_KB_LAYOUT                "us"
+
+#define CFG_TERMINAL                 {"foot", NULL}
+
+#endif // CONFIG_H

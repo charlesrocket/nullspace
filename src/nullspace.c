@@ -254,7 +254,7 @@ static void window_handle_closed(void *data, struct river_window_v1 *obj) {
     struct timespec now = wm_now();
     window_animate(
         window, &now, window->x + window->prop_w / 2,
-        window->y + window->prop_h / 2, 1, 1, ANIM_DURATION_CLOSE
+        window->y + window->prop_h / 2, 1, 1, wm.anim.duration_close
     );
 }
 
@@ -546,11 +546,12 @@ void window_apply_target(
         w->has_placement = true;
 
         window_animate_from(
-            w, now, sx, sy, sw, sh, nx, ny, nw, nh, ANIM_DURATION_OPEN
+            w, now, sx, sy, sw, sh, nx, ny, nw, nh, wm.anim.duration_open
         );
     } else if (nx != w->last_target_x || ny != w->last_target_y
                || nw != w->last_target_w || nh != w->last_target_h) {
-        int duration = w->space_anim ? ANIM_DURATION_SPACE : ANIM_DURATION_TILE;
+        int duration =
+            w->space_anim ? wm.anim.duration_space : wm.anim.duration_tile;
         w->space_anim = false;
         window_animate(w, now, nx, ny, nw, nh, duration);
     } else {
@@ -673,7 +674,7 @@ static void wm_switch_space(int space) {
                     window_animate_from(
                         window, &now, start_x, window->y, window->prop_w,
                         window->prop_h, window->saved_x, window->saved_y,
-                        window->prop_w, window->prop_h, ANIM_DURATION_SPACE
+                        window->prop_w, window->prop_h, wm.anim.duration_space
                     );
                 } else {
                     window->space_anim = true;
@@ -1199,8 +1200,8 @@ wm_handle_render_start(void *data, struct river_window_manager_v1 *obj) {
     }
 
     wallpaper_manage(
-        &wp, has_window, top_zone_h, WALLPAPER_TOPBAR_FADE_H,
-        WALLPAPER_TOPBAR_FADE_H / 2
+        &wp, has_window, top_zone_h, wm.wallpaper.topbar_fade_h,
+        wm.wallpaper.topbar_fade_h / 2
     );
 
     river_window_manager_v1_render_finish(window_manager_v1);
@@ -1297,30 +1298,43 @@ static void wm_init(void) {
     wm.anim_timer_fd = -1;
     wm.current_space = 0;
 
-    wm.layout = LAYOUT_TRIMMING;
-    wm.tiled_gap_outer_h = 8;
-    wm.tiled_gap_outer_v = 8;
-    wm.tiled_gap_inner_h = 8;
-    wm.tiled_gap_inner_v = 8;
+    wm.layout = CFG_DEFAULT_LAYOUT;
 
-    wm.nmasters = 1;
-    wm.mfact = 0.55f;
-    wm.smart_gaps = false;
+    wm.tiled_gap_outer_h = CFG_GAP_OUTER_H;
+    wm.tiled_gap_outer_v = CFG_GAP_OUTER_V;
+    wm.tiled_gap_inner_h = CFG_GAP_INNER_H;
+    wm.tiled_gap_inner_v = CFG_GAP_INNER_V;
+    wm.smart_gaps = CFG_SMART_GAPS;
 
-    wm.center_overspread = false;
-    wm.center_when_single_stack = true;
+    wm.nmasters = CFG_NMASTERS;
+    wm.mfact = CFG_MFACT;
+    wm.center_overspread = CFG_CENTER_OVERSPREAD;
+    wm.center_when_single_stack = CFG_CENTER_WHEN_SINGLE_STACK;
+
+    wm.anim.duration_space = CFG_ANIM_DURATION_SPACE;
+    wm.anim.duration_open = CFG_ANIM_DURATION_OPEN;
+    wm.anim.duration_close = CFG_ANIM_DURATION_CLOSE;
+    wm.anim.duration_tile = CFG_ANIM_DURATION_TILE;
+    wm.anim.default_hz = CFG_ANIM_DEFAULT_HZ;
+    wm.anim.min_hz = CFG_ANIM_MIN_HZ;
+    wm.anim.max_hz = CFG_ANIM_MAX_HZ;
+
+    wm.wallpaper.home_path = CFG_WALLPAPER_HOME_PATH;
+    wm.wallpaper.topbar_fade_h = CFG_WALLPAPER_TOPBAR_FADE_H;
+
+    wm.kb_layout = CFG_KB_LAYOUT;
 
     wm.trimming_tree = trimming_create();
 
     if (wm.trimming_tree != NULL) {
         struct TrimmingConfig cfg = {0};
 
-        cfg.manual_split = false;
-        cfg.preserve_split = false;
-        cfg.smart_split = false;
-        cfg.hsplit = 0;
-        cfg.vsplit = 0;
-        cfg.split_ratio = 0.5f;
+        cfg.manual_split = CFG_TRIMMING_MANUAL_SPLIT;
+        cfg.preserve_split = CFG_TRIMMING_PRESERVE_SPLIT;
+        cfg.smart_split = CFG_TRIMMING_SMART_SPLIT;
+        cfg.hsplit = CFG_TRIMMING_HSPLIT;
+        cfg.vsplit = CFG_TRIMMING_VSPLIT;
+        cfg.split_ratio = CFG_TRIMMING_SPLIT_RATIO;
 
         trimming_set_config(wm.trimming_tree, &cfg);
     }
@@ -1502,9 +1516,10 @@ int main(void) {
 
             if (home != NULL) {
                 snprintf(
-                    default_path, sizeof(default_path),
-                    "%s/.local/share/nullspace/wallpaper.ppm", home
+                    default_path, sizeof(default_path), "%s/%s", home,
+                    wm.wallpaper.home_path
                 );
+
                 wallpaper_path = default_path;
             }
         }

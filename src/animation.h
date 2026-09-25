@@ -1,26 +1,23 @@
 #ifndef ANIMATION_H
 #define ANIMATION_H
 
+#include "config.h"
 #include "nullspace.h"
 
 #include <stdint.h>
 #include <time.h>
 
-// Animations:
-// `window->x/y` is the last position given to the compositor, and
-// `window->prop_w/prop_h` is the last proposed size. `window_set_position()`
-// and `window_send_size()` are the only writers, and new animations start
-// from these values.
+#define ANIM_DURATION_SPACE CFG_ANIM_DURATION_SPACE
+#define ANIM_DURATION_OPEN  CFG_ANIM_DURATION_OPEN
+#define ANIM_DURATION_CLOSE CFG_ANIM_DURATION_CLOSE
+#define ANIM_DURATION_TILE  CFG_ANIM_DURATION_TILE
 
-#define ANIM_DURATION_SPACE 200 // ms
-#define ANIM_DURATION_OPEN  200 // ms, grow-in
-#define ANIM_DURATION_CLOSE 200 // ms, shrink-out
-#define ANIM_DURATION_TILE  200 // ms, tiled layout transitions
+#define ANIM_DEFAULT_HZ     CFG_ANIM_DEFAULT_HZ
+#define ANIM_MIN_HZ         CFG_ANIM_MIN_HZ
+#define ANIM_MAX_HZ         CFG_ANIM_MAX_HZ
 
-// Animation tick rate. Override with the `NSP_ANIM_HZ` environment variable.
-#define ANIM_DEFAULT_HZ     100
-#define ANIM_MIN_HZ         60
-#define ANIM_MAX_HZ         720
+// `window->x/y` the last position given to the compositor
+// `window->prop_w/prop_h` the last proposed size
 
 int64_t timespec_to_ns(const struct timespec *ts);
 
