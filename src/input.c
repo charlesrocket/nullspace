@@ -416,7 +416,10 @@ static void config_handle_libinput_device(
     struct river_libinput_device_v1 *id
 ) {
     struct LibinputDevice *dev = calloc(1, sizeof(struct LibinputDevice));
-    if (dev == NULL) { return; }
+    if (dev == NULL) {
+        river_libinput_device_v1_destroy(id);
+        return;
+    }
 
     dev->obj = id;
     wl_list_insert(devices.prev, &dev->link);
