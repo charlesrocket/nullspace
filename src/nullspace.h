@@ -15,6 +15,7 @@
 #include <poll.h>
 #include <river-input-management-v1-client-protocol.h>
 #include <river-layer-shell-v1-client-protocol.h>
+#include <river-libinput-config-v1-client-protocol.h>
 #include <river-xkb-bindings-v1-client-protocol.h>
 #include <river-xkb-config-v1-client-protocol.h>
 #include <signal.h>
@@ -36,6 +37,21 @@
 #define HIDDEN_POS_Y (-1000000)
 
 struct TrimmingTree;
+
+struct LibinputConfig {
+    int tap_state;
+    int natural_scroll;
+    int left_handed;
+    int middle_emulation;
+    int dwt;
+    int drag;
+    int drag_lock;
+    int three_finger_drag;
+    int accel_profile;
+    float accel_speed;
+    int click_method;
+    int scroll_method;
+};
 
 struct AnimConfig {
     int32_t duration_space; // ms
@@ -173,6 +189,7 @@ struct WindowManager {
     struct TrimmingTree *trimming_tree;
     struct AnimConfig anim;
     struct WallpaperConfig wallpaper;
+    struct LibinputConfig libinput;
 
     const char *kb_layout;
     enum Layout layout;

@@ -34,4 +34,9 @@ void input_seat_bind_all(struct Seat *seat);
 // Destroy every binding owned by the seat.
 void input_seat_unbind_all(struct Seat *seat);
 
+struct wl_registry;
+
+void libinput_init(void);
+void libinput_bind(struct wl_registry *registry, uint32_t name);
+
 #endif // INPUT_H

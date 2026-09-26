@@ -9,6 +9,8 @@
 #include "layouts/vertical.h"
 #include "wallpaper.h"
 
+#include <river-libinput-config-v1-client-protocol.h>
+
 struct Wallpaper wp;
 struct wl_shm *shm;
 struct WindowManager wm;
@@ -1322,6 +1324,19 @@ static void wm_init(void) {
     wm.wallpaper.home_path = CFG_WALLPAPER_HOME_PATH;
     wm.wallpaper.topbar_fade_h = CFG_WALLPAPER_TOPBAR_FADE_H;
 
+    wm.libinput.tap_state = CFG_LIBINPUT_TAP_STATE;
+    wm.libinput.natural_scroll = CFG_LIBINPUT_NATURAL_SCROLL;
+    wm.libinput.left_handed = CFG_LIBINPUT_LEFT_HANDED;
+    wm.libinput.middle_emulation = CFG_LIBINPUT_MIDDLE_EMULATION;
+    wm.libinput.dwt = CFG_LIBINPUT_DWT;
+    wm.libinput.drag = CFG_LIBINPUT_DRAG;
+    wm.libinput.drag_lock = CFG_LIBINPUT_DRAG_LOCK;
+    wm.libinput.three_finger_drag = CFG_LIBINPUT_THREE_FINGER_DRAG;
+    wm.libinput.accel_profile = CFG_LIBINPUT_ACCEL_PROFILE;
+    wm.libinput.accel_speed = CFG_LIBINPUT_ACCEL_SPEED;
+    wm.libinput.click_method = CFG_LIBINPUT_CLICK_METHOD;
+    wm.libinput.scroll_method = CFG_LIBINPUT_SCROLL_METHOD;
+
     wm.kb_layout = CFG_KB_LAYOUT;
 
     wm.trimming_tree = trimming_create();
@@ -1367,6 +1382,9 @@ static void handle_global(
         shm = wl_registry_bind(registry, name, &wl_shm_interface, 1);
     } else if (strcmp(interface, river_xkb_config_v1_interface.name) == 0) {
         keymap_bind(registry, name);
+    } else if (strcmp(interface, river_libinput_config_v1_interface.name)
+               == 0) {
+        libinput_bind(registry, name);
     } else if (strcmp(interface, river_input_manager_v1_interface.name) == 0) {
         input_manager_v1 = wl_registry_bind(
             registry, name, &river_input_manager_v1_interface, 1
@@ -1468,6 +1486,7 @@ int main(void) {
 
     keymap_init();
     keymap_set_layout(wm.kb_layout);
+    libinput_init();
 
     struct wl_registry *registry = wl_display_get_registry(display);
     wl_registry_add_listener(registry, &registry_listener, NULL);
