@@ -43,3 +43,13 @@ generated = wl_mod.scan_xml(
 )
 
 subdir('src')
+
+exe = executable(
+  'nullspace',
+  src_files,
+  dependencies: [
+    wayland_client,
+    xkbcommon,
+  ],
+  install: true,
+)

@@ -11,16 +11,6 @@ src_files = files(
   'wallpaper.c',
 ) + generated
 
-exe = executable(
-  'nullspace',
-  src_files,
-  dependencies: [
-    wayland_client,
-    xkbcommon,
-  ],
-  install: true,
-)
-
 trimming_test = executable(
   'test_trimming',
   'layouts/test_trimming.c',

@@ -20,7 +20,7 @@ ninja -C build
 ## Usage
 
 ```
-river -c ./build/src/nullspace
+river -c ./build/nullspace
 ```
 
 ## Contributing
