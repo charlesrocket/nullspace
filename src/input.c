@@ -433,7 +433,7 @@ void libinput_bind(struct wl_registry *registry, uint32_t name) {
     if (libinput_config != NULL) { return; }
 
     struct river_libinput_config_v1 *config = wl_registry_bind(
-        registry, name, &river_libinput_config_v1_interface, 1
+        registry, name, &river_libinput_config_v1_interface, 2
     );
 
     if (config == NULL) { return; }
