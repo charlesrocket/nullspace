@@ -1387,7 +1387,7 @@ static void handle_global(
         libinput_bind(registry, name);
     } else if (strcmp(interface, river_input_manager_v1_interface.name) == 0) {
         input_manager_v1 = wl_registry_bind(
-            registry, name, &river_input_manager_v1_interface, 1
+            registry, name, &river_input_manager_v1_interface, 2
         );
 
         river_input_manager_v1_add_listener(
