@@ -4,6 +4,8 @@
 
 #include "keymap.h"
 
+#include "ipc.h"
+
 #include <fcntl.h>
 #include <river-input-management-v1-client-protocol.h>
 #include <river-xkb-config-v1-client-protocol.h>
@@ -31,6 +33,7 @@ static struct wl_list keyboards; // Keyboard
 
 void keymap_set_layout(const char *layout) {
     if (layout != NULL && layout[0] != '\0') { layout_name = layout; }
+    ipc_notify_kb_layout();
 }
 
 void keymap_init(void) {

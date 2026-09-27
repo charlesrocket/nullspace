@@ -12,7 +12,6 @@
 #include <dev/evdev/input-event-codes.h>
 #include <errno.h>
 #include <math.h>
-#include <poll.h>
 #include <river-input-management-v1-client-protocol.h>
 #include <river-layer-shell-v1-client-protocol.h>
 #include <river-libinput-config-v1-client-protocol.h>
@@ -105,6 +104,9 @@ struct Window {
 
     int space;
 
+    char *title;
+    char *app_id;
+
     bool spawn_hint_set; // where a new tiled window should appear
     bool decoration_state_set;
     bool in_trimming_tree;
@@ -190,6 +192,7 @@ struct WindowManager {
     struct AnimConfig anim;
     struct WallpaperConfig wallpaper;
     struct LibinputConfig libinput;
+    struct Output *default_output;
 
     const char *kb_layout;
     enum Layout layout;
@@ -224,5 +227,10 @@ void window_apply_target(
     struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh,
     const struct timespec *now
 );
+
+void wm_set_layout(enum Layout layout);
+void wm_switch_space(int space);
+void wm_move_window_to_space(struct Seat *seat, int space);
+void wm_request_manage(void);
 
 #endif // NULLSPACE_H

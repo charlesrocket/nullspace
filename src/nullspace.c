@@ -2,6 +2,7 @@
 
 #include "animation.h"
 #include "input.h"
+#include "ipc.h"
 #include "keymap.h"
 #include "layouts/horizontal.h"
 #include "layouts/layout.h"
@@ -10,6 +11,7 @@
 #include "wallpaper.h"
 
 #include <river-libinput-config-v1-client-protocol.h>
+#include <sys/event.h>
 
 struct Wallpaper wp;
 struct wl_shm *shm;
@@ -182,6 +184,10 @@ static void window_maybe_destroy(struct Window *window) {
     river_window_v1_destroy(window->obj);
     wl_list_remove(&window->link);
     wl_list_remove(&window->focus_link);
+    ipc_notify_window_closed(window);
+
+    free(window->title);
+    free(window->app_id);
     free(window);
 }
 
@@ -294,11 +300,29 @@ static void window_handle_dimensions_hint(
 
 static void window_handle_app_id(
     void *data, struct river_window_v1 *obj, const char *app_id
-) {}
+) {
+    struct Window *window = data;
+    const char *new_id = app_id ? app_id : "";
+    const char *old_id = window->app_id ? window->app_id : "";
+    if (strcmp(new_id, old_id) == 0) { return; }
+
+    free(window->app_id);
+    window->app_id = app_id ? strdup(app_id) : NULL;
+    ipc_notify_window_meta(window);
+}
 
 static void window_handle_title(
     void *data, struct river_window_v1 *obj, const char *title
-) {}
+) {
+    struct Window *window = data;
+    const char *new_title = title ? title : "";
+    const char *old_title = window->title ? window->title : "";
+    if (strcmp(new_title, old_title) == 0) { return; }
+
+    free(window->title);
+    window->title = title ? strdup(title) : NULL;
+    ipc_notify_window_meta(window);
+}
 
 static void window_handle_parent(
     void *data, struct river_window_v1 *obj, struct river_window_v1 *parent
@@ -566,7 +590,7 @@ void window_apply_target(
     w->last_target_h = nh;
 }
 
-static void wm_set_layout(enum Layout layout) {
+void wm_set_layout(enum Layout layout) {
     if (wm.layout == layout) { return; }
 
     struct Window *window;
@@ -603,6 +627,8 @@ static void wm_set_layout(enum Layout layout) {
         window->last_target_w = INT32_MIN;
         window->last_target_h = INT32_MIN;
     }
+
+    ipc_notify_layout();
 }
 
 static void space_offscreen_edges(int32_t *left, int32_t *right) {
@@ -646,7 +672,7 @@ static void window_hide_to_side(
     );
 }
 
-static void wm_switch_space(int space) {
+void wm_switch_space(int space) {
     if (space < 0 || space >= SPACE_COUNT) { return; }
     if (space == wm.current_space) { return; }
 
@@ -662,9 +688,7 @@ static void wm_switch_space(int space) {
 
     wl_list_for_each(window, &wm.windows, link) {
         if (window->closed) { continue; }
-
-        if (window->space == space) {
-            // Reveal
+        if (window->space == space) { // reveal
             if (window->space_hidden) {
                 window->space_hidden = false;
                 window_animation_cancel(window);
@@ -686,8 +710,7 @@ static void wm_switch_space(int space) {
                     window->last_target_h = INT32_MIN;
                 }
             }
-        } else {
-            // Hide
+        } else { // hide
             window_hide_to_side(window, &now, (dir > 0) ? right : left);
         }
     }
@@ -703,22 +726,24 @@ static void wm_switch_space(int space) {
 
     wm.current_space = space;
 
-    // Refocus if needed
     struct Seat *seat;
-    wl_list_for_each(seat, &wm.seats, link) {
+    wl_list_for_each(seat, &wm.seats, link) { // refocus if needed
         if (seat->focused != NULL && !seat->focused->space_hidden) { continue; }
         seat_focus(seat, focus_stack_top());
     }
+
+    ipc_notify_space();
+    ipc_notify_focus();
 }
 
-static void wm_move_window_to_space(struct Seat *seat, int space) {
+void wm_move_window_to_space(struct Seat *seat, int space) {
     if (space < 0 || space >= SPACE_COUNT) { return; }
 
     struct Window *window = seat->focused;
     if (window == NULL || window->closed || window->space_hidden) { return; }
     if (window->space == space) { return; }
 
-    // Same convention as wm_switch_space(): higher space slides left.
+    // Same convention as in `wm_switch_space()`: higher space slides left.
     int dir = (space > wm.current_space) ? -1 : 1;
 
     int32_t left, right;
@@ -738,6 +763,31 @@ static void wm_move_window_to_space(struct Seat *seat, int space) {
     wl_list_for_each(s, &wm.seats, link) {
         if (s->focused != NULL && !s->focused->space_hidden) { continue; }
         seat_focus(s, focus_stack_top());
+    }
+
+    ipc_notify_space();
+    ipc_notify_window_meta(window);
+    ipc_notify_focus();
+}
+
+void wm_request_manage(void) {
+    if (window_manager_v1 != NULL) {
+        river_window_manager_v1_manage_dirty(window_manager_v1);
+    }
+}
+
+static void wm_maybe_set_default_output(void) {
+    if (wm.default_output != NULL && !wm.default_output->removed) { return; }
+    if (layer_shell_v1 == NULL) { return; }
+
+    struct Output *output;
+    wl_list_for_each(output, &wm.outputs, link) {
+        if (output->removed) { continue; }
+        if (output->layer_shell == NULL) { continue; }
+
+        river_layer_shell_output_v1_set_default(output->layer_shell);
+        wm.default_output = output;
+        return;
     }
 }
 
@@ -872,7 +922,6 @@ static struct Window *window_next(struct Window *window) {
 static void seat_focus(struct Seat *seat, struct Window *window) {
     // Focus the top window (if any) when there is no explicit target.
     if (window == NULL) { window = focus_stack_top(); }
-
     if (seat->focused == window) { return; }
 
     if (window != NULL) {
@@ -885,6 +934,7 @@ static void seat_focus(struct Seat *seat, struct Window *window) {
     }
 
     seat->focused = window;
+    ipc_notify_focus();
 }
 
 static void seat_pointer_move(struct Seat *seat, struct Window *window) {
@@ -960,7 +1010,7 @@ seat_action(struct Seat *seat, enum Action action, const void *arg) {
                 break;
             }
         case ACTION_MOVE:
-            // Interactive move is only in the floating layout
+            // Interactive move is only in the floating layout.
             if (wm.layout == LAYOUT_FLOATING && seat->op == SEAT_OP_NONE
                 && seat->hovered != NULL && !seat->hovered->space_hidden) {
                 seat_pointer_move(seat, seat->hovered);
@@ -1029,6 +1079,13 @@ static void seat_manage(struct Seat *seat) {
                 break;
             }
 
+            if (seat->op_window != NULL && !seat->op_window->space_hidden) {
+                window_set_position(
+                    seat->op_window, seat->op_start_x + seat->op_dx,
+                    seat->op_start_y + seat->op_dy
+                );
+            }
+
             break;
         case SEAT_OP_RESIZE:
             {
@@ -1061,46 +1118,26 @@ static void seat_manage(struct Seat *seat) {
 
                 window_send_size(seat->op_window, width, height);
 
+                if (seat->op_window != NULL && !seat->op_window->space_hidden) {
+                    int32_t x = seat->op_start_x;
+                    int32_t y = seat->op_start_y;
+
+                    if ((seat->op_edges & RIVER_WINDOW_V1_EDGES_LEFT) != 0) {
+                        x += seat->op_start_width - seat->op_window->width;
+                    }
+
+                    if ((seat->op_edges & RIVER_WINDOW_V1_EDGES_TOP) != 0) {
+                        y += seat->op_start_height - seat->op_window->height;
+                    }
+
+                    window_set_position(seat->op_window, x, y);
+                }
+
                 break;
             }
     }
 
     seat->op_release = false;
-}
-
-static void seat_render(struct Seat *seat) {
-    // Tiled layouts place windows deterministically.
-    if (layouts_is_tiled(wm.layout)) { return; }
-
-    switch (seat->op) {
-        case SEAT_OP_NONE: break;
-        case SEAT_OP_MOVE:
-            if (seat->op_window->space_hidden) { break; }
-            window_set_position(
-                seat->op_window, seat->op_start_x + seat->op_dx,
-                seat->op_start_y + seat->op_dy
-            );
-
-            break;
-        case SEAT_OP_RESIZE:
-            {
-                if (seat->op_window->space_hidden) { break; }
-
-                int32_t x = seat->op_start_x;
-                int32_t y = seat->op_start_y;
-
-                if ((seat->op_edges & RIVER_WINDOW_V1_EDGES_LEFT) != 0) {
-                    x += seat->op_start_width - seat->op_window->width;
-                }
-
-                if ((seat->op_edges & RIVER_WINDOW_V1_EDGES_TOP) != 0) {
-                    y += seat->op_start_height - seat->op_window->height;
-                }
-
-                window_set_position(seat->op_window, x, y);
-                break;
-            }
-    }
 }
 
 static void
@@ -1116,9 +1153,9 @@ wm_handle_finished(void *data, struct river_window_manager_v1 *obj) {
 
 static void
 wm_handle_manage_start(void *data, struct river_window_manager_v1 *obj) {
-    // Destroy closed windows and removed outputs/seats
     struct Output *output, *output_tmp;
     wl_list_for_each_safe(output, output_tmp, &wm.outputs, link) {
+        // Destroy closed windows and removed outputs/seats.
         output_maybe_destroy(output);
     }
 
@@ -1132,9 +1169,12 @@ wm_handle_manage_start(void *data, struct river_window_manager_v1 *obj) {
         seat_maybe_destroy(seat);
     }
 
+    wm_maybe_set_default_output();
+    ipc_process_pending_commands();
+
     struct timespec now = wm_now(); // keep in sync
 
-    // Carry out window management policy
+    // Carry out window management policy.
     wl_list_for_each(window, &wm.windows, link) {
         if (window->closed) { continue; }
         window_manage(window);
@@ -1171,9 +1211,6 @@ wm_handle_manage_start(void *data, struct river_window_manager_v1 *obj) {
 
 static void
 wm_handle_render_start(void *data, struct river_window_manager_v1 *obj) {
-    struct Seat *seat;
-
-    wl_list_for_each(seat, &wm.seats, link) { seat_render(seat); }
     bool has_window = false;
     struct Window *window;
     wl_list_for_each(window, &wm.windows, link) {
@@ -1223,6 +1260,7 @@ static void wm_handle_window(
 
     wl_list_insert(wm.windows.prev, &window->link);
     wl_list_insert(wm.focus_stack.prev, &window->focus_link);
+    ipc_notify_window_opened(window);
 }
 
 static void wm_handle_output(
@@ -1299,6 +1337,7 @@ static void wm_init(void) {
 
     wm.anim_timer_fd = -1;
     wm.current_space = 0;
+    wm.default_output = NULL;
 
     wm.layout = CFG_DEFAULT_LAYOUT;
 
@@ -1405,51 +1444,141 @@ static const struct wl_registry_listener registry_listener = {
 };
 
 static int run_event_loop(struct wl_display *display) {
+    int wl_fd = wl_display_get_fd(display);
+
+    int kq = kqueue();
+    if (kq < 0) {
+        perror("kqueue");
+        return 1;
+    }
+
+    struct kevent ev;
+
+    EV_SET(&ev, (uintptr_t)wl_fd, EVFILT_READ, EV_ADD, 0, 0, NULL);
+    if (kevent(kq, &ev, 1, NULL, 0, NULL) < 0) {
+        perror("kevent(wayland)");
+        close(kq);
+        return 1;
+    }
+
+    if (wm.anim_timer_fd >= 0) {
+        EV_SET(
+            &ev, (uintptr_t)wm.anim_timer_fd, EVFILT_READ, EV_ADD, 0, 0, NULL
+        );
+        kevent(kq, &ev, 1, NULL, 0, NULL);
+    }
+
+    ipc_kqueue_register(kq);
+
+    bool wl_write_armed = false;
+
+    struct kevent events[256];
+
     while (true) {
         while (wl_display_prepare_read(display) != 0) {
             if (wl_display_dispatch_pending(display) < 0) {
                 fprintf(stderr, "Dispatch failed\n");
+                close(kq);
                 return 1;
             }
         }
 
-        // Flush outgoing requests
-        short wayland_events = POLLIN;
         if (wl_display_flush(display) < 0) {
             if (errno == EAGAIN) {
-                wayland_events |= POLLOUT;
+                if (!wl_write_armed) {
+                    EV_SET(
+                        &ev, (uintptr_t)wl_fd, EVFILT_WRITE, EV_ADD, 0, 0, NULL
+                    );
+                    if (kevent(kq, &ev, 1, NULL, 0, NULL) < 0) {
+                        wl_display_cancel_read(display);
+                        perror("kevent(wayland write)");
+                        close(kq);
+                        return 1;
+                    }
+
+                    wl_write_armed = true;
+                }
             } else {
                 wl_display_cancel_read(display);
                 perror("wl_display_flush");
+                close(kq);
                 return 1;
             }
+        } else if (wl_write_armed) {
+            EV_SET(&ev, (uintptr_t)wl_fd, EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
+            if (kevent(kq, &ev, 1, NULL, 0, NULL) < 0 && errno != ENOENT) {
+                wl_display_cancel_read(display);
+                perror("kevent(wayland write delete)");
+                close(kq);
+                return 1;
+            }
+
+            wl_write_armed = false;
         }
 
-        struct pollfd fds[2] = {
-            {.fd = wl_display_get_fd(display), .events = wayland_events},
-            // poll() ignores negative fds, so this is safe if timerfd_create
-            // failed and anim_timer_fd is -1.
-            {          .fd = wm.anim_timer_fd,         .events = POLLIN},
-        };
+        ipc_flush_pending();
 
-        int ret;
-        do { ret = poll(fds, 2, -1); } while (ret < 0 && errno == EINTR);
+        int n = kevent(kq, NULL, 0, events, 256, NULL);
+        if (n < 0) {
+            if (errno == EINTR) {
+                wl_display_cancel_read(display);
+                continue;
+            }
 
-        if (ret < 0) {
             wl_display_cancel_read(display);
-            perror("poll");
+            perror("kevent");
+            close(kq);
             return 1;
         }
 
-        if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
-            wl_display_cancel_read(display);
-            fprintf(stderr, "Wayland connection lost\n");
-            return 1;
+        bool wl_readable = false;
+
+        for (int i = 0; i < n; i++) {
+            const struct kevent *e = &events[i];
+            int fd = (int)e->ident;
+
+            if (fd == wl_fd) {
+                if (e->filter == EVFILT_READ) {
+                    wl_readable = true;
+                } else if (e->filter == EVFILT_WRITE) {
+                    if (wl_display_flush(display) == 0) {
+                        EV_SET(
+                            &ev, (uintptr_t)wl_fd, EVFILT_WRITE, EV_DELETE, 0,
+                            0, NULL
+                        );
+
+                        if (kevent(kq, &ev, 1, NULL, 0, NULL) < 0
+                            && errno != ENOENT) {
+                            wl_display_cancel_read(display);
+                            perror("kevent(wayland write delete)");
+                            close(kq);
+                            return 1;
+                        }
+                        wl_write_armed = false;
+                    } else if (errno != EAGAIN) {
+                        wl_display_cancel_read(display);
+                        perror("wl_display_flush");
+                        close(kq);
+                        return 1;
+                    }
+                }
+
+                continue;
+            }
+
+            if (wm.anim_timer_fd >= 0 && fd == wm.anim_timer_fd
+                && e->filter == EVFILT_READ) {
+                anim_timer_fire(window_manager_v1);
+                continue;
+            }
+
+            ipc_kqueue_handle(e);
         }
 
-        if (fds[0].revents & POLLIN) {
+        if (wl_readable) {
             if (wl_display_read_events(display) < 0) {
                 perror("wl_display_read_events");
+                close(kq);
                 return 1;
             }
         } else {
@@ -1459,11 +1588,8 @@ static int run_event_loop(struct wl_display *display) {
 
         if (wl_display_dispatch_pending(display) < 0) {
             fprintf(stderr, "Dispatch failed\n");
+            close(kq);
             return 1;
-        }
-
-        if (wm.anim_timer_fd >= 0 && (fds[1].revents & POLLIN)) {
-            anim_timer_fire(window_manager_v1);
         }
     }
 }
@@ -1484,6 +1610,7 @@ int main(void) {
 
     wm_init();
 
+    ipc_init();
     keymap_init();
     keymap_set_layout(wm.kb_layout);
     libinput_init();
@@ -1524,9 +1651,9 @@ int main(void) {
         );
     }
 
-    if (compositor != NULL && shm != NULL) {
-        wallpaper_init(&wp, compositor, shm, window_manager_v1);
+    wallpaper_init(&wp, compositor, shm, window_manager_v1);
 
+    if (compositor != NULL && shm != NULL) {
         const char *wallpaper_path = getenv("NSP_WALLPAPER");
         char default_path[4096];
 
@@ -1552,5 +1679,7 @@ int main(void) {
 
     river_window_manager_v1_add_listener(window_manager_v1, &wm_listener, NULL);
 
-    return run_event_loop(display);
+    int rc = run_event_loop(display);
+    ipc_destroy();
+    return rc;
 }

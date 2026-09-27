@@ -658,6 +658,10 @@ static void wpo_destroy_unlinked(struct WallpaperOutput *wpo) {
 }
 
 struct WallpaperOutput *wallpaper_output_create(struct Wallpaper *wp) {
+    if (wp->compositor == NULL || wp->shm == NULL || wp->wm == NULL) {
+        return NULL;
+    }
+
     struct WallpaperOutput *wpo = calloc(1, sizeof(struct WallpaperOutput));
     if (wpo == NULL) { return NULL; }
 

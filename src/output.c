@@ -1,5 +1,6 @@
 #include "output.h"
 
+#include "nullspace.h"
 #include "wallpaper.h"
 
 #include <river-layer-shell-v1-client-protocol.h>
@@ -11,6 +12,8 @@
 
 void output_maybe_destroy(struct Output *output) {
     if (!output->removed) { return; }
+    if (wm.default_output == output) { wm.default_output = NULL; }
+
     if (output->wallpaper != NULL) {
         wallpaper_output_destroy(output->wallpaper);
     }
