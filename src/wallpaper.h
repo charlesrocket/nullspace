@@ -30,6 +30,11 @@ struct WallpaperOutput {
     int32_t drawn_w, drawn_h, drawn_top_h, drawn_top_fade_h,
         drawn_fade_h; // current
 
+    int32_t drawn_pattern_bg_r, drawn_pattern_bg_g, drawn_pattern_bg_b;
+    int32_t drawn_pattern_dot_r, drawn_pattern_dot_g, drawn_pattern_dot_b;
+    int32_t drawn_pattern_grid_spacing, drawn_pattern_dot_radius;
+    int32_t drawn_blur_radius, drawn_blur_passes, drawn_blur_top_inset;
+
     uint8_t *cached_sharp, *cached_blurred;
     uint8_t *data;
     size_t size;
@@ -67,10 +72,12 @@ struct Wallpaper {
 
 void wallpaper_init(
     struct Wallpaper *wp, struct wl_compositor *compositor, struct wl_shm *shm,
-    struct river_window_manager_v1 *wm
+    struct river_window_manager_v1 *manager
 );
 
 bool wallpaper_load_ppm(struct Wallpaper *wp, const char *path);
+
+void wallpaper_invalidate(struct Wallpaper *wp);
 
 struct WallpaperOutput *wallpaper_output_create(struct Wallpaper *wp);
 

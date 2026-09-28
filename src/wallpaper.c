@@ -4,6 +4,8 @@
 
 #include "wallpaper.h"
 
+#include "nullspace.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -18,77 +20,72 @@
 #include <unistd.h>
 #include <wayland-client-protocol.h>
 
-#define DEFAULT_PATTERN_BG_R         0x12
-#define DEFAULT_PATTERN_BG_G         0x12
-#define DEFAULT_PATTERN_BG_B         0x12
+#define MAX_DIMENSION 32768
+#define PPM_TOKEN_MAX 12
 
-#define DEFAULT_PATTERN_DOT_R        0x3a
-#define DEFAULT_PATTERN_DOT_G        0xb5
-#define DEFAULT_PATTERN_DOT_B        0x5e
+#define SHM_ANON      ((char *)1)
 
-#define DEFAULT_PATTERN_GRID_SPACING 24
-#define DEFAULT_PATTERN_DOT_RADIUS   1
-
-#define MAX_DIMENSION                32768
-#define PPM_TOKEN_MAX                12
-
-#define BLUR_RADIUS                  12
-#define BLUR_PASSES                  2
-#define BLUR_TOP_INSET               8
-
-#define SHM_ANON                     ((char *)1)
+static void wpo_destroy_cached_variants(struct WallpaperOutput *wpo);
 
 static void paint_default_pattern(uint8_t *dst, int w, int h) {
     if (w <= 0 || h <= 0) { return; }
+
+    int32_t spacing = wm.wallpaper.pattern_grid_spacing;
+    int32_t dot_radius = wm.wallpaper.pattern_dot_radius;
+    if (spacing < 1) { spacing = 1; }
+    if (dot_radius < 0) { dot_radius = 0; }
+
+    uint8_t bg_r = (uint8_t)wm.wallpaper.pattern_bg_r;
+    uint8_t bg_g = (uint8_t)wm.wallpaper.pattern_bg_g;
+    uint8_t bg_b = (uint8_t)wm.wallpaper.pattern_bg_b;
+    uint8_t dot_r = (uint8_t)wm.wallpaper.pattern_dot_r;
+    uint8_t dot_g = (uint8_t)wm.wallpaper.pattern_dot_g;
+    uint8_t dot_b = (uint8_t)wm.wallpaper.pattern_dot_b;
 
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
             uint8_t *dp = &dst[((size_t)y * (size_t)w + (size_t)x) * 4];
 
-            dp[0] = DEFAULT_PATTERN_BG_B;
-            dp[1] = DEFAULT_PATTERN_BG_G;
-            dp[2] = DEFAULT_PATTERN_BG_R;
+            dp[0] = bg_b;
+            dp[1] = bg_g;
+            dp[2] = bg_r;
             dp[3] = 255;
         }
     }
 
-    int cols = w / DEFAULT_PATTERN_GRID_SPACING;
-    int rows = h / DEFAULT_PATTERN_GRID_SPACING;
+    int cols = w / spacing;
+    int rows = h / spacing;
 
-    int used_w = cols * DEFAULT_PATTERN_GRID_SPACING;
-    int used_h = rows * DEFAULT_PATTERN_GRID_SPACING;
+    int used_w = cols * spacing;
+    int used_h = rows * spacing;
 
-    int offset_x = (w - used_w) / 2 + DEFAULT_PATTERN_GRID_SPACING / 2;
-    int offset_y = (h - used_h) / 2 + DEFAULT_PATTERN_GRID_SPACING / 2;
+    int offset_x = (w - used_w) / 2 + spacing / 2;
+    int offset_y = (h - used_h) / 2 + spacing / 2;
 
     for (int row = 0; row < rows; row++) {
-        int gy = offset_y + row * DEFAULT_PATTERN_GRID_SPACING;
+        int gy = offset_y + row * spacing;
 
         for (int col = 0; col < cols; col++) {
-            int gx = offset_x + col * DEFAULT_PATTERN_GRID_SPACING;
+            int gx = offset_x + col * spacing;
 
-            for (int dy = -DEFAULT_PATTERN_DOT_RADIUS;
-                 dy <= DEFAULT_PATTERN_DOT_RADIUS; dy++) {
+            for (int dy = -dot_radius; dy <= dot_radius; dy++) {
                 int py = gy + dy;
                 if (py < 0 || py >= h) { continue; }
 
-                for (int dx = -DEFAULT_PATTERN_DOT_RADIUS;
-                     dx <= DEFAULT_PATTERN_DOT_RADIUS; dx++) {
+                for (int dx = -dot_radius; dx <= dot_radius; dx++) {
                     int px = gx + dx;
                     if (px < 0 || px >= w) { continue; }
 
-                    if (dx * dx + dy * dy > DEFAULT_PATTERN_DOT_RADIUS
-                                                    * DEFAULT_PATTERN_DOT_RADIUS
-                                                + 1) {
+                    if (dx * dx + dy * dy > dot_radius * dot_radius + 1) {
                         continue;
                     }
 
                     uint8_t *dp =
                         &dst[((size_t)py * (size_t)w + (size_t)px) * 4];
 
-                    dp[0] = DEFAULT_PATTERN_DOT_B;
-                    dp[1] = DEFAULT_PATTERN_DOT_G;
-                    dp[2] = DEFAULT_PATTERN_DOT_R;
+                    dp[0] = dot_b;
+                    dp[1] = dot_g;
+                    dp[2] = dot_r;
                     dp[3] = 255;
                 }
             }
@@ -339,6 +336,8 @@ bool wallpaper_load_ppm(struct Wallpaper *wp, const char *path) {
     wp->image_height = h;
     wp->loaded = true;
 
+    wallpaper_invalidate(wp);
+
     return true;
 }
 
@@ -349,6 +348,8 @@ scale_cover(const uint8_t *src, int sw, int sh, uint8_t *dst, int dw, int dh) {
     double scale_x = (double)dw / sw;
     double scale_y = (double)dh / sh;
     double cover_scale = scale_x > scale_y ? scale_x : scale_y;
+
+    if (cover_scale <= 0.0) { return; }
 
     int scaled_w = (int)(sw * cover_scale + 0.5);
     int scaled_h = (int)(sh * cover_scale + 0.5);
@@ -401,7 +402,8 @@ static void box_blur(uint8_t *pixels, int w, int h, int radius) {
             }
 
             for (int x = 0; x < w; x++) {
-                out_row[x * 4 + c] = (uint8_t)(sum / count);
+                int denom = count > 0 ? count : 1;
+                out_row[x * 4 + c] = (uint8_t)(sum / denom);
 
                 int add_x = x + radius + 1;
                 int rem_x = x - radius;
@@ -430,8 +432,9 @@ static void box_blur(uint8_t *pixels, int w, int h, int radius) {
             }
 
             for (int y = 0; y < h; y++) {
+                int denom = count > 0 ? count : 1;
                 pixels[((size_t)y * (size_t)w + (size_t)x) * 4 + (size_t)c] =
-                    (uint8_t)(sum / count);
+                    (uint8_t)(sum / denom);
 
                 int add_y = y + radius + 1;
                 int rem_y = y - radius;
@@ -478,6 +481,16 @@ static void wpo_destroy_cached_variants(struct WallpaperOutput *wpo) {
 
     free(wpo->cached_blurred);
     wpo->cached_blurred = NULL;
+    wpo->drawn_valid = false;
+}
+
+void wallpaper_invalidate(struct Wallpaper *wp) {
+    if (wp == NULL) { return; }
+
+    struct WallpaperOutput *wpo;
+    wl_list_for_each(wpo, &wp->outputs, link) {
+        wpo_destroy_cached_variants(wpo);
+    }
 }
 
 static void buffer_handle_release(void *data, struct wl_buffer *buffer) {
@@ -568,11 +581,16 @@ wpo_alloc_buffer(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
 
 static void
 wpo_prepare_variants(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
+    if (wpo->width <= 0 || wpo->height <= 0) { return; }
+    if (wp->image_pixels == NULL) { return; }
+    if (wp->image_width <= 0 || wp->image_height <= 0) { return; }
+
     size_t image_size = (size_t)wpo->width * (size_t)wpo->height * 4;
 
     wpo_destroy_cached_variants(wpo);
-    wpo->cached_sharp = malloc(image_size);
-    wpo->cached_blurred = malloc(image_size);
+
+    wpo->cached_sharp = calloc(1, image_size);
+    wpo->cached_blurred = calloc(1, image_size);
 
     if (wpo->cached_sharp == NULL || wpo->cached_blurred == NULL) {
         wpo_destroy_cached_variants(wpo);
@@ -586,14 +604,17 @@ wpo_prepare_variants(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
 
     memcpy(wpo->cached_blurred, wpo->cached_sharp, image_size);
 
-    for (int p = 0; p < BLUR_PASSES; p++) {
-        box_blur(wpo->cached_blurred, wpo->width, wpo->height, BLUR_RADIUS);
+    for (int p = 0; p < wm.wallpaper.blur_passes; p++) {
+        box_blur(
+            wpo->cached_blurred, wpo->width, wpo->height,
+            wm.wallpaper.blur_radius
+        );
     }
 }
 
 static uint32_t
 blur_weight(int32_t y, int32_t top, int32_t top_fade, int32_t fade) {
-    int32_t inset = BLUR_TOP_INSET;
+    int32_t inset = wm.wallpaper.blur_top_inset;
     if (inset > top) { inset = top; }
     if (top_fade > inset) { top_fade = inset; }
     if (y < inset - top_fade) { return 0; }
@@ -660,7 +681,29 @@ wpo_needs_draw(const struct Wallpaper *wp, const struct WallpaperOutput *wpo) {
     }
 
     if (wpo->drawn_loaded != wp->loaded) { return true; }
-    if (!wp->loaded) { return false; }
+
+    if (!wp->loaded) {
+        if (wpo->drawn_pattern_bg_r != wm.wallpaper.pattern_bg_r
+            || wpo->drawn_pattern_bg_g != wm.wallpaper.pattern_bg_g
+            || wpo->drawn_pattern_bg_b != wm.wallpaper.pattern_bg_b
+            || wpo->drawn_pattern_dot_r != wm.wallpaper.pattern_dot_r
+            || wpo->drawn_pattern_dot_g != wm.wallpaper.pattern_dot_g
+            || wpo->drawn_pattern_dot_b != wm.wallpaper.pattern_dot_b
+            || wpo->drawn_pattern_grid_spacing
+                   != wm.wallpaper.pattern_grid_spacing
+            || wpo->drawn_pattern_dot_radius
+                   != wm.wallpaper.pattern_dot_radius) {
+            return true;
+        }
+
+        return false;
+    }
+
+    if (wpo->drawn_blur_radius != wm.wallpaper.blur_radius
+        || wpo->drawn_blur_passes != wm.wallpaper.blur_passes
+        || wpo->drawn_blur_top_inset != wm.wallpaper.blur_top_inset) {
+        return true;
+    }
 
     return wpo->drawn_blur_all != wp->blur_all
         || wpo->drawn_top_h != wp->blur_top_h
@@ -707,17 +750,30 @@ static void wpo_redraw(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
     wpo->drawn_top_h = wp->blur_top_h;
     wpo->drawn_top_fade_h = wp->blur_top_fade_h;
     wpo->drawn_fade_h = wp->blur_fade_h;
+
+    wpo->drawn_pattern_bg_r = wm.wallpaper.pattern_bg_r;
+    wpo->drawn_pattern_bg_g = wm.wallpaper.pattern_bg_g;
+    wpo->drawn_pattern_bg_b = wm.wallpaper.pattern_bg_b;
+    wpo->drawn_pattern_dot_r = wm.wallpaper.pattern_dot_r;
+    wpo->drawn_pattern_dot_g = wm.wallpaper.pattern_dot_g;
+    wpo->drawn_pattern_dot_b = wm.wallpaper.pattern_dot_b;
+    wpo->drawn_pattern_grid_spacing = wm.wallpaper.pattern_grid_spacing;
+    wpo->drawn_pattern_dot_radius = wm.wallpaper.pattern_dot_radius;
+    wpo->drawn_blur_radius = wm.wallpaper.blur_radius;
+    wpo->drawn_blur_passes = wm.wallpaper.blur_passes;
+    wpo->drawn_blur_top_inset = wm.wallpaper.blur_top_inset;
+
     wpo->drawn_valid = true;
 }
 
 void wallpaper_init(
     struct Wallpaper *wp, struct wl_compositor *compositor, struct wl_shm *shm,
-    struct river_window_manager_v1 *wm
+    struct river_window_manager_v1 *manager
 ) {
     memset(wp, 0, sizeof(*wp));
     wp->compositor = compositor;
     wp->shm = shm;
-    wp->wm = wm;
+    wp->wm = manager;
 
     wl_list_init(&wp->outputs);
 }
@@ -822,7 +878,7 @@ void wallpaper_manage(
 
     wl_list_for_each(wpo, &wp->outputs, link) {
         if (wpo->width <= 0 || wpo->height <= 0) { continue; }
-        if (wpo->buffer != NULL && wpo->drawn_valid
+        if (wpo->buffer != NULL
             && (wpo->drawn_w != wpo->width || wpo->drawn_h != wpo->height)) {
             wpo_destroy_buffer(wpo);
         }
