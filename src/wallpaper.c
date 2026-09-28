@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <wayland-client-protocol.h>
@@ -95,37 +96,55 @@ static void paint_default_pattern(uint8_t *dst, int w, int h) {
     }
 }
 
-static int ppm_read_token(FILE *f, char *buf, size_t buf_size) {
-    int c;
+struct ppm_buf {
+    const uint8_t *data;
+    size_t size;
+    size_t pos;
+};
+
+static int ppm_buf_token(struct ppm_buf *b, char *out, size_t out_size) {
     size_t len = 0;
 
     // Skip whitespace and comments.
-    while ((c = fgetc(f)) != EOF) {
+    while (b->pos < b->size) {
+        uint8_t c = b->data[b->pos];
         if (c == '#') {
-            while ((c = fgetc(f)) != EOF && c != '\n') {}
+            b->pos++;
+            while (b->pos < b->size && b->data[b->pos] != '\n') { b->pos++; }
             continue;
         }
 
-        if (c == ' ' || c == '\t' || c == '\n' || c == '\r') { continue; }
+        if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
+            b->pos++;
+            continue;
+        }
+
         break;
     }
 
-    if (c == EOF) { return -1; }
+    if (b->pos >= b->size) { return -1; }
 
-    while (c != EOF && c != ' ' && c != '\t' && c != '\n' && c != '\r') {
-        if (len + 1 >= buf_size) { return -1; }
-        buf[len++] = (char)c;
-        c = fgetc(f);
+    while (b->pos < b->size) {
+        uint8_t c = b->data[b->pos];
+        if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
+            b->pos++;
+            break;
+        }
+
+        if (len + 1 >= out_size) { return -1; }
+
+        out[len++] = (char)c;
+        b->pos++;
     }
 
-    buf[len] = '\0';
+    out[len] = '\0';
     return 0;
 }
 
-static bool ppm_read_int(FILE *f, int *out) {
+static bool ppm_buf_read_int(struct ppm_buf *b, int *out) {
     char token[64];
 
-    if (ppm_read_token(f, token, sizeof(token)) != 0) { return false; }
+    if (ppm_buf_token(b, token, sizeof(token)) != 0) { return false; }
 
     char *end;
     errno = 0;
@@ -141,9 +160,9 @@ static bool ppm_read_int(FILE *f, int *out) {
 }
 
 static bool
-ppm_load(const char *path, uint8_t **out_rgba, int *out_w, int *out_h) {
-    FILE *f = fopen(path, "rb");
-    if (f == NULL) {
+read_whole_file(const char *path, uint8_t **out_data, size_t *out_size) {
+    int fd = open(path, O_RDONLY);
+    if (fd < 0) {
         fprintf(
             stderr, "Wallpaper: failed to open '%s': %s\n", path,
             strerror(errno)
@@ -152,21 +171,98 @@ ppm_load(const char *path, uint8_t **out_rgba, int *out_w, int *out_h) {
         return false;
     }
 
+    struct stat st;
+
+    if (fstat(fd, &st) < 0) {
+        fprintf(
+            stderr, "Wallpaper: fstat('%s') failed: %s\n", path, strerror(errno)
+        );
+
+        close(fd);
+        return false;
+    }
+
+    if (!S_ISREG(st.st_mode)) {
+        fprintf(stderr, "Wallpaper: '%s' is not a regular file\n", path);
+        close(fd);
+        return false;
+    }
+
+    if (st.st_size <= 0) {
+        fprintf(stderr, "Wallpaper: '%s' is empty\n", path);
+        close(fd);
+        return false;
+    }
+
+    size_t size = (size_t)st.st_size;
+    uint8_t *data = malloc(size);
+
+    if (data == NULL) {
+        close(fd);
+        return false;
+    }
+
+    size_t got = 0;
+    while (got < size) {
+        ssize_t n = read(fd, data + got, size - got);
+
+        if (n < 0) {
+            if (errno == EINTR) { continue; }
+            fprintf(
+                stderr, "Wallpaper: read('%s') failed: %s\n", path,
+                strerror(errno)
+            );
+
+            free(data);
+            close(fd);
+            return false;
+        }
+
+        if (n == 0) { break; }
+        got += (size_t)n;
+    }
+
+    close(fd);
+
+    if (got != size) {
+        fprintf(stderr, "Wallpaper: short read on '%s'\n", path);
+        free(data);
+        return false;
+    }
+
+    *out_data = data;
+    *out_size = size;
+
+    return true;
+}
+
+static bool
+ppm_load(const char *path, uint8_t **out_rgba, int *out_w, int *out_h) {
+    uint8_t *filebuf = NULL;
+    size_t filebuf_size = 0;
+
+    if (!read_whole_file(path, &filebuf, &filebuf_size)) { return false; }
+
+    struct ppm_buf b = {
+        .data = filebuf,
+        .size = filebuf_size,
+        .pos = 0,
+    };
+
     char token[64];
 
-    if (ppm_read_token(f, token, sizeof(token)) != 0
+    if (ppm_buf_token(&b, token, sizeof(token)) != 0
         || strcmp(token, "P6") != 0) {
         fprintf(stderr, "Wallpaper: '%s' is not a binary PPM (P6)\n", path);
-        fclose(f);
+        free(filebuf);
         return false;
     }
 
     int width, height, maxval;
-
-    if (!ppm_read_int(f, &width) || !ppm_read_int(f, &height)
-        || !ppm_read_int(f, &maxval)) {
+    if (!ppm_buf_read_int(&b, &width) || !ppm_buf_read_int(&b, &height)
+        || !ppm_buf_read_int(&b, &maxval)) {
         fprintf(stderr, "Wallpaper: malformed PPM header in '%s'\n", path);
-        fclose(f);
+        free(filebuf);
         return false;
     }
 
@@ -178,7 +274,7 @@ ppm_load(const char *path, uint8_t **out_rgba, int *out_w, int *out_h) {
             path, width, height, maxval
         );
 
-        fclose(f);
+        free(filebuf);
         return false;
     }
 
@@ -188,37 +284,29 @@ ppm_load(const char *path, uint8_t **out_rgba, int *out_w, int *out_h) {
             width, height, MAX_DIMENSION
         );
 
-        fclose(f);
+        free(filebuf);
         return false;
     }
 
     size_t pixel_count = (size_t)width * (size_t)height;
     if (pixel_count > SIZE_MAX / 4) {
         fprintf(stderr, "Wallpaper: '%s' dimensions overflow\n", path);
-        fclose(f);
+        free(filebuf);
         return false;
     }
 
-    uint8_t *rgb = malloc(pixel_count * 3);
-
-    if (rgb == NULL) {
-        fclose(f);
-        return false;
-    }
-
-    if (fread(rgb, 1, pixel_count * 3, f) != pixel_count * 3) {
+    size_t needed = pixel_count * 3;
+    if (needed > b.size - b.pos) {
         fprintf(stderr, "Wallpaper: truncated pixel data in '%s'\n", path);
-        free(rgb);
-        fclose(f);
+        free(filebuf);
         return false;
     }
 
-    fclose(f);
+    const uint8_t *rgb = b.data + b.pos;
 
     uint8_t *rgba = malloc(pixel_count * 4);
-
     if (rgba == NULL) {
-        free(rgb);
+        free(filebuf);
         return false;
     }
 
@@ -229,7 +317,7 @@ ppm_load(const char *path, uint8_t **out_rgba, int *out_w, int *out_h) {
         rgba[i * 4 + 3] = 255;
     }
 
-    free(rgb);
+    free(filebuf);
 
     *out_rgba = rgba;
     *out_w = width;
@@ -245,6 +333,7 @@ bool wallpaper_load_ppm(struct Wallpaper *wp, const char *path) {
     if (!ppm_load(path, &pixels, &w, &h)) { return false; }
 
     free(wp->image_pixels);
+
     wp->image_pixels = pixels;
     wp->image_width = w;
     wp->image_height = h;
@@ -283,10 +372,10 @@ scale_cover(const uint8_t *src, int sw, int sh, uint8_t *dst, int dw, int dh) {
 
             uint8_t *dp = &dst[((size_t)y * (size_t)dw + (size_t)x) * 4];
 
-            dp[0] = sp[0];
-            dp[1] = sp[1];
-            dp[2] = sp[2];
-            dp[3] = sp[3];
+            dp[0] = sp[2]; // B
+            dp[1] = sp[1]; // G
+            dp[2] = sp[0]; // R
+            dp[3] = sp[3]; // A
         }
     }
 }
@@ -499,19 +588,6 @@ wpo_prepare_variants(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
 
     for (int p = 0; p < BLUR_PASSES; p++) {
         box_blur(wpo->cached_blurred, wpo->width, wpo->height, BLUR_RADIUS);
-    }
-
-    // Source is R,G,B,A; ARGB8888 little-endian is B,G,R,A in memory.
-    uint8_t *variants[2] = {wpo->cached_sharp, wpo->cached_blurred};
-
-    for (int v = 0; v < 2; v++) {
-        uint8_t *buf = variants[v];
-        for (size_t i = 0; i < (size_t)wpo->width * (size_t)wpo->height; i++) {
-            uint8_t *px = &buf[i * 4];
-            uint8_t r = px[0];
-            px[0] = px[2];
-            px[2] = r;
-        }
     }
 }
 
