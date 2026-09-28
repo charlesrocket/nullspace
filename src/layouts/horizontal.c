@@ -110,6 +110,7 @@ void horizontal_right_tile(
 void horizontal_monocle(
     struct LayoutWindow *lw, size_t n, const struct LayoutParams *p
 ) {
+    if (n == 0) { return; }
     int32_t go_h, go_v, gi_h, gi_v;
     effective_gaps(p, n, &go_h, &go_v, &gi_h, &gi_v);
 
@@ -175,6 +176,7 @@ void horizontal_grid(
     int32_t go_h, go_v, gi_h, gi_v;
     effective_gaps(p, n, &go_h, &go_v, &gi_h, &gi_v);
     int32_t count = (int32_t)n;
+    if (count <= 0) { return; }
 
     int32_t cols = 0;
     while (cols * cols < count) cols++;
@@ -184,6 +186,7 @@ void horizontal_grid(
     int32_t first_group_cols = cols - remainder;
     int32_t first_group_count = first_group_cols * base_rows;
     int32_t max_rows = base_rows + (remainder > 0 ? 1 : 0);
+    if (cols <= 0 || base_rows <= 0 || max_rows <= 0) { return; }
 
     int32_t avail_w = p->width - 2 * go_h - (cols - 1) * gi_h;
 
@@ -260,16 +263,29 @@ void horizontal_grid(
         if (i < first_group_count) {
             col_idx = i / base_rows;
             row_idx = i % base_rows;
+
+            if (col_idx < 0 || col_idx >= cols || row_idx < 0
+                || row_idx >= base_rows) {
+                continue;
+            }
+
             cy = row_y_base[row_idx];
             ch = row_h_base[row_idx];
         } else {
             int32_t offset = i - first_group_count;
             col_idx = first_group_cols + (offset / max_rows);
             row_idx = offset % max_rows;
+
+            if (col_idx < 0 || col_idx >= cols || row_idx < 0
+                || row_idx >= max_rows) {
+                continue;
+            }
+
             cy = row_y_max[row_idx];
             ch = row_h_max[row_idx];
         }
 
+        if (col_idx < 0 || col_idx >= cols) { continue; }
         lw[i].x = col_x[col_idx];
         lw[i].y = cy;
         lw[i].w = col_w[col_idx];

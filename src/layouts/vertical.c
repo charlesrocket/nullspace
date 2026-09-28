@@ -96,6 +96,7 @@ void vertical_tile(
 void vertical_grid(
     struct LayoutWindow *lw, size_t n, const struct LayoutParams *p
 ) {
+    if (n == 0) { return; }
     struct LayoutParams g = effective_params(p, n);
 
     size_t rows = 1;
@@ -106,6 +107,7 @@ void vertical_grid(
     size_t first_group_rows = rows - remainder;
     size_t first_group_count = first_group_rows * base_cols;
     size_t max_cols = base_cols + (remainder > 0 ? 1 : 0);
+    if (base_cols == 0 || max_cols == 0) { return; }
 
     int32_t inner_w = g.width - 2 * g.gap_outer_h;
     int32_t inner_h = g.height - 2 * g.gap_outer_v;
