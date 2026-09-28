@@ -1360,7 +1360,7 @@ static void wm_init(void) {
     wm.anim.min_hz = CFG_ANIM_MIN_HZ;
     wm.anim.max_hz = CFG_ANIM_MAX_HZ;
 
-    wm.wallpaper.home_path = CFG_WALLPAPER_HOME_PATH;
+    wm.wallpaper.path = CFG_WALLPAPER_PATH;
     wm.wallpaper.topbar_fade_h = CFG_WALLPAPER_TOPBAR_FADE_H;
 
     wm.libinput.tap_state = CFG_LIBINPUT_TAP_STATE;
@@ -1663,7 +1663,7 @@ int main(void) {
             if (home != NULL) {
                 snprintf(
                     default_path, sizeof(default_path), "%s/%s", home,
-                    wm.wallpaper.home_path
+                    wm.wallpaper.path
                 );
 
                 wallpaper_path = default_path;

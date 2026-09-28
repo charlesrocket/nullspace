@@ -30,7 +30,7 @@
 #define CFG_ANIM_MIN_HZ                60
 #define CFG_ANIM_MAX_HZ                720
 
-#define CFG_WALLPAPER_HOME_PATH        ".local/share/nullspace/wallpaper.ppm"
+#define CFG_WALLPAPER_PATH             ".local/share/nullspace/wallpaper.ppm"
 #define CFG_WALLPAPER_TOPBAR_FADE_H    42
 
 #define CFG_KB_LAYOUT                  "us"

@@ -1,5 +1,5 @@
-#ifndef NULLSPACE_IPC_H
-#define NULLSPACE_IPC_H
+#ifndef IPC_H
+#define IPC_H
 
 #include <stdbool.h>
 #include <sys/event.h>
@@ -23,4 +23,4 @@ void ipc_notify_window_closed(struct Window *w);
 void ipc_notify_window_meta(struct Window *w);
 void ipc_notify_all_state(void);
 
-#endif /* NULLSPACE_IPC_H */
+#endif // IPC_H

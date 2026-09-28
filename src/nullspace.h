@@ -63,7 +63,7 @@ struct AnimConfig {
 };
 
 struct WallpaperConfig {
-    const char *home_path;
+    const char *path;
     int32_t topbar_fade_h;
 };
 

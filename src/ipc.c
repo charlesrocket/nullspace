@@ -393,10 +393,7 @@ static void emit_config(struct IpcClient *c) {
     emit_int(c, "anim_max_hz", wm.anim.max_hz);
 
     emit_int(c, "wallpaper_topbar_fade_h", wm.wallpaper.topbar_fade_h);
-    emit_str(
-        c, "wallpaper_home_path",
-        wm.wallpaper.home_path ? wm.wallpaper.home_path : ""
-    );
+    emit_str(c, "wallpaper_path", wm.wallpaper.path ? wm.wallpaper.path : "");
 }
 
 static void emit_spaces(struct IpcClient *c) {

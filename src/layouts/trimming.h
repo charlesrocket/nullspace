@@ -57,4 +57,4 @@ size_t trimming_assign(
     size_t cap
 );
 
-#endif /* TRIMMING_H */
+#endif // TRIMMING_H
