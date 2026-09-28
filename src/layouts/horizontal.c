@@ -190,8 +190,8 @@ void horizontal_grid(
 
     int32_t avail_w = p->width - 2 * go_h - (cols - 1) * gi_h;
 
-    int32_t *col_x = malloc(sizeof(int32_t) * (size_t)cols);
-    int32_t *col_w = malloc(sizeof(int32_t) * (size_t)cols);
+    int32_t *col_x = calloc((size_t)cols, sizeof(int32_t));
+    int32_t *col_w = calloc((size_t)cols, sizeof(int32_t));
 
     if (col_x == NULL || col_w == NULL) {
         free(col_x);
@@ -209,8 +209,8 @@ void horizontal_grid(
     }
 
     int32_t avail_h_base = p->height - 2 * go_v - (base_rows - 1) * gi_v;
-    int32_t *row_y_base = malloc(sizeof(int32_t) * (size_t)base_rows);
-    int32_t *row_h_base = malloc(sizeof(int32_t) * (size_t)base_rows);
+    int32_t *row_y_base = calloc((size_t)base_rows, sizeof(int32_t));
+    int32_t *row_h_base = calloc((size_t)base_rows, sizeof(int32_t));
 
     if (row_y_base == NULL || row_h_base == NULL) {
         free(col_x);
@@ -227,34 +227,31 @@ void horizontal_grid(
         row_h_base[i] = (i == base_rows - 1)
                           ? (p->y + p->height - go_v - next_y)
                           : unit_h_base;
+
         next_y += row_h_base[i] + gi_v;
     }
 
-    int32_t *row_y_max = NULL;
-    int32_t *row_h_max = NULL;
-    if (remainder > 0) {
-        row_y_max = malloc(sizeof(int32_t) * (size_t)max_rows);
-        row_h_max = malloc(sizeof(int32_t) * (size_t)max_rows);
-        if (row_y_max == NULL || row_h_max == NULL) {
-            free(col_x);
-            free(col_w);
-            free(row_y_base);
-            free(row_h_base);
-            free(row_y_max);
-            free(row_h_max);
-            return;
-        }
+    int32_t *row_y_max = calloc((size_t)max_rows, sizeof(int32_t));
+    int32_t *row_h_max = calloc((size_t)max_rows, sizeof(int32_t));
+    if (row_y_max == NULL || row_h_max == NULL) {
+        free(col_x);
+        free(col_w);
+        free(row_y_base);
+        free(row_h_base);
+        free(row_y_max);
+        free(row_h_max);
+        return;
+    }
 
-        int32_t avail_h_max = p->height - 2 * go_v - (max_rows - 1) * gi_v;
-        int32_t unit_h_max = avail_h_max / max_rows;
-        next_y = p->y + go_v;
-        for (int32_t i = 0; i < max_rows; i++) {
-            row_y_max[i] = next_y;
-            row_h_max[i] = (i == max_rows - 1)
-                             ? (p->y + p->height - go_v - next_y)
-                             : unit_h_max;
-            next_y += row_h_max[i] + gi_v;
-        }
+    int32_t avail_h_max = p->height - 2 * go_v - (max_rows - 1) * gi_v;
+    int32_t unit_h_max = avail_h_max / max_rows;
+    next_y = p->y + go_v;
+    for (int32_t i = 0; i < max_rows; i++) {
+        row_y_max[i] = next_y;
+        row_h_max[i] = (i == max_rows - 1) ? (p->y + p->height - go_v - next_y)
+                                           : unit_h_max;
+
+        next_y += row_h_max[i] + gi_v;
     }
 
     for (int32_t i = 0; i < count; i++) {
