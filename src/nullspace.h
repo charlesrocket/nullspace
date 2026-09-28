@@ -63,8 +63,16 @@ struct AnimConfig {
 };
 
 struct WallpaperConfig {
-    const char *path;
     int32_t topbar_fade_h;
+
+    int32_t pattern_bg_r, pattern_bg_g, pattern_bg_b;
+    int32_t pattern_dot_r, pattern_dot_g, pattern_dot_b;
+    int32_t pattern_grid_spacing;
+    int32_t pattern_dot_radius;
+
+    int32_t blur_radius, blur_passes, blur_top_inset;
+
+    char *path;
 };
 
 struct WindowAnimation {
@@ -194,7 +202,6 @@ struct WindowManager {
     struct LibinputConfig libinput;
     struct Output *default_output;
 
-    const char *kb_layout;
     enum Layout layout;
 
     int64_t anim_frame_ns; // frame interval in nanoseconds
@@ -207,6 +214,8 @@ struct WindowManager {
     int32_t nmasters;
     int current_space;
     float mfact;
+
+    char *kb_layout;
 
     bool smart_gaps;
     bool center_overspread; // let masters fill width when n <= nmasters
@@ -232,5 +241,8 @@ void wm_set_layout(enum Layout layout);
 void wm_switch_space(int space);
 void wm_move_window_to_space(struct Seat *seat, int space);
 void wm_request_manage(void);
+
+bool wm_set_wallpaper_path(const char *path);
+void wm_invalidate_wallpaper(void);
 
 #endif // NULLSPACE_H

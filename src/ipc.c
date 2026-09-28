@@ -4,6 +4,7 @@
 
 #include "ipc.h"
 
+#include "input.h"
 #include "layouts/layout.h"
 #include "layouts/trimming.h"
 #include "nullspace.h"
@@ -394,6 +395,34 @@ static void emit_config(struct IpcClient *c) {
 
     emit_int(c, "wallpaper_topbar_fade_h", wm.wallpaper.topbar_fade_h);
     emit_str(c, "wallpaper_path", wm.wallpaper.path ? wm.wallpaper.path : "");
+    emit_int(c, "wallpaper_pattern_bg_r", wm.wallpaper.pattern_bg_r);
+    emit_int(c, "wallpaper_pattern_bg_g", wm.wallpaper.pattern_bg_g);
+    emit_int(c, "wallpaper_pattern_bg_b", wm.wallpaper.pattern_bg_b);
+    emit_int(c, "wallpaper_pattern_dot_r", wm.wallpaper.pattern_dot_r);
+    emit_int(c, "wallpaper_pattern_dot_g", wm.wallpaper.pattern_dot_g);
+    emit_int(c, "wallpaper_pattern_dot_b", wm.wallpaper.pattern_dot_b);
+    emit_int(
+        c, "wallpaper_pattern_grid_spacing", wm.wallpaper.pattern_grid_spacing
+    );
+    emit_int(
+        c, "wallpaper_pattern_dot_radius", wm.wallpaper.pattern_dot_radius
+    );
+    emit_int(c, "wallpaper_blur_radius", wm.wallpaper.blur_radius);
+    emit_int(c, "wallpaper_blur_passes", wm.wallpaper.blur_passes);
+    emit_int(c, "wallpaper_blur_top_inset", wm.wallpaper.blur_top_inset);
+
+    emit_int(c, "libinput_tap_state", wm.libinput.tap_state);
+    emit_int(c, "libinput_natural_scroll", wm.libinput.natural_scroll);
+    emit_int(c, "libinput_left_handed", wm.libinput.left_handed);
+    emit_int(c, "libinput_middle_emulation", wm.libinput.middle_emulation);
+    emit_int(c, "libinput_dwt", wm.libinput.dwt);
+    emit_int(c, "libinput_drag", wm.libinput.drag);
+    emit_int(c, "libinput_drag_lock", wm.libinput.drag_lock);
+    emit_int(c, "libinput_three_finger_drag", wm.libinput.three_finger_drag);
+    emit_int(c, "libinput_accel_profile", wm.libinput.accel_profile);
+    emit_float(c, "libinput_accel_speed", wm.libinput.accel_speed);
+    emit_int(c, "libinput_click_method", wm.libinput.click_method);
+    emit_int(c, "libinput_scroll_method", wm.libinput.scroll_method);
 }
 
 static void emit_spaces(struct IpcClient *c) {
@@ -758,6 +787,68 @@ static void handle_get(struct IpcClient *c, const char *key, const char *arg) {
         return;
     }
 
+    if (!strcmp(key, "wallpaper_path")) {
+        resp_ok_str(c, wm.wallpaper.path ? wm.wallpaper.path : "");
+        return;
+    }
+
+    {
+        struct {
+            const char *key;
+            int32_t value;
+        } wps[] = {
+            {        "wallpaper_pattern_bg_r",         wm.wallpaper.pattern_bg_r},
+            {        "wallpaper_pattern_bg_g",         wm.wallpaper.pattern_bg_g},
+            {        "wallpaper_pattern_bg_b",         wm.wallpaper.pattern_bg_b},
+            {       "wallpaper_pattern_dot_r",        wm.wallpaper.pattern_dot_r},
+            {       "wallpaper_pattern_dot_g",        wm.wallpaper.pattern_dot_g},
+            {       "wallpaper_pattern_dot_b",        wm.wallpaper.pattern_dot_b},
+            {"wallpaper_pattern_grid_spacing", wm.wallpaper.pattern_grid_spacing},
+            {  "wallpaper_pattern_dot_radius",   wm.wallpaper.pattern_dot_radius},
+            {         "wallpaper_blur_radius",          wm.wallpaper.blur_radius},
+            {         "wallpaper_blur_passes",          wm.wallpaper.blur_passes},
+            {      "wallpaper_blur_top_inset",       wm.wallpaper.blur_top_inset},
+        };
+
+        for (size_t i = 0; i < sizeof(wps) / sizeof(wps[0]); i++) {
+            if (!strcmp(key, wps[i].key)) {
+                resp_ok_int(c, wps[i].value);
+                return;
+            }
+        }
+    }
+
+    {
+        struct {
+            const char *key;
+            int32_t value;
+        } lis[] = {
+            {        "libinput_tap_state",         wm.libinput.tap_state},
+            {   "libinput_natural_scroll",    wm.libinput.natural_scroll},
+            {      "libinput_left_handed",       wm.libinput.left_handed},
+            { "libinput_middle_emulation",  wm.libinput.middle_emulation},
+            {              "libinput_dwt",               wm.libinput.dwt},
+            {             "libinput_drag",              wm.libinput.drag},
+            {        "libinput_drag_lock",         wm.libinput.drag_lock},
+            {"libinput_three_finger_drag", wm.libinput.three_finger_drag},
+            {    "libinput_accel_profile",     wm.libinput.accel_profile},
+            {     "libinput_click_method",      wm.libinput.click_method},
+            {    "libinput_scroll_method",     wm.libinput.scroll_method},
+        };
+
+        for (size_t i = 0; i < sizeof(lis) / sizeof(lis[0]); i++) {
+            if (!strcmp(key, lis[i].key)) {
+                resp_ok_int(c, lis[i].value);
+                return;
+            }
+        }
+    }
+
+    if (!strcmp(key, "libinput_accel_speed")) {
+        resp_ok_float(c, wm.libinput.accel_speed);
+        return;
+    }
+
     if (!strcmp(key, "focused_title")) {
         struct Window *w = focused_window();
         resp_ok_str(c, w && w->title ? w->title : "");
@@ -931,6 +1022,114 @@ handle_set(struct IpcClient *c, const char *key, const char *value) {
 
         wm.wallpaper.topbar_fade_h = (int32_t)v;
         broadcast_printf("EVT wallpaper_topbar_fade_h %d\n", (int32_t)v);
+        resp_ok(c);
+        return;
+    }
+
+    if (!strcmp(key, "wallpaper_path")) {
+        if (value[0] == '\0') {
+            resp_err(c, "bad value");
+            return;
+        }
+
+        if (!wm_set_wallpaper_path(value)) {
+            resp_err(c, "could not load");
+            return;
+        }
+
+        broadcast_printf(
+            "EVT wallpaper_path \"%s\"\n",
+            wm.wallpaper.path ? wm.wallpaper.path : ""
+        );
+
+        resp_ok(c);
+        return;
+    }
+
+    {
+        struct {
+            const char *key;
+            int32_t *slot;
+            int32_t min, max;
+        } wps[] = {
+            {        "wallpaper_pattern_bg_r",&wm.wallpaper.pattern_bg_r,0, 255                                                                                },
+            {        "wallpaper_pattern_bg_g",       &wm.wallpaper.pattern_bg_g, 0, 255},
+            {        "wallpaper_pattern_bg_b",       &wm.wallpaper.pattern_bg_b, 0, 255},
+            {       "wallpaper_pattern_dot_r",      &wm.wallpaper.pattern_dot_r, 0, 255},
+            {       "wallpaper_pattern_dot_g",      &wm.wallpaper.pattern_dot_g, 0, 255},
+            {       "wallpaper_pattern_dot_b",      &wm.wallpaper.pattern_dot_b, 0, 255},
+            {"wallpaper_pattern_grid_spacing",
+             &wm.wallpaper.pattern_grid_spacing, 1, 512                                },
+            {  "wallpaper_pattern_dot_radius", &wm.wallpaper.pattern_dot_radius,
+             0, 128                                                                    },
+            {         "wallpaper_blur_radius",        &wm.wallpaper.blur_radius, 0, 256},
+            {         "wallpaper_blur_passes",        &wm.wallpaper.blur_passes, 0,  16},
+            {      "wallpaper_blur_top_inset",     &wm.wallpaper.blur_top_inset, 0, 512},
+        };
+
+        for (size_t i = 0; i < sizeof(wps) / sizeof(wps[0]); i++) {
+            if (strcmp(key, wps[i].key) != 0) { continue; }
+
+            long v;
+            if (!parse_int(value, &v) || v < wps[i].min || v > wps[i].max) {
+                resp_err(c, "bad value");
+                return;
+            }
+
+            *wps[i].slot = (int32_t)v;
+            broadcast_printf("EVT %s %d\n", key, *wps[i].slot);
+            wm_invalidate_wallpaper();
+            resp_ok(c);
+            return;
+        }
+    }
+
+    {
+        struct {
+            const char *key;
+            int32_t *slot;
+            int32_t min, max;
+        } lis[] = {
+            {        "libinput_tap_state",         &wm.libinput.tap_state, -1, 1},
+            {   "libinput_natural_scroll",    &wm.libinput.natural_scroll, -1, 1},
+            {      "libinput_left_handed",       &wm.libinput.left_handed, -1, 1},
+            { "libinput_middle_emulation",  &wm.libinput.middle_emulation, -1, 1},
+            {              "libinput_dwt",               &wm.libinput.dwt, -1, 1},
+            {             "libinput_drag",              &wm.libinput.drag, -1, 1},
+            {        "libinput_drag_lock",         &wm.libinput.drag_lock, -1, 2},
+            {"libinput_three_finger_drag", &wm.libinput.three_finger_drag, -1, 2},
+            {    "libinput_accel_profile",     &wm.libinput.accel_profile, -1, 7},
+            {     "libinput_click_method",      &wm.libinput.click_method, -1, 2},
+            {    "libinput_scroll_method",     &wm.libinput.scroll_method, -1, 7},
+        };
+
+        for (size_t i = 0; i < sizeof(lis) / sizeof(lis[0]); i++) {
+            if (strcmp(key, lis[i].key) != 0) { continue; }
+
+            long v;
+            if (!parse_int(value, &v) || v < lis[i].min || v > lis[i].max) {
+                resp_err(c, "bad value");
+                return;
+            }
+
+            *lis[i].slot = (int32_t)v;
+            broadcast_printf("EVT %s %d\n", key, *lis[i].slot);
+            libinput_reconfigure();
+            resp_ok(c);
+            return;
+        }
+    }
+
+    if (!strcmp(key, "libinput_accel_speed")) {
+        float v;
+        if (!parse_float(value, &v) || v < -2.0f || v > 1.0f) {
+            resp_err(c, "bad value");
+            return;
+        }
+
+        wm.libinput.accel_speed = v;
+        broadcast_printf("EVT libinput_accel_speed %g\n", (double)v);
+        libinput_reconfigure();
         resp_ok(c);
         return;
     }

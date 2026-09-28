@@ -444,3 +444,85 @@ void libinput_bind(struct wl_registry *registry, uint32_t name) {
     libinput_config = config;
     river_libinput_config_v1_add_listener(config, &config_listener, NULL);
 }
+
+void libinput_reconfigure(void) {
+    struct LibinputDevice *dev;
+    wl_list_for_each(dev, &devices, link) {
+        struct river_libinput_device_v1 *obj = dev->obj;
+
+        if (wm.libinput.tap_state >= 0) {
+            river_libinput_device_v1_set_tap(
+                obj, (uint32_t)wm.libinput.tap_state
+            );
+        }
+
+        if (wm.libinput.natural_scroll >= 0) {
+            river_libinput_device_v1_set_natural_scroll(
+                obj, (uint32_t)wm.libinput.natural_scroll
+            );
+        }
+
+        if (wm.libinput.left_handed >= 0) {
+            river_libinput_device_v1_set_left_handed(
+                obj, (uint32_t)wm.libinput.left_handed
+            );
+        }
+
+        if (wm.libinput.middle_emulation >= 0) {
+            river_libinput_device_v1_set_middle_emulation(
+                obj, (uint32_t)wm.libinput.middle_emulation
+            );
+        }
+
+        if (wm.libinput.dwt >= 0) {
+            river_libinput_device_v1_set_dwt(obj, (uint32_t)wm.libinput.dwt);
+        }
+
+        if (wm.libinput.drag >= 0) {
+            river_libinput_device_v1_set_drag(obj, (uint32_t)wm.libinput.drag);
+        }
+
+        if (wm.libinput.drag_lock >= 0) {
+            river_libinput_device_v1_set_drag_lock(
+                obj, (uint32_t)wm.libinput.drag_lock
+            );
+        }
+
+        if (wm.libinput.three_finger_drag >= 0) {
+            river_libinput_device_v1_set_three_finger_drag(
+                obj, (uint32_t)wm.libinput.three_finger_drag
+            );
+        }
+
+        if (wm.libinput.accel_profile >= 0) {
+            river_libinput_device_v1_set_accel_profile(
+                obj, (uint32_t)wm.libinput.accel_profile
+            );
+        }
+
+        if (wm.libinput.accel_speed > -2.0f) {
+            struct wl_array buf;
+            wl_array_init(&buf);
+
+            double *slot = wl_array_add(&buf, sizeof(*slot));
+            if (slot != NULL) {
+                *slot = (double)wm.libinput.accel_speed;
+                river_libinput_device_v1_set_accel_speed(obj, &buf);
+            }
+
+            wl_array_release(&buf);
+        }
+
+        if (wm.libinput.click_method >= 0) {
+            river_libinput_device_v1_set_click_method(
+                obj, (uint32_t)wm.libinput.click_method
+            );
+        }
+
+        if (wm.libinput.scroll_method >= 0) {
+            river_libinput_device_v1_set_scroll_method(
+                obj, (uint32_t)wm.libinput.scroll_method
+            );
+        }
+    }
+}

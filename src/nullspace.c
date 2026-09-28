@@ -776,6 +776,54 @@ void wm_request_manage(void) {
     }
 }
 
+bool wm_set_wallpaper_path(const char *path) {
+    if (path == NULL || path[0] == '\0') { return false; }
+
+    char resolved[4096];
+    const char *full = path;
+
+    if (path[0] != '/') {
+        const char *home = getenv("HOME");
+        if (home != NULL) {
+            snprintf(resolved, sizeof(resolved), "%s/%s", home, path);
+            full = resolved;
+        }
+    }
+
+    char *new_path = strdup(full);
+    if (new_path == NULL) { return false; }
+
+    if (!wallpaper_load_ppm(&wp, full)) {
+        free(new_path);
+        return false;
+    }
+
+    free(wm.wallpaper.path);
+    wm.wallpaper.path = new_path;
+    wm_invalidate_wallpaper();
+    return true;
+}
+
+void wm_invalidate_wallpaper(void) {
+    wallpaper_invalidate(&wp);
+    wm_request_manage();
+}
+
+static void wm_on_kb_layout_changed(const char *layout) {
+    if (layout == NULL || layout[0] == '\0') { return; }
+    if (wm.kb_layout != NULL && strcmp(wm.kb_layout, layout) == 0) {
+        return; // unchanged
+    }
+
+    char *new_name = strdup(layout);
+    if (new_name == NULL) { return; }
+
+    free(wm.kb_layout);
+    wm.kb_layout = new_name;
+
+    ipc_notify_kb_layout();
+}
+
 static void wm_maybe_set_default_output(void) {
     if (wm.default_output != NULL && !wm.default_output->removed) { return; }
     if (layer_shell_v1 == NULL) { return; }
@@ -1360,8 +1408,20 @@ static void wm_init(void) {
     wm.anim.min_hz = CFG_ANIM_MIN_HZ;
     wm.anim.max_hz = CFG_ANIM_MAX_HZ;
 
-    wm.wallpaper.path = CFG_WALLPAPER_PATH;
+    wm.wallpaper.path = strdup(CFG_WALLPAPER_PATH);
     wm.wallpaper.topbar_fade_h = CFG_WALLPAPER_TOPBAR_FADE_H;
+
+    wm.wallpaper.pattern_bg_r = CFG_WALLPAPER_PATTERN_BG_R;
+    wm.wallpaper.pattern_bg_g = CFG_WALLPAPER_PATTERN_BG_G;
+    wm.wallpaper.pattern_bg_b = CFG_WALLPAPER_PATTERN_BG_B;
+    wm.wallpaper.pattern_dot_r = CFG_WALLPAPER_PATTERN_DOT_R;
+    wm.wallpaper.pattern_dot_g = CFG_WALLPAPER_PATTERN_DOT_G;
+    wm.wallpaper.pattern_dot_b = CFG_WALLPAPER_PATTERN_DOT_B;
+    wm.wallpaper.pattern_grid_spacing = CFG_WALLPAPER_PATTERN_GRID_SPACING;
+    wm.wallpaper.pattern_dot_radius = CFG_WALLPAPER_PATTERN_DOT_RADIUS;
+    wm.wallpaper.blur_radius = CFG_WALLPAPER_BLUR_RADIUS;
+    wm.wallpaper.blur_passes = CFG_WALLPAPER_BLUR_PASSES;
+    wm.wallpaper.blur_top_inset = CFG_WALLPAPER_BLUR_TOP_INSET;
 
     wm.libinput.tap_state = CFG_LIBINPUT_TAP_STATE;
     wm.libinput.natural_scroll = CFG_LIBINPUT_NATURAL_SCROLL;
@@ -1376,7 +1436,9 @@ static void wm_init(void) {
     wm.libinput.click_method = CFG_LIBINPUT_CLICK_METHOD;
     wm.libinput.scroll_method = CFG_LIBINPUT_SCROLL_METHOD;
 
-    wm.kb_layout = CFG_KB_LAYOUT;
+    wm.kb_layout = NULL;
+
+    keymap_set_layout_callback(wm_on_kb_layout_changed);
 
     wm.trimming_tree = trimming_create();
 
@@ -1612,7 +1674,6 @@ int main(void) {
 
     ipc_init();
     keymap_init();
-    keymap_set_layout(wm.kb_layout);
     libinput_init();
 
     struct wl_registry *registry = wl_display_get_registry(display);
@@ -1657,7 +1718,7 @@ int main(void) {
         const char *wallpaper_path = getenv("NSP_WALLPAPER");
         char default_path[4096];
 
-        if (wallpaper_path == NULL) {
+        if (wallpaper_path == NULL && wm.wallpaper.path != NULL) {
             const char *home = getenv("HOME");
 
             if (home != NULL) {

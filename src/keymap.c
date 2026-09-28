@@ -4,7 +4,7 @@
 
 #include "keymap.h"
 
-#include "ipc.h"
+#include "config.h"
 
 #include <fcntl.h>
 #include <river-input-management-v1-client-protocol.h>
@@ -17,6 +17,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <wayland-util.h>
 #include <xkbcommon/xkbcommon.h>
 
 struct Keyboard {
@@ -24,16 +25,16 @@ struct Keyboard {
     struct wl_list link;
 };
 
-static const char *layout_name = "us";
 static struct xkb_context *xkb_context;
 static struct river_xkb_config_v1 *xkb_config;
 static struct river_xkb_keymap_v1 *xkb_keymap;
 static bool keymap_ready;        // success event received
 static struct wl_list keyboards; // Keyboard
 
-void keymap_set_layout(const char *layout) {
-    if (layout != NULL && layout[0] != '\0') { layout_name = layout; }
-    ipc_notify_kb_layout();
+static KeymapLayoutCallback on_layout_change = NULL;
+
+void keymap_set_layout_callback(KeymapLayoutCallback cb) {
+    on_layout_change = cb;
 }
 
 void keymap_init(void) {
@@ -58,7 +59,15 @@ static void keyboard_handle_input_device(
 static void keyboard_handle_layout(
     void *data, struct river_xkb_keyboard_v1 *obj, uint32_t index,
     const char *name // may be NULL
-) {}
+) {
+    (void)data;
+    (void)obj;
+    (void)index;
+
+    if (name == NULL || name[0] == '\0') { return; }
+
+    if (on_layout_change != NULL) { on_layout_change(name); }
+}
 
 static void keyboard_handle_capslock_enabled(
     void *data, struct river_xkb_keyboard_v1 *obj
@@ -131,7 +140,9 @@ static void keymap_shm_seal(int fd) {
 
 static struct river_xkb_keymap_v1 *keymap_create(void) {
     struct xkb_rule_names names = {0};
-    names.layout = layout_name;
+
+    names.layout = CFG_KB_LAYOUTS;
+    names.options = CFG_KB_OPTIONS;
 
     struct xkb_keymap *keymap = xkb_keymap_new_from_names2(
         xkb_context, &names, XKB_KEYMAP_FORMAT_TEXT_V2,
@@ -140,8 +151,11 @@ static struct river_xkb_keymap_v1 *keymap_create(void) {
 
     if (keymap == NULL) {
         fprintf(
-            stderr, "Keymap: failed to compile layout \"%s\"\n", layout_name
+            stderr,
+            "Keymap: failed to compile layouts \"%s\" with options \"%s\"\n",
+            CFG_KB_LAYOUTS, CFG_KB_OPTIONS
         );
+
         return NULL;
     }
 
@@ -174,7 +188,6 @@ static struct river_xkb_keymap_v1 *keymap_create(void) {
 
     memcpy(map, str, len);
     free(str);
-
     munmap(map, len);
 
     keymap_shm_seal(fd);
@@ -198,6 +211,11 @@ static void config_handle_xkb_keyboard(
     struct river_xkb_keyboard_v1 *id
 ) {
     struct Keyboard *kb = calloc(1, sizeof(struct Keyboard));
+    if (kb == NULL) {
+        river_xkb_keyboard_v1_destroy(id);
+        return;
+    }
+
     kb->obj = id;
     wl_list_insert(keyboards.prev, &kb->link);
 
@@ -229,5 +247,11 @@ void keymap_bind(struct wl_registry *registry, uint32_t name) {
 
 void keymap_destroy(void) {
     if (xkb_config != NULL) { river_xkb_config_v1_stop(xkb_config); }
+
+    if (xkb_keymap != NULL) {
+        river_xkb_keymap_v1_destroy(xkb_keymap);
+        xkb_keymap = NULL;
+    }
+
     if (xkb_context != NULL) { xkb_context_unref(xkb_context); }
 }

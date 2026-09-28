@@ -38,5 +38,6 @@ struct wl_registry;
 
 void libinput_init(void);
 void libinput_bind(struct wl_registry *registry, uint32_t name);
+void libinput_reconfigure(void);
 
 #endif // INPUT_H
