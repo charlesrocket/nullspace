@@ -4,7 +4,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <time.h>
 
 enum Layout {
     LAYOUT_VERTICAL_TILE,
@@ -27,9 +26,6 @@ struct LayoutWindow {
 };
 
 struct LayoutParams {
-    // Currently focused window, or NULL if none/unknown
-    // (layouts that treat the focused window specially (monocle)
-    // fall back to `out[0]` when this is NULL).
     struct Window *focused;
 
     int32_t x, y, width, height; // usable area (exclusive zone)
@@ -44,9 +40,6 @@ struct LayoutParams {
 
 bool layouts_is_tiled(enum Layout layout);
 
-// Fill out[0..n-1] with target rects for `layout`. Every out[i].window must
-// already be set; only .x/.y/.w/.h are written. Returns the number of
-// entries filled, or 0 if the layout is not handled here (floating).
 size_t layouts_compute(
     enum Layout layout, struct LayoutWindow *out, size_t n,
     const struct LayoutParams *p
@@ -54,8 +47,6 @@ size_t layouts_compute(
 
 typedef size_t (*LayoutCompute)(enum Layout, struct LayoutWindow *, size_t, const struct LayoutParams *);
 
-void layout_apply(const struct timespec *now);
-void layout_vertical_apply(const struct timespec *now);
-void layout_horizontal_apply(const struct timespec *now);
+void layout_apply(void);
 
 #endif // LAYOUT_H

@@ -1,6 +1,7 @@
 #ifndef NULLSPACE_H
 #define NULLSPACE_H
 
+#include "animation.h"
 #include "config.h"
 #include "input.h"
 #include "layouts/horizontal.h"
@@ -11,7 +12,6 @@
 
 #include <dev/evdev/input-event-codes.h>
 #include <errno.h>
-#include <math.h>
 #include <river-input-management-v1-client-protocol.h>
 #include <river-layer-shell-v1-client-protocol.h>
 #include <river-libinput-config-v1-client-protocol.h>
@@ -23,8 +23,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/timerfd.h>
-#include <time.h>
 #include <unistd.h>
 #include <wayland-client-core.h>
 #include <wayland-client-protocol.h>
@@ -50,16 +48,6 @@ struct LibinputConfig {
     int scroll_method;
 };
 
-struct AnimConfig {
-    int32_t duration_space; // ms
-    int32_t duration_open;  // ms, grow
-    int32_t duration_close; // ms, shrink
-    int32_t duration_tile;  // ms, layout transitions
-
-    int default_hz;
-    int min_hz, max_hz;
-};
-
 struct WallpaperConfig {
     int32_t topbar_fade_h;
 
@@ -73,24 +61,14 @@ struct WallpaperConfig {
     char *path;
 };
 
-struct WindowAnimation {
-    struct timespec start_time;
-
-    int32_t duration_ms;
-
-    int32_t start_x, start_y, start_w, start_h;
-    int32_t target_x, target_y, target_w, target_h;
-
-    bool active;
-};
-
 struct Window {
     struct river_window_v1 *obj;
     struct river_node_v1 *node;
     struct wl_list link;       // WindowManager.windows
     struct wl_list focus_link; // WindowManager.focus_stack
     struct Seat *pointer_move_requested, *pointer_resize_requested;
-    struct WindowAnimation anim;
+    struct Animation anim;
+    struct AnimationBox target_box;
 
     enum Layout decoration_state;
 
@@ -105,16 +83,13 @@ struct Window {
     // Size we last proposed to the client.
     int32_t prop_w, prop_h;
 
-    int32_t last_target_x, last_target_y, last_target_w, last_target_h;
-
     int space;
 
     char *title;
     char *app_id;
 
     bool decoration_state_set;
-    bool has_placement;
-    // The client must report dimensions at least once to receive animations.
+    // The client must report dimensions at least once.
     bool mapped;
     // False until a proposal has been sent/after something invalidates
     // the cache (layout switch). While false, `window_propose_size()` always
@@ -122,9 +97,13 @@ struct Window {
     bool prop_valid;
     bool pos_valid; // false until a position has been sent
 
-    bool new, closed;
+    bool closed;
     // space_hidden == (space != wm.current_space).
-    bool space_hidden, space_anim;
+    bool space_hidden;
+
+    bool has_target;
+
+    int32_t reveal_dir;
 };
 
 struct XkbBinding {
@@ -191,14 +170,11 @@ struct WindowManager {
     struct wl_list windows;     // Window, creation order (tile order)
     struct wl_list focus_stack; // Window, most recently focused last
     struct wl_list seats;       // Seat
-    struct AnimConfig anim;
     struct WallpaperConfig wallpaper;
     struct LibinputConfig libinput;
     struct Output *default_output;
 
     enum Layout layout;
-
-    int64_t anim_frame_ns; // frame interval in nanoseconds
 
     int32_t tiled_gap_outer_h;
     int32_t tiled_gap_outer_v;
@@ -215,8 +191,7 @@ struct WindowManager {
     bool center_overspread; // let masters fill width when n <= nmasters
     bool center_when_single_stack;
 
-    int anim_timer_fd;     // timerfd, or -1 if unavailable
-    bool anim_timer_armed; // a tick is already scheduled
+    bool animations;
 };
 
 extern struct WindowManager wm;
@@ -225,8 +200,7 @@ extern struct river_xkb_bindings_v1 *xkb_bindings_v1;
 struct Output *tiling_output(void);
 
 void window_apply_target(
-    struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh,
-    const struct timespec *now
+    struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh
 );
 
 void wm_set_layout(enum Layout layout);

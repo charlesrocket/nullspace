@@ -14,15 +14,6 @@
 #define CFG_CENTER_OVERSPREAD              false
 #define CFG_CENTER_WHEN_SINGLE_STACK       true
 
-#define CFG_ANIM_DURATION_SPACE            200 // ms
-#define CFG_ANIM_DURATION_OPEN             200 // ms, grow
-#define CFG_ANIM_DURATION_CLOSE            200 // ms, shrink
-#define CFG_ANIM_DURATION_TILE             200 // ms, layout transitions
-
-#define CFG_ANIM_DEFAULT_HZ                100
-#define CFG_ANIM_MIN_HZ                    60
-#define CFG_ANIM_MAX_HZ                    720
-
 #define CFG_WALLPAPER_PATH                 ".local/share/nullspace/wallpaper.ppm"
 #define CFG_WALLPAPER_TOPBAR_FADE_H        42
 
@@ -48,7 +39,6 @@
 #define CFG_TERMINAL                       {"foot", NULL}
 
 // -1 current | 0 disabled | 1 enabled
-
 #define CFG_LIBINPUT_TAP_STATE             1
 #define CFG_LIBINPUT_NATURAL_SCROLL        1
 #define CFG_LIBINPUT_LEFT_HANDED           -1
@@ -67,5 +57,19 @@
 #define CFG_LIBINPUT_CLICK_METHOD          -1
 // 0 no_scroll | 1 two_finger | 2 edge | 4 on_button_down
 #define CFG_LIBINPUT_SCROLL_METHOD         -1
+
+// 0 disabled | 1 enabled
+#define CFG_ANIMATIONS                     1
+
+#define CFG_ANIM_DURATION_MOVE             160
+#define CFG_ANIM_DURATION_OPEN             200
+#define CFG_ANIM_DURATION_CLOSE            140
+#define CFG_ANIM_DURATION_SPACE            220
+
+// Cubic bezier control points (x1, y1, x2, y2).
+#define CFG_ANIM_CURVE_MOVE                {0.25, 0.10, 0.25, 1.00}
+#define CFG_ANIM_CURVE_OPEN                {0.00, 0.00, 0.20, 1.00}
+#define CFG_ANIM_CURVE_CLOSE               {0.40, 0.00, 1.00, 1.00}
+#define CFG_ANIM_CURVE_SPACE               {0.25, 0.10, 0.25, 1.00}
 
 #endif // CONFIG_H

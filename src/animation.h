@@ -1,37 +1,57 @@
 #ifndef ANIMATION_H
 #define ANIMATION_H
 
-#include "config.h"
-#include "nullspace.h"
-
+#include <stdbool.h>
 #include <stdint.h>
-#include <time.h>
 
-#define ANIM_DURATION_SPACE CFG_ANIM_DURATION_SPACE
-#define ANIM_DURATION_OPEN  CFG_ANIM_DURATION_OPEN
-#define ANIM_DURATION_CLOSE CFG_ANIM_DURATION_CLOSE
-#define ANIM_DURATION_TILE  CFG_ANIM_DURATION_TILE
+enum AnimationKind {
+    ANIM_NONE,
+    ANIM_MOVE,
+    ANIM_OPEN,
+    ANIM_CLOSE,
+    ANIM_SPACE,
+    ANIM_KIND_COUNT,
+};
 
-#define ANIM_DEFAULT_HZ     CFG_ANIM_DEFAULT_HZ
-#define ANIM_MIN_HZ         CFG_ANIM_MIN_HZ
-#define ANIM_MAX_HZ         CFG_ANIM_MAX_HZ
+struct AnimationBox {
+    int32_t x, y;
+    int32_t width, height;
+};
 
-// `window->x/y` the last position given to the compositor
-// `window->prop_w/prop_h` the last proposed size
+struct Animation {
+    enum AnimationKind kind;
+    struct AnimationBox from;
+    struct AnimationBox to;
+    struct AnimationBox current;
+    int64_t start_ms;
+    int32_t duration_ms;
+    bool running;
+};
 
-int64_t timespec_to_ns(const struct timespec *ts);
+void animation_init(void);
 
-double ease_out_cubic(double t);
+double animation_ease(double t, enum AnimationKind kind);
 
-double
-animation_progress(const struct WindowAnimation *a, const struct timespec *now);
+int64_t animation_now_ms(void);
 
-void anim_timer_init(void);
-
-void anim_timer_arm(
-    struct river_window_manager_v1 *manager, const struct timespec *now
+void animation_start(
+    struct Animation *a, enum AnimationKind kind,
+    const struct AnimationBox *from, const struct AnimationBox *to,
+    int32_t duration_ms
 );
 
-void anim_timer_fire(struct river_window_manager_v1 *manager);
+bool animation_step(struct Animation *a, int64_t now_ms);
+
+static inline bool
+animation_box_eq(const struct AnimationBox *a, const struct AnimationBox *b) {
+    return a->x == b->x && a->y == b->y && a->width == b->width
+        && a->height == b->height;
+}
+
+static inline struct AnimationBox
+animation_box(int32_t x, int32_t y, int32_t w, int32_t h) {
+    struct AnimationBox b = {x, y, w, h};
+    return b;
+}
 
 #endif // ANIMATION_H

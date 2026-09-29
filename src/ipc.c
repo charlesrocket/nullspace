@@ -378,14 +378,6 @@ static void emit_config(struct IpcClient *c) {
     emit_bool(c, "center_overspread", wm.center_overspread);
     emit_bool(c, "center_when_single_stack", wm.center_when_single_stack);
 
-    emit_int(c, "anim_duration_space", wm.anim.duration_space);
-    emit_int(c, "anim_duration_open", wm.anim.duration_open);
-    emit_int(c, "anim_duration_close", wm.anim.duration_close);
-    emit_int(c, "anim_duration_tile", wm.anim.duration_tile);
-    emit_int(c, "anim_default_hz", wm.anim.default_hz);
-    emit_int(c, "anim_min_hz", wm.anim.min_hz);
-    emit_int(c, "anim_max_hz", wm.anim.max_hz);
-
     emit_int(c, "wallpaper_topbar_fade_h", wm.wallpaper.topbar_fade_h);
     emit_str(c, "wallpaper_path", wm.wallpaper.path ? wm.wallpaper.path : "");
     emit_int(c, "wallpaper_pattern_bg_r", wm.wallpaper.pattern_bg_r);
@@ -740,41 +732,6 @@ static void handle_get(struct IpcClient *c, const char *key, const char *arg) {
         return;
     }
 
-    if (!strcmp(key, "anim_duration_space")) {
-        resp_ok_int(c, wm.anim.duration_space);
-        return;
-    }
-
-    if (!strcmp(key, "anim_duration_open")) {
-        resp_ok_int(c, wm.anim.duration_open);
-        return;
-    }
-
-    if (!strcmp(key, "anim_duration_close")) {
-        resp_ok_int(c, wm.anim.duration_close);
-        return;
-    }
-
-    if (!strcmp(key, "anim_duration_tile")) {
-        resp_ok_int(c, wm.anim.duration_tile);
-        return;
-    }
-
-    if (!strcmp(key, "anim_default_hz")) {
-        resp_ok_int(c, wm.anim.default_hz);
-        return;
-    }
-
-    if (!strcmp(key, "anim_min_hz")) {
-        resp_ok_int(c, wm.anim.min_hz);
-        return;
-    }
-
-    if (!strcmp(key, "anim_max_hz")) {
-        resp_ok_int(c, wm.anim.max_hz);
-        return;
-    }
-
     if (!strcmp(key, "wallpaper_topbar_fade_h")) {
         resp_ok_int(c, wm.wallpaper.topbar_fade_h);
         return;
@@ -973,35 +930,6 @@ handle_set(struct IpcClient *c, const char *key, const char *value) {
         *bslot = b;
         broadcast_printf("EVT %s %s\n", key, b ? "true" : "false");
         wm_request_manage();
-        resp_ok(c);
-        return;
-    }
-
-    int32_t *aslot = NULL;
-    if (!strcmp(key, "anim_duration_space"))
-        aslot = &wm.anim.duration_space;
-    else if (!strcmp(key, "anim_duration_open"))
-        aslot = &wm.anim.duration_open;
-    else if (!strcmp(key, "anim_duration_close"))
-        aslot = &wm.anim.duration_close;
-    else if (!strcmp(key, "anim_duration_tile"))
-        aslot = &wm.anim.duration_tile;
-    else if (!strcmp(key, "anim_default_hz"))
-        aslot = &wm.anim.default_hz;
-    else if (!strcmp(key, "anim_min_hz"))
-        aslot = &wm.anim.min_hz;
-    else if (!strcmp(key, "anim_max_hz"))
-        aslot = &wm.anim.max_hz;
-
-    if (aslot) {
-        long v;
-        if (!parse_int(value, &v) || v < 0 || v > 100000) {
-            resp_err(c, "bad value");
-            return;
-        }
-
-        *aslot = (int32_t)v;
-        broadcast_printf("EVT %s %d\n", key, *aslot);
         resp_ok(c);
         return;
     }

@@ -8,7 +8,6 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <time.h>
 
 static void output_usable_area(
     struct Output *output, int32_t *x, int32_t *y, int32_t *w, int32_t *h
@@ -40,8 +39,7 @@ static struct Window *layout_focused_window(void) {
     return NULL;
 }
 
-static void
-layout_windows_apply(const struct timespec *now, LayoutCompute compute) {
+static void layout_windows_apply(LayoutCompute compute) {
     struct Output *output = tiling_output();
     if (output == NULL) { return; }
 
@@ -54,6 +52,7 @@ layout_windows_apply(const struct timespec *now, LayoutCompute compute) {
     wl_list_for_each(w, &wm.windows, link) {
         if (!w->closed && !w->space_hidden) { n++; }
     }
+
     if (n == 0) { return; }
 
     struct LayoutWindow *lw = calloc(n, sizeof(*lw));
@@ -89,19 +88,17 @@ layout_windows_apply(const struct timespec *now, LayoutCompute compute) {
     }
 
     for (size_t j = 0; j < written; j++) {
-        window_apply_target(
-            lw[j].window, lw[j].x, lw[j].y, lw[j].w, lw[j].h, now
-        );
+        window_apply_target(lw[j].window, lw[j].x, lw[j].y, lw[j].w, lw[j].h);
     }
 
     free(lw);
 }
 
-void layout_apply(const struct timespec *now) {
+void layout_apply(void) {
     switch (wm.layout) {
         case LAYOUT_FLOATING: break;
 
-        default: layout_windows_apply(now, layouts_compute); break;
+        default: layout_windows_apply(layouts_compute); break;
     }
 }
 

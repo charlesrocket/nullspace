@@ -1,6 +1,5 @@
 #include "nullspace.h"
 
-#include "animation.h"
 #include "input.h"
 #include "ipc.h"
 #include "keymap.h"
@@ -71,12 +70,6 @@ struct Output *tiling_output(void) {
     return NULL;
 }
 
-static struct timespec wm_now(void) {
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    return now;
-}
-
 static void window_set_position(struct Window *window, int32_t x, int32_t y) {
     if (window->pos_valid && window->x == x && window->y == y) { return; }
 
@@ -111,55 +104,36 @@ static void window_propose_size(struct Window *window, int32_t w, int32_t h) {
     window_send_size(window, w, h);
 }
 
-// Start an animation from the current rectangle.
-static void window_animate(
-    struct Window *window, const struct timespec *now, int32_t target_x,
-    int32_t target_y, int32_t target_w, int32_t target_h, int32_t duration
-) {
-    struct WindowAnimation *a = &window->anim;
+static bool animation_active(void) {
+    if (!wm.animations) return false;
 
-    a->start_x = window->x;
-    a->start_y = window->y;
-    a->start_w = window->prop_w;
-    a->start_h = window->prop_h;
+    struct Window *w;
+    wl_list_for_each(w, &wm.windows, link) {
+        if (w->closed || w->space_hidden) continue;
+        if (w->anim.running) return true;
+    }
 
-    a->target_x = target_x;
-    a->target_y = target_y;
-    a->target_w = target_w;
-    a->target_h = target_h;
-    a->duration_ms = duration;
-    a->active = true;
-    a->start_time = *now;
+    return false;
 }
 
-// Start an animation from an explicit rectangle.
-static void window_animate_from(
-    struct Window *window, const struct timespec *now, int32_t from_x,
-    int32_t from_y, int32_t from_w, int32_t from_h, int32_t target_x,
-    int32_t target_y, int32_t target_w, int32_t target_h, int32_t duration
-) {
-    struct WindowAnimation *a = &window->anim;
+static void animation_tick_all(void) {
+    if (!wm.animations) return;
 
-    a->start_x = from_x;
-    a->start_y = from_y;
-    a->start_w = from_w;
-    a->start_h = from_h;
-    a->target_x = target_x;
-    a->target_y = target_y;
-    a->target_w = target_w;
-    a->target_h = target_h;
-    a->duration_ms = duration;
-    a->active = true;
-    a->start_time = *now;
-}
+    int64_t now = animation_now_ms();
+    struct Window *w;
 
-static void window_animation_cancel(struct Window *window) {
-    window->anim.active = false;
+    wl_list_for_each(w, &wm.windows, link) {
+        if (w->closed || w->space_hidden) continue;
+        if (!w->anim.running) continue;
+
+        animation_step(&w->anim, now);
+        window_set_position(w, w->anim.current.x, w->anim.current.y);
+        window_propose_size(w, w->anim.current.width, w->anim.current.height);
+    }
 }
 
 static void window_maybe_destroy(struct Window *window) {
     if (!window->closed) { return; }
-    if (window->anim.active) { return; } // still shrinking
 
     struct Seat *seat;
 
@@ -185,74 +159,11 @@ static void window_maybe_destroy(struct Window *window) {
     free(window);
 }
 
-// Drive an in-flight animation to its end state.
-static void window_animation_finish(struct Window *window) {
-    struct WindowAnimation *a = &window->anim;
-    if (!a->active) { return; }
-
-    a->active = false;
-
-    window_set_position(window, a->target_x, a->target_y);
-
-    if (!window->closed) {
-        window_propose_size(window, a->target_w, a->target_h);
-    }
-}
-
-// Advances the window's in-flight animation by one tick.
-//
-// Returns true if the window is still animating afterward, false otherwise.
-// MUST check the return value instead of reading `window->anim.active`.
-static bool
-window_animation_update(struct Window *window, const struct timespec *now) {
-    struct WindowAnimation *a = &window->anim;
-    if (!a->active) { return false; }
-
-    double t = animation_progress(a, now);
-    bool last = t >= 1.0;
-
-    // Do not rely on the easing curve evaluating to even `1.0`.
-    double e = last ? 1.0 : ease_out_cubic(t);
-
-    // Round to avoid pixel stalls.
-    int32_t x = a->start_x + (int32_t)lround((a->target_x - a->start_x) * e);
-    int32_t y = a->start_y + (int32_t)lround((a->target_y - a->start_y) * e);
-
-    window_set_position(window, x, y);
-
-    if (!window->closed) {
-        int32_t w =
-            a->start_w + (int32_t)lround((a->target_w - a->start_w) * e);
-        int32_t h =
-            a->start_h + (int32_t)lround((a->target_h - a->start_h) * e);
-        window_propose_size(window, w, h);
-    }
-
-    if (!last) { return true; }
-
-    a->active = false;
-    bool closed = window->closed;
-
-    if (closed) { window_maybe_destroy(window); }
-    return false;
-}
-
 static void window_handle_closed(void *data, struct river_window_v1 *obj) {
     struct Window *window = data;
     if (window->closed) { return; }
     window->closed = true;
-
-    if (!window->mapped) {
-        window_animation_cancel(window);
-        return;
-    }
-
-    // Shrink to center.
-    struct timespec now = wm_now();
-    window_animate(
-        window, &now, window->x + window->prop_w / 2,
-        window->y + window->prop_h / 2, 1, 1, wm.anim.duration_close
-    );
+    wm_request_manage();
 }
 
 static void window_handle_dimensions(
@@ -384,13 +295,6 @@ static struct Window *focus_stack_top(void);
 static void seat_focus(struct Seat *seat, struct Window *window);
 
 static void window_manage(struct Window *window) {
-    if (window->new) {
-        window->new = false;
-        // Expand the new window.
-        window_set_position(window, 0, 0);
-        window_propose_size(window, 1, 1);
-    }
-
     if (!window->decoration_state_set
         || window->decoration_state != wm.layout) {
 
@@ -431,42 +335,80 @@ static void window_manage(struct Window *window) {
     }
 }
 
-// Drive one window from its current presented rectangle to a target rectangle,
-// using the shared animation path.
 void window_apply_target(
-    struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh,
-    const struct timespec *now
+    struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh
 ) {
     if (w->space_hidden) { return; }
     if (nw < 1) { nw = 1; }
     if (nh < 1) { nh = 1; }
 
-    if (!w->has_placement) {
-        // Grow the new window from the center of its  target
-        int32_t sx = nx + nw / 2;
-        int32_t sy = ny + nh / 2;
+    // Consume the reveal flag unconditionally
+    int32_t reveal_dir = w->reveal_dir;
+    w->reveal_dir = 0;
 
-        window_set_position(w, sx, sy);
-        window_propose_size(w, 1, 1);
-        w->has_placement = true;
+    struct AnimationBox target = animation_box(nx, ny, nw, nh);
 
-        window_animate_from(
-            w, now, sx, sy, 1, 1, nx, ny, nw, nh, wm.anim.duration_open
-        );
-    } else if (nx != w->last_target_x || ny != w->last_target_y
-               || nw != w->last_target_w || nh != w->last_target_h) {
-        int duration =
-            w->space_anim ? wm.anim.duration_space : wm.anim.duration_tile;
-        w->space_anim = false;
-        window_animate(w, now, nx, ny, nw, nh, duration);
-    } else {
+    if (w->has_target && animation_box_eq(&w->target_box, &target)) { return; }
+
+    bool first = !w->has_target;
+    w->target_box = target;
+    w->has_target = true;
+
+    if (!wm.animations) {
+        w->anim.kind = ANIM_NONE;
+        w->anim.from = target;
+        w->anim.to = target;
+        w->anim.current = target;
+        w->anim.running = false;
+        window_set_position(w, nx, ny);
+        window_propose_size(w, nw, nh);
         return;
     }
 
-    w->last_target_x = nx;
-    w->last_target_y = ny;
-    w->last_target_w = nw;
-    w->last_target_h = nh;
+    struct AnimationBox from;
+    enum AnimationKind kind;
+    int32_t duration;
+
+    if (first && (reveal_dir != 0 || !w->pos_valid)) {
+        if (reveal_dir != 0) {
+            // Horizontal space slide across the whole output.
+            struct Output *out = tiling_output();
+            int32_t offset =
+                (out != NULL && out->width > 0) ? out->width : target.width;
+            if (offset < 1) offset = 1;
+
+            from = target;
+            from.x = target.x + reveal_dir * offset;
+            kind = ANIM_SPACE;
+            duration = CFG_ANIM_DURATION_SPACE;
+        } else { // slide from above
+            from = target;
+            from.y = -target.height;
+            kind = ANIM_OPEN;
+            duration = CFG_ANIM_DURATION_OPEN;
+        }
+
+        window_set_position(w, from.x, from.y);
+        window_propose_size(w, target.width, target.height);
+    } else {
+        if (w->anim.running) {
+            from = w->anim.current;
+        } else if (w->pos_valid && w->width > 0 && w->height > 0) {
+            from = animation_box(w->x, w->y, w->width, w->height);
+        } else if (w->pos_valid && w->prop_valid) {
+            from = animation_box(w->x, w->y, w->prop_w, w->prop_h);
+        } else {
+            from = target;
+        }
+
+        kind = ANIM_MOVE;
+        duration = CFG_ANIM_DURATION_MOVE;
+    }
+
+    animation_start(&w->anim, kind, &from, &target, duration);
+
+    window_set_position(w, w->anim.current.x, w->anim.current.y);
+    window_propose_size(w, w->anim.current.width, w->anim.current.height);
 }
 
 void wm_set_layout(enum Layout layout) {
@@ -476,55 +418,17 @@ void wm_set_layout(enum Layout layout) {
 
     struct Window *window;
 
-    // Ensure all animations are completed.
+    // The client may have changed its size while we were busy.
     wl_list_for_each(window, &wm.windows, link) {
-        // Let the closing windows finish its own animation
         if (window->closed) { continue; }
-
-        // Snap to the end state rather than freezing mid-animation
-        // (no infra yet to handle unfinished animations).
-        window_animation_finish(window);
-
-        // The client may have changed the size
-        // while we were busy with something else.
         window->prop_valid = false;
-
-        // Forces a reset via invalid targets
-        // (too hacky?)
-        window->last_target_x = INT32_MIN;
-        window->last_target_y = INT32_MIN;
-        window->last_target_w = INT32_MIN;
-        window->last_target_h = INT32_MIN;
     }
 
     ipc_notify_layout();
 }
 
-static void space_offscreen_edges(int32_t *left, int32_t *right) {
-    *left = HIDDEN_POS_X;
-    *right = HIDDEN_POS_X;
-
-    struct Output *output = tiling_output();
-    if (output == NULL) { return; }
-
-    int32_t x, w;
-    if (output->area_set && output->area_width > 0) {
-        x = output->area_x;
-        w = output->area_width;
-    } else {
-        x = output->pos_x;
-        w = output->width;
-    }
-
-    *left = x - w;
-    *right = x + w;
-}
-
-static void window_hide_to_side(
-    struct Window *window, const struct timespec *now, int32_t target_x
-) {
+static void window_hide_offscreen(struct Window *window) {
     if (window->space_hidden) { return; }
-    window->space_hidden = true;
 
     if (window->pos_valid) {
         window->saved_x = window->x;
@@ -534,53 +438,47 @@ static void window_hide_to_side(
         window->saved_y = 0;
     }
 
-    window_animation_cancel(window);
-    window_animate(
-        window, now, target_x, window->y, window->prop_w, window->prop_h,
-        wm.anim.duration_space
-    );
+    window->anim.running = false;
+
+    // Break the `has_target && target_box == target` invariant so the next
+    // placement is treated as fresh instead of early-returning.
+    window->has_target = false;
+    window->reveal_dir = 0;
+
+    window->space_hidden = true;
+    window_set_position(window, HIDDEN_POS_X, window->y);
 }
 
 void wm_switch_space(int space) {
     if (space < 0 || space >= SPACE_COUNT) { return; }
     if (space == wm.current_space) { return; }
 
-    // +1: left-to-right
-    // -1: right-to-left
-    int dir = (space > wm.current_space) ? -1 : 1; // animation direction
+    // Spaces are left-to-right.
+    const int32_t dir = (space > wm.current_space) ? +1 : -1;
 
-    int32_t left, right;
-    space_offscreen_edges(&left, &right);
-
-    struct timespec now = wm_now();
     struct Window *window;
 
     wl_list_for_each(window, &wm.windows, link) {
         if (window->closed) { continue; }
+
         if (window->space == space) { // reveal
-            if (window->space_hidden) {
-                window->space_hidden = false;
-                window_animation_cancel(window);
+            if (!window->space_hidden) { continue; }
+            window->space_hidden = false;
 
-                int32_t start_x = (dir > 0) ? left : right;
-                window_set_position(window, start_x, window->y);
-
-                if (wm.layout == LAYOUT_FLOATING) {
-                    window_animate_from(
-                        window, &now, start_x, window->y, window->prop_w,
-                        window->prop_h, window->saved_x, window->saved_y,
-                        window->prop_w, window->prop_h, wm.anim.duration_space
-                    );
-                } else {
-                    window->space_anim = true;
-                    window->last_target_x = INT32_MIN;
-                    window->last_target_y = INT32_MIN;
-                    window->last_target_w = INT32_MIN;
-                    window->last_target_h = INT32_MIN;
-                }
+            if (wm.layout == LAYOUT_FLOATING) {
+                // Floating windows do not go through `layout_apply()`.
+                window_set_position(window, window->saved_x, window->saved_y);
+                window->has_target = false;
+                window->anim.running = false;
+                window->reveal_dir = 0;
+            } else { // tiling
+                // Flag a horizontal space slide for `window_apply_target()`.
+                window->reveal_dir = dir;
+                window->has_target = false;
+                window->anim.running = false;
             }
         } else { // hide
-            window_hide_to_side(window, &now, (dir > 0) ? right : left);
+            window_hide_offscreen(window);
         }
     }
 
@@ -603,16 +501,8 @@ void wm_move_window_to_space(struct Seat *seat, int space) {
     if (window == NULL || window->closed || window->space_hidden) { return; }
     if (window->space == space) { return; }
 
-    // Same convention as in `wm_switch_space()`: higher space slides left.
-    int dir = (space > wm.current_space) ? -1 : 1;
-
-    int32_t left, right;
-    space_offscreen_edges(&left, &right);
-
-    struct timespec now = wm_now();
-
     window->space = space;
-    window_hide_to_side(window, &now, (dir > 0) ? right : left);
+    window_hide_offscreen(window);
 
     struct Seat *s;
     wl_list_for_each(s, &wm.seats, link) {
@@ -1075,8 +965,6 @@ wm_handle_manage_start(void *data, struct river_window_manager_v1 *obj) {
     wm_maybe_set_default_output();
     ipc_process_pending_commands();
 
-    struct timespec now = wm_now(); // keep in sync
-
     // Carry out window management policy.
     wl_list_for_each(window, &wm.windows, link) {
         if (window->closed) { continue; }
@@ -1085,31 +973,25 @@ wm_handle_manage_start(void *data, struct river_window_manager_v1 *obj) {
 
     wl_list_for_each(seat, &wm.seats, link) { seat_manage(seat); }
 
-    // Apply the current layout (overrides any per-window positioning).
-    layout_apply(&now);
+    layout_apply();
+    animation_tick_all(); // by river protocol
 
-    bool any_animation_active = false;
-    struct Window *window_next_safe;
-    wl_list_for_each_safe(window, window_next_safe, &wm.windows, link) {
-        if (window_animation_update(window, &now)) {
-            any_animation_active = true;
-        }
-    }
-
-    bool any_closed_pending = false;
+    // Sweep reveal flags (`layout_apply()` leftovers).
     wl_list_for_each(window, &wm.windows, link) {
-        if (window->closed) {
-            any_closed_pending = true;
-            break;
+        if (window->reveal_dir == 0) continue;
+        if (!window->space_hidden) {
+            window->anim.running = false;
+            window->has_target = false;
+
+            window_set_position(window, window->saved_x, window->saved_y);
         }
+
+        window->reveal_dir = 0;
     }
+
+    if (animation_active()) { wm_request_manage(); }
 
     river_window_manager_v1_manage_finish(window_manager_v1);
-
-    if (any_animation_active || any_closed_pending) {
-        // Pacing the animations.
-        anim_timer_arm(window_manager_v1, &now);
-    }
 }
 
 static void
@@ -1156,8 +1038,9 @@ static void wm_handle_window(
     struct Window *window = calloc(1, sizeof(struct Window));
     window->obj = river_window;
     window->node = river_window_v1_get_node(window->obj);
-    window->new = true;
     window->space = wm.current_space;
+
+    // Animation state is zero-initialized for default negatives.
 
     river_window_v1_add_listener(window->obj, &river_window_listener, window);
 
@@ -1238,7 +1121,6 @@ static void wm_init(void) {
     wl_list_init(&wm.focus_stack);
     wl_list_init(&wm.seats);
 
-    wm.anim_timer_fd = -1;
     wm.current_space = 0;
     wm.default_output = NULL;
 
@@ -1255,13 +1137,8 @@ static void wm_init(void) {
     wm.center_overspread = CFG_CENTER_OVERSPREAD;
     wm.center_when_single_stack = CFG_CENTER_WHEN_SINGLE_STACK;
 
-    wm.anim.duration_space = CFG_ANIM_DURATION_SPACE;
-    wm.anim.duration_open = CFG_ANIM_DURATION_OPEN;
-    wm.anim.duration_close = CFG_ANIM_DURATION_CLOSE;
-    wm.anim.duration_tile = CFG_ANIM_DURATION_TILE;
-    wm.anim.default_hz = CFG_ANIM_DEFAULT_HZ;
-    wm.anim.min_hz = CFG_ANIM_MIN_HZ;
-    wm.anim.max_hz = CFG_ANIM_MAX_HZ;
+    wm.animations = CFG_ANIMATIONS;
+    animation_init();
 
     wm.wallpaper.path = strdup(CFG_WALLPAPER_PATH);
     wm.wallpaper.topbar_fade_h = CFG_WALLPAPER_TOPBAR_FADE_H;
@@ -1294,8 +1171,6 @@ static void wm_init(void) {
     wm.kb_layout = NULL;
 
     keymap_set_layout_callback(wm_on_kb_layout_changed);
-
-    anim_timer_init();
 }
 
 static void handle_global(
@@ -1363,13 +1238,6 @@ static int run_event_loop(struct wl_display *display) {
         return 1;
     }
 
-    if (wm.anim_timer_fd >= 0) {
-        EV_SET(
-            &ev, (uintptr_t)wm.anim_timer_fd, EVFILT_READ, EV_ADD, 0, 0, NULL
-        );
-        kevent(kq, &ev, 1, NULL, 0, NULL);
-    }
-
     ipc_kqueue_register(kq);
 
     bool wl_write_armed = false;
@@ -1420,7 +1288,10 @@ static int run_event_loop(struct wl_display *display) {
 
         ipc_flush_pending();
 
-        int n = kevent(kq, NULL, 0, events, 256, NULL);
+        struct timespec timeout = {.tv_sec = 0, .tv_nsec = 16 * 1000 * 1000};
+        struct timespec *timeoutp = animation_active() ? &timeout : NULL;
+
+        int n = kevent(kq, NULL, 0, events, 256, timeoutp);
         if (n < 0) {
             if (errno == EINTR) {
                 wl_display_cancel_read(display);
@@ -1432,6 +1303,10 @@ static int run_event_loop(struct wl_display *display) {
             close(kq);
             return 1;
         }
+
+        // Timeout fired with no events: ask for another manage pass so the
+        // animation keeps stepping.
+        if (n == 0 && animation_active()) { wm_request_manage(); }
 
         bool wl_readable = false;
 
@@ -1468,12 +1343,6 @@ static int run_event_loop(struct wl_display *display) {
                 continue;
             }
 
-            if (wm.anim_timer_fd >= 0 && fd == wm.anim_timer_fd
-                && e->filter == EVFILT_READ) {
-                anim_timer_fire(window_manager_v1);
-                continue;
-            }
-
             ipc_kqueue_handle(e);
         }
 
@@ -1484,7 +1353,7 @@ static int run_event_loop(struct wl_display *display) {
                 return 1;
             }
         } else {
-            // Nothing to read (e.g. woken by the timer or POLLOUT only).
+            // Nothing to read (e.g. woken by POLLOUT only).
             wl_display_cancel_read(display);
         }
 

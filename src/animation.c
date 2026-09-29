@@ -1,123 +1,114 @@
 #include "animation.h"
 
-#include "nullspace.h"
+#include "config.h"
 
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/timerfd.h>
-#include <unistd.h>
+#include <time.h>
 
-int64_t timespec_to_ns(const struct timespec *ts) {
-    return (int64_t)ts->tv_sec * 1000000000LL + (int64_t)ts->tv_nsec;
+#define ANIM_BAKED_POINTS 64
+
+struct AnimCurve {
+    double x1, y1, x2, y2;
+};
+
+static const struct AnimCurve anim_curves[ANIM_KIND_COUNT] = {
+    [ANIM_NONE] = {0.25, 0.10, 0.25, 1.00},
+      [ANIM_MOVE] = CFG_ANIM_CURVE_MOVE,
+    [ANIM_OPEN] = CFG_ANIM_CURVE_OPEN,      [ANIM_CLOSE] = CFG_ANIM_CURVE_CLOSE,
+    [ANIM_SPACE] = CFG_ANIM_CURVE_SPACE,
+};
+
+static struct {
+    double x[ANIM_BAKED_POINTS];
+    double y[ANIM_BAKED_POINTS];
+} baked[ANIM_KIND_COUNT];
+
+static double bezier_component(double t, double p1, double p2) {
+    double mt = 1.0 - t;
+    return 3.0 * mt * mt * t * p1 + 3.0 * mt * t * t * p2 + t * t * t;
 }
 
-double ease_out_cubic(double t) {
-    const double f = t - 1.0;
-    return f * f * f + 1.0;
-}
-
-double animation_progress(
-    const struct WindowAnimation *a, const struct timespec *now
-) {
-    if (a->duration_ms <= 0) { return 1.0; }
-
-    const int64_t elapsed_ns =
-        timespec_to_ns(now) - timespec_to_ns(&a->start_time);
-    const int64_t duration_ns = (int64_t)a->duration_ms * 1000000LL;
-
-    if (elapsed_ns <= 0) { return 0.0; }
-    if (elapsed_ns >= duration_ns) { return 1.0; }
-
-    return (double)elapsed_ns / (double)duration_ns;
-}
-
-// We arm a timer and request the next
-// manage sequence only when it fires.
-
-static int64_t anim_frame_interval_ns(void) {
-    long hz = ANIM_DEFAULT_HZ;
-
-    const char *env = getenv("NSP_ANIM_HZ");
-    if (env != NULL && env[0] != '\0') {
-        char *end = NULL;
-        long v = strtol(env, &end, 10);
-
-        if (end != env && *end == '\0' && v >= ANIM_MIN_HZ
-            && v <= ANIM_MAX_HZ) {
-            hz = v;
-        } else {
-            fprintf(
-                stderr, "NSP_ANIM_HZ=%s is invalid (range is %d-%d)\n", env,
-                ANIM_MIN_HZ, ANIM_MAX_HZ
-            );
+void animation_init(void) {
+    for (int k = 0; k < ANIM_KIND_COUNT; k++) {
+        const struct AnimCurve *c = &anim_curves[k];
+        for (int i = 0; i < ANIM_BAKED_POINTS; i++) {
+            double t = (double)i / (double)(ANIM_BAKED_POINTS - 1);
+            baked[k].x[i] = bezier_component(t, c->x1, c->x2);
+            baked[k].y[i] = bezier_component(t, c->y1, c->y2);
         }
     }
-
-    return 1000000000LL / hz;
 }
 
-void anim_timer_init(void) {
-    wm.anim_frame_ns = anim_frame_interval_ns();
-    wm.anim_timer_armed = false;
-    wm.anim_timer_fd =
-        timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
+double animation_ease(double t, enum AnimationKind kind) {
+    if (t <= 0.0) return 0.0;
+    if (t >= 1.0) return 1.0;
+    if (kind < 0 || kind >= ANIM_KIND_COUNT) kind = ANIM_MOVE;
 
-    if (wm.anim_timer_fd < 0) {
-        perror("timerfd_create");
-        fprintf(
-            stderr, "falling back to unpaced animation (busy manage_dirty)\n"
-        );
+    // Binary search the segment that brackets the requested x (= t) and
+    // linearly interpolate y.
+    int lo = 0, hi = ANIM_BAKED_POINTS - 1;
+    while (hi - lo > 1) {
+        int mid = (lo + hi) / 2;
+        if (baked[kind].x[mid] <= t)
+            lo = mid;
+        else
+            hi = mid;
     }
+
+    double x0 = baked[kind].x[lo], x1 = baked[kind].x[hi];
+    double y0 = baked[kind].y[lo], y1 = baked[kind].y[hi];
+    if (x1 - x0 < 1e-9) return y1;
+
+    double f = (t - x0) / (x1 - x0);
+    return y0 + (y1 - y0) * f;
 }
 
-void anim_timer_arm(
-    struct river_window_manager_v1 *manager, const struct timespec *now
+int64_t animation_now_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000 + (int64_t)(ts.tv_nsec / 1000000);
+}
+
+void animation_start(
+    struct Animation *a, enum AnimationKind kind,
+    const struct AnimationBox *from, const struct AnimationBox *to,
+    int32_t duration_ms
 ) {
-    if (wm.anim_timer_armed) { return; }
+    a->kind = kind;
+    a->from = *from;
+    a->to = *to;
+    a->current = *from;
+    a->duration_ms = duration_ms;
+    a->start_ms = animation_now_ms();
+    a->running = duration_ms > 0 && !animation_box_eq(from, to);
 
-    if (wm.anim_timer_fd < 0) {
-        // No timer available, fire at will!
-        river_window_manager_v1_manage_dirty(manager);
-        return;
-    }
-
-    int64_t now_ns = timespec_to_ns(now);
-    int64_t frame = wm.anim_frame_ns;
-
-    // Next multiple of `frame` strictly after now.
-    int64_t delay_ns = (now_ns / frame + 1) * frame - now_ns;
-
-    // TODO
-    if (delay_ns < 1000) { delay_ns = 1000; }
-
-    struct itimerspec spec = {
-        .it_value =
-            {
-                       .tv_sec = (time_t)(delay_ns / 1000000000LL),
-                       .tv_nsec = (long)(delay_ns % 1000000000LL),
-                       },
-        // Re-armed by the next manage pass if any animations remain.
-    };
-
-    if (timerfd_settime(wm.anim_timer_fd, 0, &spec, NULL) < 0) {
-        perror("timerfd_settime");
-        river_window_manager_v1_manage_dirty(manager);
-        return;
-    }
-
-    wm.anim_timer_armed = true;
+    if (!a->running) a->current = *to;
 }
 
-void anim_timer_fire(struct river_window_manager_v1 *manager) {
-    uint64_t expirations;
+bool animation_step(struct Animation *a, int64_t now_ms) {
+    if (!a->running) return false;
+    if (a->duration_ms <= 0) {
+        a->current = a->to;
+        a->running = false;
+        return false;
+    }
 
-    // Lock
-    ssize_t n = read(wm.anim_timer_fd, &expirations, sizeof(expirations));
-    (void)n;
+    double t = (double)(now_ms - a->start_ms) / (double)a->duration_ms;
+    if (t >= 1.0) {
+        a->current = a->to;
+        a->running = false;
+        return false;
+    }
+    if (t < 0.0) t = 0.0;
 
-    wm.anim_timer_armed = false;
+    double e = animation_ease(t, a->kind);
+    a->current.x = a->from.x + (int32_t)((double)(a->to.x - a->from.x) * e);
+    a->current.y = a->from.y + (int32_t)((double)(a->to.y - a->from.y) * e);
 
-    // Exactly one manage sequence per frame interval.
-    river_window_manager_v1_manage_dirty(manager);
+    a->current.width =
+        a->from.width + (int32_t)((double)(a->to.width - a->from.width) * e);
+
+    a->current.height =
+        a->from.height + (int32_t)((double)(a->to.height - a->from.height) * e);
+
+    return true;
 }
