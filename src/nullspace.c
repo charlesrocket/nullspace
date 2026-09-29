@@ -6,7 +6,6 @@
 #include "keymap.h"
 #include "layouts/horizontal.h"
 #include "layouts/layout.h"
-#include "layouts/trimming.h"
 #include "layouts/vertical.h"
 #include "wallpaper.h"
 
@@ -162,11 +161,6 @@ static void window_maybe_destroy(struct Window *window) {
     if (!window->closed) { return; }
     if (window->anim.active) { return; } // still shrinking
 
-    if (wm.trimming_tree != NULL && window->in_trimming_tree) {
-        trimming_remove(wm.trimming_tree, window);
-        window->in_trimming_tree = false;
-    }
-
     struct Seat *seat;
 
     wl_list_for_each(seat, &wm.seats, link) {
@@ -247,11 +241,6 @@ static void window_handle_closed(void *data, struct river_window_v1 *obj) {
     struct Window *window = data;
     if (window->closed) { return; }
     window->closed = true;
-
-    if (wm.trimming_tree != NULL && window->in_trimming_tree) {
-        trimming_remove(wm.trimming_tree, window);
-        window->in_trimming_tree = false;
-    }
 
     if (!window->mapped) {
         window_animation_cancel(window);
@@ -442,117 +431,6 @@ static void window_manage(struct Window *window) {
     }
 }
 
-static struct Seat *first_seat_with_pointer(void) {
-    struct Seat *seat;
-    wl_list_for_each(seat, &wm.seats, link) {
-        if (seat->pointer_set) { return seat; }
-    }
-
-    return NULL;
-}
-
-static struct Window *last_focused_in_tree(void) {
-    if (wl_list_empty(&wm.focus_stack)) { return NULL; }
-
-    struct wl_list *cur = wm.focus_stack.prev;
-    while (cur != &wm.focus_stack) {
-        struct Window *w = wl_container_of(cur, w, focus_link);
-        if (w->in_trimming_tree && !w->space_hidden) { return w; }
-        cur = cur->prev;
-    }
-
-    return NULL;
-}
-
-void trimming_sync(int32_t fb_x, int32_t fb_y, int32_t fb_w, int32_t fb_h) {
-    if (wm.trimming_tree == NULL) { return; }
-
-    struct Window *window;
-    wl_list_for_each(window, &wm.windows, link) {
-        if (window->in_trimming_tree) { continue; }
-        if (window->closed) { continue; }
-        if (window->space_hidden) { continue; }
-
-        struct Window *focused = last_focused_in_tree();
-        struct Seat *seat = first_seat_with_pointer();
-
-        int32_t cx, cy;
-        if (seat != NULL && seat->pointer_set) {
-            cx = seat->pointer_x;
-            cy = seat->pointer_y;
-        } else {
-            cx = fb_x + fb_w;
-            cy = fb_y + fb_h;
-        }
-
-        int32_t fx = fb_x, fy = fb_y, fw = fb_w, fh = fb_h;
-        if (focused != NULL && focused->width > 0 && focused->height > 0) {
-            fx = focused->x;
-            fy = focused->y;
-            fw = focused->width;
-            fh = focused->height;
-        }
-
-        // Remember the rectangle that is about to be split
-        // so the new window can grow out of the correct edge.
-        window->spawn_parent_x = fx;
-        window->spawn_parent_y = fy;
-        window->spawn_parent_w = fw;
-        window->spawn_parent_h = fh;
-        window->spawn_hint_set = true;
-
-        trimming_insert(
-            wm.trimming_tree, window, focused, cx, cy, fx, fy, fw, fh
-        );
-
-        window->in_trimming_tree = true;
-    }
-}
-
-static void spawn_start_rect(
-    const struct Window *w, int32_t tx, int32_t ty, int32_t tw, int32_t th,
-    int32_t *sx, int32_t *sy, int32_t *sw, int32_t *sh
-) {
-    // Grow from the center of the target (default/no parent)
-    *sx = tx + tw / 2;
-    *sy = ty + th / 2;
-    *sw = 1;
-    *sh = 1;
-
-    if (!w->spawn_hint_set) { return; }
-
-    int32_t px = w->spawn_parent_x, py = w->spawn_parent_y;
-    int32_t pw = w->spawn_parent_w, ph = w->spawn_parent_h;
-
-    // Centers of target and parent.
-    int32_t tcx = tx + tw / 2, tcy = ty + th / 2;
-    int32_t pcx = px + pw / 2, pcy = py + ph / 2;
-
-    int32_t dx = tcx - pcx;
-    int32_t dy = tcy - pcy;
-
-    // Given the final target rectangle, and the rectangle of the window it
-    // split from, compute a zero-thickness starting rectangle on the shared
-    // edge so the new window grows along the split axis only.
-
-    if (abs(dx) >= abs(dy)) {
-        // Horizontal split
-        // Keep full height, grow in width from shared edge
-        *sh = th;
-        *sy = ty;
-        *sw = 1;
-        // New window is to the right with an anchor at its left edge.
-        *sx = (dx >= 0) ? tx : tx + tw - 1;
-    } else {
-        // Vertical split
-        // Keep full width, grow in height from shared edge
-        *sw = tw;
-        *sx = tx;
-        *sh = 1;
-        *sy = (dy >= 0) ? ty : ty + th - 1;
-    }
-}
-
 // Drive one window from its current presented rectangle to a target rectangle,
 // using the shared animation path.
 void window_apply_target(
@@ -564,15 +442,16 @@ void window_apply_target(
     if (nh < 1) { nh = 1; }
 
     if (!w->has_placement) {
-        int32_t sx, sy, sw, sh;
-        spawn_start_rect(w, nx, ny, nw, nh, &sx, &sy, &sw, &sh);
+        // Grow the new window from the center of its  target
+        int32_t sx = nx + nw / 2;
+        int32_t sy = ny + nh / 2;
 
         window_set_position(w, sx, sy);
-        window_propose_size(w, sw, sh);
+        window_propose_size(w, 1, 1);
         w->has_placement = true;
 
         window_animate_from(
-            w, now, sx, sy, sw, sh, nx, ny, nw, nh, wm.anim.duration_open
+            w, now, sx, sy, 1, 1, nx, ny, nw, nh, wm.anim.duration_open
         );
     } else if (nx != w->last_target_x || ny != w->last_target_y
                || nw != w->last_target_w || nh != w->last_target_h) {
@@ -593,19 +472,9 @@ void window_apply_target(
 void wm_set_layout(enum Layout layout) {
     if (wm.layout == layout) { return; }
 
-    struct Window *window;
-
-    // Detach every window from the tree
-    if (wm.layout == LAYOUT_TRIMMING && wm.trimming_tree != NULL) {
-        wl_list_for_each(window, &wm.windows, link) {
-            if (window->in_trimming_tree) {
-                trimming_remove(wm.trimming_tree, window);
-                window->in_trimming_tree = false;
-            }
-        }
-    }
-
     wm.layout = layout;
+
+    struct Window *window;
 
     // Ensure all animations are completed.
     wl_list_for_each(window, &wm.windows, link) {
@@ -715,15 +584,6 @@ void wm_switch_space(int space) {
         }
     }
 
-    if (wm.trimming_tree != NULL) {
-        wl_list_for_each(window, &wm.windows, link) {
-            if (window->in_trimming_tree && window->space_hidden) {
-                trimming_remove(wm.trimming_tree, window);
-                window->in_trimming_tree = false;
-            }
-        }
-    }
-
     wm.current_space = space;
 
     struct Seat *seat;
@@ -750,11 +610,6 @@ void wm_move_window_to_space(struct Seat *seat, int space) {
     space_offscreen_edges(&left, &right);
 
     struct timespec now = wm_now();
-
-    if (wm.trimming_tree != NULL && window->in_trimming_tree) {
-        trimming_remove(wm.trimming_tree, window);
-        window->in_trimming_tree = false;
-    }
 
     window->space = space;
     window_hide_to_side(window, &now, (dir > 0) ? right : left);
@@ -1439,21 +1294,6 @@ static void wm_init(void) {
     wm.kb_layout = NULL;
 
     keymap_set_layout_callback(wm_on_kb_layout_changed);
-
-    wm.trimming_tree = trimming_create();
-
-    if (wm.trimming_tree != NULL) {
-        struct TrimmingConfig cfg = {0};
-
-        cfg.manual_split = CFG_TRIMMING_MANUAL_SPLIT;
-        cfg.preserve_split = CFG_TRIMMING_PRESERVE_SPLIT;
-        cfg.smart_split = CFG_TRIMMING_SMART_SPLIT;
-        cfg.hsplit = CFG_TRIMMING_HSPLIT;
-        cfg.vsplit = CFG_TRIMMING_VSPLIT;
-        cfg.split_ratio = CFG_TRIMMING_SPLIT_RATIO;
-
-        trimming_set_config(wm.trimming_tree, &cfg);
-    }
 
     anim_timer_init();
 }

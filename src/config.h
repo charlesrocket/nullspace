@@ -1,7 +1,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#define CFG_DEFAULT_LAYOUT                 LAYOUT_TRIMMING
+#define CFG_DEFAULT_LAYOUT                 LAYOUT_VERTICAL_TILE
 
 #define CFG_GAP_OUTER_H                    8
 #define CFG_GAP_OUTER_V                    8
@@ -13,13 +13,6 @@
 #define CFG_MFACT                          0.55f
 #define CFG_CENTER_OVERSPREAD              false
 #define CFG_CENTER_WHEN_SINGLE_STACK       true
-
-#define CFG_TRIMMING_MANUAL_SPLIT          false
-#define CFG_TRIMMING_PRESERVE_SPLIT        false
-#define CFG_TRIMMING_SMART_SPLIT           false
-#define CFG_TRIMMING_HSPLIT                0
-#define CFG_TRIMMING_VSPLIT                0
-#define CFG_TRIMMING_SPLIT_RATIO           0.5f
 
 #define CFG_ANIM_DURATION_SPACE            200 // ms
 #define CFG_ANIM_DURATION_OPEN             200 // ms, grow

@@ -6,7 +6,6 @@
 
 #include "input.h"
 #include "layouts/layout.h"
-#include "layouts/trimming.h"
 #include "nullspace.h"
 
 #include <errno.h>
@@ -80,7 +79,6 @@ static void set_nosigpipe(int fd) {
 
 static const char *layout_name(enum Layout l) {
     switch (l) {
-        case LAYOUT_TRIMMING: return "trimming";
         case LAYOUT_VERTICAL_TILE: return "vtile";
         case LAYOUT_VERTICAL_GRID: return "vgrid";
         case LAYOUT_HORIZONTAL_TILE: return "htile";
@@ -101,11 +99,6 @@ static bool parse_layout(const char *s, enum Layout *out) {
             *out = (enum Layout)i;
             return true;
         }
-    }
-
-    if (strcmp(s, "trim") == 0) {
-        *out = LAYOUT_TRIMMING;
-        return true;
     }
 
     if (strcmp(s, "floating") == 0) {

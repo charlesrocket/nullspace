@@ -1,7 +1,6 @@
 src_files = files(
   'nullspace.c',
   'layouts/layout.c',
-  'layouts/trimming.c',
   'layouts/vertical.c',
   'layouts/horizontal.c',
   'ipc.c',
@@ -11,11 +10,3 @@ src_files = files(
   'animation.c',
   'wallpaper.c',
 ) + generated
-
-trimming_test = executable(
-  'test_trimming',
-  'layouts/test_trimming.c',
-  'layouts/trimming.c',
-)
-
-test('trimming', trimming_test)

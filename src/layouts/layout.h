@@ -7,7 +7,6 @@
 #include <time.h>
 
 enum Layout {
-    LAYOUT_TRIMMING,
     LAYOUT_VERTICAL_TILE,
     LAYOUT_VERTICAL_GRID,
 
@@ -45,12 +44,9 @@ struct LayoutParams {
 
 bool layouts_is_tiled(enum Layout layout);
 
-void layout_tiled_apply(const struct timespec *now);
-
 // Fill out[0..n-1] with target rects for `layout`. Every out[i].window must
 // already be set; only .x/.y/.w/.h are written. Returns the number of
-// entries filled, or 0 if the layout is not handled here (trimming,
-// floating).
+// entries filled, or 0 if the layout is not handled here (floating).
 size_t layouts_compute(
     enum Layout layout, struct LayoutWindow *out, size_t n,
     const struct LayoutParams *p

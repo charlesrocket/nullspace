@@ -35,8 +35,6 @@
 #define HIDDEN_POS_X (-1000000)
 #define HIDDEN_POS_Y (-1000000)
 
-struct TrimmingTree;
-
 struct LibinputConfig {
     int tap_state;
     int natural_scroll;
@@ -108,16 +106,13 @@ struct Window {
     int32_t prop_w, prop_h;
 
     int32_t last_target_x, last_target_y, last_target_w, last_target_h;
-    int32_t spawn_parent_x, spawn_parent_y, spawn_parent_w, spawn_parent_h;
 
     int space;
 
     char *title;
     char *app_id;
 
-    bool spawn_hint_set; // where a new tiled window should appear
     bool decoration_state_set;
-    bool in_trimming_tree;
     bool has_placement;
     // The client must report dimensions at least once to receive animations.
     bool mapped;
@@ -196,7 +191,6 @@ struct WindowManager {
     struct wl_list windows;     // Window, creation order (tile order)
     struct wl_list focus_stack; // Window, most recently focused last
     struct wl_list seats;       // Seat
-    struct TrimmingTree *trimming_tree;
     struct AnimConfig anim;
     struct WallpaperConfig wallpaper;
     struct LibinputConfig libinput;
@@ -229,8 +223,6 @@ extern struct WindowManager wm;
 extern struct river_xkb_bindings_v1 *xkb_bindings_v1;
 
 struct Output *tiling_output(void);
-
-void trimming_sync(int32_t fb_x, int32_t fb_y, int32_t fb_w, int32_t fb_h);
 
 void window_apply_target(
     struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh,

@@ -2,7 +2,6 @@
 
 #include "../nullspace.h"
 #include "horizontal.h"
-#include "trimming.h"
 #include "vertical.h"
 
 #include <stdbool.h>
@@ -98,52 +97,8 @@ layout_windows_apply(const struct timespec *now, LayoutCompute compute) {
     free(lw);
 }
 
-void layout_tiled_apply(const struct timespec *now) {
-    struct Output *output = tiling_output();
-    if (output == NULL) { return; }
-
-    // Tile only within the exclusive zone
-    int32_t area_x, area_y, out_w, out_h;
-    output_usable_area(output, &area_x, &area_y, &out_w, &out_h);
-    if (out_w <= 0 || out_h <= 0) { return; }
-
-    trimming_sync(area_x, area_y, out_w, out_h);
-
-    size_t cap = trimming_leaf_count(wm.trimming_tree);
-    if (cap == 0) { return; }
-
-    struct TrimmingPlacement *placements =
-        calloc(cap, sizeof(struct TrimmingPlacement));
-    if (placements == NULL) { return; }
-
-    struct TrimmingLayoutParams lp = {
-        .x = area_x,
-        .y = area_y,
-        .width = out_w,
-        .height = out_h,
-        .gap_outer_h = wm.tiled_gap_outer_h,
-        .gap_outer_v = wm.tiled_gap_outer_v,
-        .gap_inner_h = wm.tiled_gap_inner_h,
-        .gap_inner_v = wm.tiled_gap_inner_v,
-    };
-
-    size_t n = trimming_layout(wm.trimming_tree, &lp, placements, cap);
-
-    for (size_t i = 0; i < n; i++) {
-        struct Window *w = placements[i].handle;
-        window_apply_target(
-            w, placements[i].x, placements[i].y, placements[i].width,
-            placements[i].height, now
-        );
-    }
-
-    free(placements);
-}
-
 void layout_apply(const struct timespec *now) {
     switch (wm.layout) {
-        case LAYOUT_TRIMMING: layout_tiled_apply(now); break;
-
         case LAYOUT_FLOATING: break;
 
         default: layout_windows_apply(now, layouts_compute); break;
@@ -152,7 +107,6 @@ void layout_apply(const struct timespec *now) {
 
 bool layouts_is_tiled(enum Layout layout) {
     switch (layout) {
-        case LAYOUT_TRIMMING:
         case LAYOUT_VERTICAL_TILE:
         case LAYOUT_VERTICAL_GRID:
         case LAYOUT_HORIZONTAL_TILE:
@@ -183,7 +137,6 @@ size_t layouts_compute(
         case LAYOUT_HORIZONTAL_MONOCLE: horizontal_monocle(out, n, p); return n;
         case LAYOUT_HORIZONTAL_GRID: horizontal_grid(out, n, p); return n;
 
-        case LAYOUT_TRIMMING:
         case LAYOUT_FLOATING: return 0;
     }
 
