@@ -125,12 +125,14 @@ static void animation_tick_all(void) {
 
     wl_list_for_each(w, &wm.windows, link) {
         if (w->closed) continue;
-        if (w->space_hidden && w->hide_dir == 0) continue;
         if (!w->anim.running && w->hide_dir == 0) continue;
 
         if (w->anim.running) {
             animation_step(&w->anim, now);
             window_set_position(w, w->anim.current.x, w->anim.current.y);
+
+            // A hidden window's size is frozen at the moment of hiding (do not
+            // re-propose it while sliding off).
             if (!w->space_hidden) {
                 window_propose_size(
                     w, w->anim.current.width, w->anim.current.height
@@ -138,8 +140,8 @@ static void animation_tick_all(void) {
             }
         }
 
-        if (w->hide_dir != 0 && !w->anim.running) {
-            window_set_position(w, HIDDEN_POS_X, w->y);
+        if (w->hide_dir != 0 && !w->anim.running) {     // finished
+            window_set_position(w, HIDDEN_POS_X, w->y); // park
             w->hide_dir = 0;
         }
     }
@@ -452,9 +454,8 @@ static void window_hide_offscreen(struct Window *window, int32_t dir) {
     }
 
     window->reveal_dir = 0;
-    window->space_hidden = true;
-    // has_target is reset so the next reveal is treated as fresh
     window->has_target = false;
+    window->space_hidden = true;
 
     if (!wm.animations || dir == 0) {
         window->anim.running = false;
@@ -470,11 +471,9 @@ static void window_hide_offscreen(struct Window *window, int32_t dir) {
     int32_t nw = (window->prop_valid && window->prop_w > 0)
                    ? window->prop_w
                    : (window->width > 0 ? window->width : 1);
-
     int32_t nh = (window->prop_valid && window->prop_h > 0)
                    ? window->prop_h
                    : (window->height > 0 ? window->height : 1);
-
     if (nw < 1) nw = 1;
     if (nh < 1) nh = 1;
 
@@ -482,9 +481,13 @@ static void window_hide_offscreen(struct Window *window, int32_t dir) {
     int32_t ny = window->y;
 
     struct AnimationBox from =
-        window->pos_valid && window->width > 0 && window->height > 0
-            ? animation_box(window->x, window->y, window->width, window->height)
-            : animation_box(nx, ny, nw, nh);
+        window->anim.running
+            ? window->anim.current
+            : (window->pos_valid && window->width > 0 && window->height > 0
+                   ? animation_box(
+                         window->x, window->y, window->width, window->height
+                     )
+                   : animation_box(nx, ny, nw, nh));
 
     struct AnimationBox target = animation_box(nx, ny, nw, nh);
 
@@ -505,34 +508,20 @@ void wm_switch_space(int space) {
 
     wl_list_for_each(window, &wm.windows, link) {
         if (window->closed) { continue; }
+
         if (window->space == space) { // reveal
             if (!window->space_hidden) { continue; }
             window->space_hidden = false;
 
-            if (window->anim.running && window->hide_dir != 0) {
-                // Reverse in place
+            if (window->hide_dir != 0 && window->anim.running) {
                 window->hide_dir = 0;
                 window->reveal_dir = 0;
-                if (wm.layout == LAYOUT_FLOATING) {
-                    window_apply_target(
-                        window, window->saved_x, window->saved_y, window->width,
-                        window->height
-                    );
-                }
-            } else if (wm.layout == LAYOUT_FLOATING) {
-                window->hide_dir = 0;
-                window->anim.running = false;
-                window->has_target = false;
-                window->reveal_dir = dir;
-                window_apply_target(
-                    window, window->saved_x, window->saved_y, window->width,
-                    window->height
-                );
             } else {
                 window->hide_dir = 0;
                 window->anim.running = false;
                 window->has_target = false;
                 window->reveal_dir = dir;
+                window_set_position(window, window->saved_x, window->saved_y);
             }
         } else { // hide
             window_hide_offscreen(window, -dir);
@@ -558,7 +547,10 @@ void wm_move_window_to_space(struct Seat *seat, int space) {
     if (window == NULL || window->closed || window->space_hidden) { return; }
     if (window->space == space) { return; }
 
+    // The focused window sits on the current space, so the direction of
+    // travel is simply target-vs-current.
     const int32_t dir = (space > wm.current_space) ? +1 : -1;
+
     window->space = space;
     window_hide_offscreen(window, dir);
 
@@ -614,9 +606,7 @@ void wm_invalidate_wallpaper(void) {
 
 static void wm_on_kb_layout_changed(const char *layout) {
     if (layout == NULL || layout[0] == '\0') { return; }
-    if (wm.kb_layout != NULL && strcmp(wm.kb_layout, layout) == 0) {
-        return; // unchanged
-    }
+    if (wm.kb_layout != NULL && strcmp(wm.kb_layout, layout) == 0) { return; }
 
     char *new_name = strdup(layout);
     if (new_name == NULL) { return; }
@@ -861,7 +851,6 @@ seat_action(struct Seat *seat, enum Action action, const void *arg) {
                 break;
             }
         case ACTION_MOVE:
-            // Interactive move is only in the floating layout.
             if (wm.layout == LAYOUT_FLOATING && seat->op == SEAT_OP_NONE
                 && seat->hovered != NULL && !seat->hovered->space_hidden) {
                 seat_pointer_move(seat, seat->hovered);
@@ -931,10 +920,13 @@ static void seat_manage(struct Seat *seat) {
             }
 
             if (seat->op_window != NULL && !seat->op_window->space_hidden) {
-                window_set_position(
-                    seat->op_window, seat->op_start_x + seat->op_dx,
-                    seat->op_start_y + seat->op_dy
-                );
+                int32_t nx = seat->op_start_x + seat->op_dx;
+                int32_t ny = seat->op_start_y + seat->op_dy;
+
+                window_set_position(seat->op_window, nx, ny);
+
+                seat->op_window->saved_x = nx;
+                seat->op_window->saved_y = ny;
             }
 
             break;
@@ -982,6 +974,8 @@ static void seat_manage(struct Seat *seat) {
                     }
 
                     window_set_position(seat->op_window, x, y);
+                    seat->op_window->saved_x = x;
+                    seat->op_window->saved_y = y;
                 }
 
                 break;

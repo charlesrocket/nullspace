@@ -80,10 +80,10 @@ struct Window {
     int32_t x, y;
     int32_t width, height;
 
+    int32_t reveal_dir, hide_dir;
+
     // Size we last proposed to the client.
     int32_t prop_w, prop_h;
-
-    int32_t reveal_dir, hide_dir;
 
     int space;
 

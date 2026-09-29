@@ -94,13 +94,7 @@ static void layout_windows_apply(LayoutCompute compute) {
     free(lw);
 }
 
-void layout_apply(void) {
-    switch (wm.layout) {
-        case LAYOUT_FLOATING: break;
-
-        default: layout_windows_apply(layouts_compute); break;
-    }
-}
+void layout_apply(void) { layout_windows_apply(layouts_compute); }
 
 bool layouts_is_tiled(enum Layout layout) {
     switch (layout) {
@@ -115,6 +109,25 @@ bool layouts_is_tiled(enum Layout layout) {
     }
 
     return false;
+}
+
+static void floating_layout(
+    struct LayoutWindow *lw, size_t n, const struct LayoutParams *p
+) {
+    for (size_t i = 0; i < n; i++) {
+        struct Window *w = lw[i].window;
+
+        if (w->anim.running) {
+            lw[i].x = w->saved_x;
+            lw[i].y = w->saved_y;
+        } else {
+            lw[i].x = w->x;
+            lw[i].y = w->y;
+        }
+
+        lw[i].w = w->width > 0 ? w->width : 1;
+        lw[i].h = w->height > 0 ? w->height : 1;
+    }
 }
 
 size_t layouts_compute(
@@ -134,7 +147,7 @@ size_t layouts_compute(
         case LAYOUT_HORIZONTAL_MONOCLE: horizontal_monocle(out, n, p); return n;
         case LAYOUT_HORIZONTAL_GRID: horizontal_grid(out, n, p); return n;
 
-        case LAYOUT_FLOATING: return 0;
+        case LAYOUT_FLOATING: floating_layout(out, n, p); return n;
     }
 
     return 0;
