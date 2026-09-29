@@ -456,7 +456,7 @@ static void window_hide_offscreen(struct Window *window, int32_t dir) {
     // has_target is reset so the next reveal is treated as fresh
     window->has_target = false;
 
-    if (!wm.animations || wm.layout == LAYOUT_FLOATING || dir == 0) {
+    if (!wm.animations || dir == 0) {
         window->anim.running = false;
         window->hide_dir = 0;
         window_set_position(window, HIDDEN_POS_X, window->y);
@@ -510,16 +510,24 @@ void wm_switch_space(int space) {
             window->space_hidden = false;
 
             if (window->anim.running && window->hide_dir != 0) {
-                // Keep it running so `window_apply_target()` animates from
-                // `anim.current` back to the layout box.
+                // Reverse in place
                 window->hide_dir = 0;
                 window->reveal_dir = 0;
+                if (wm.layout == LAYOUT_FLOATING) {
+                    window_apply_target(
+                        window, window->saved_x, window->saved_y, window->width,
+                        window->height
+                    );
+                }
             } else if (wm.layout == LAYOUT_FLOATING) {
                 window->hide_dir = 0;
                 window->anim.running = false;
                 window->has_target = false;
-                window->reveal_dir = 0;
-                window_set_position(window, window->saved_x, window->saved_y);
+                window->reveal_dir = dir;
+                window_apply_target(
+                    window, window->saved_x, window->saved_y, window->width,
+                    window->height
+                );
             } else {
                 window->hide_dir = 0;
                 window->anim.running = false;
