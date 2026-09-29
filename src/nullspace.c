@@ -109,8 +109,9 @@ static bool animation_active(void) {
 
     struct Window *w;
     wl_list_for_each(w, &wm.windows, link) {
-        if (w->closed || w->space_hidden) continue;
+        if (w->closed) continue;
         if (w->anim.running) return true;
+        if (w->hide_dir != 0) return true;
     }
 
     return false;
@@ -123,12 +124,24 @@ static void animation_tick_all(void) {
     struct Window *w;
 
     wl_list_for_each(w, &wm.windows, link) {
-        if (w->closed || w->space_hidden) continue;
-        if (!w->anim.running) continue;
+        if (w->closed) continue;
+        if (w->space_hidden && w->hide_dir == 0) continue;
+        if (!w->anim.running && w->hide_dir == 0) continue;
 
-        animation_step(&w->anim, now);
-        window_set_position(w, w->anim.current.x, w->anim.current.y);
-        window_propose_size(w, w->anim.current.width, w->anim.current.height);
+        if (w->anim.running) {
+            animation_step(&w->anim, now);
+            window_set_position(w, w->anim.current.x, w->anim.current.y);
+            if (!w->space_hidden) {
+                window_propose_size(
+                    w, w->anim.current.width, w->anim.current.height
+                );
+            }
+        }
+
+        if (w->hide_dir != 0 && !w->anim.running) {
+            window_set_position(w, HIDDEN_POS_X, w->y);
+            w->hide_dir = 0;
+        }
     }
 }
 
@@ -427,7 +440,7 @@ void wm_set_layout(enum Layout layout) {
     ipc_notify_layout();
 }
 
-static void window_hide_offscreen(struct Window *window) {
+static void window_hide_offscreen(struct Window *window, int32_t dir) {
     if (window->space_hidden) { return; }
 
     if (window->pos_valid) {
@@ -438,15 +451,47 @@ static void window_hide_offscreen(struct Window *window) {
         window->saved_y = 0;
     }
 
-    window->anim.running = false;
-
-    // Break the `has_target && target_box == target` invariant so the next
-    // placement is treated as fresh instead of early-returning.
-    window->has_target = false;
     window->reveal_dir = 0;
-
     window->space_hidden = true;
-    window_set_position(window, HIDDEN_POS_X, window->y);
+    // has_target is reset so the next reveal is treated as fresh
+    window->has_target = false;
+
+    if (!wm.animations || wm.layout == LAYOUT_FLOATING || dir == 0) {
+        window->anim.running = false;
+        window->hide_dir = 0;
+        window_set_position(window, HIDDEN_POS_X, window->y);
+        return;
+    }
+
+    struct Output *out = tiling_output();
+    int32_t offset = (out != NULL && out->width > 0) ? out->width : 1920;
+    if (offset < 1) offset = 1;
+
+    int32_t nw = (window->prop_valid && window->prop_w > 0)
+                   ? window->prop_w
+                   : (window->width > 0 ? window->width : 1);
+
+    int32_t nh = (window->prop_valid && window->prop_h > 0)
+                   ? window->prop_h
+                   : (window->height > 0 ? window->height : 1);
+
+    if (nw < 1) nw = 1;
+    if (nh < 1) nh = 1;
+
+    int32_t nx = window->x + dir * offset;
+    int32_t ny = window->y;
+
+    struct AnimationBox from =
+        window->pos_valid && window->width > 0 && window->height > 0
+            ? animation_box(window->x, window->y, window->width, window->height)
+            : animation_box(nx, ny, nw, nh);
+
+    struct AnimationBox target = animation_box(nx, ny, nw, nh);
+
+    window->hide_dir = dir;
+    animation_start(
+        &window->anim, ANIM_SPACE, &from, &target, CFG_ANIM_DURATION_SPACE
+    );
 }
 
 void wm_switch_space(int space) {
@@ -460,25 +505,29 @@ void wm_switch_space(int space) {
 
     wl_list_for_each(window, &wm.windows, link) {
         if (window->closed) { continue; }
-
         if (window->space == space) { // reveal
             if (!window->space_hidden) { continue; }
             window->space_hidden = false;
 
-            if (wm.layout == LAYOUT_FLOATING) {
-                // Floating windows do not go through `layout_apply()`.
-                window_set_position(window, window->saved_x, window->saved_y);
-                window->has_target = false;
-                window->anim.running = false;
+            if (window->anim.running && window->hide_dir != 0) {
+                // Keep it running so `window_apply_target()` animates from
+                // `anim.current` back to the layout box.
+                window->hide_dir = 0;
                 window->reveal_dir = 0;
-            } else { // tiling
-                // Flag a horizontal space slide for `window_apply_target()`.
-                window->reveal_dir = dir;
-                window->has_target = false;
+            } else if (wm.layout == LAYOUT_FLOATING) {
+                window->hide_dir = 0;
                 window->anim.running = false;
+                window->has_target = false;
+                window->reveal_dir = 0;
+                window_set_position(window, window->saved_x, window->saved_y);
+            } else {
+                window->hide_dir = 0;
+                window->anim.running = false;
+                window->has_target = false;
+                window->reveal_dir = dir;
             }
         } else { // hide
-            window_hide_offscreen(window);
+            window_hide_offscreen(window, -dir);
         }
     }
 
@@ -501,8 +550,9 @@ void wm_move_window_to_space(struct Seat *seat, int space) {
     if (window == NULL || window->closed || window->space_hidden) { return; }
     if (window->space == space) { return; }
 
+    const int32_t dir = (space > wm.current_space) ? +1 : -1;
     window->space = space;
-    window_hide_offscreen(window);
+    window_hide_offscreen(window, dir);
 
     struct Seat *s;
     wl_list_for_each(s, &wm.seats, link) {

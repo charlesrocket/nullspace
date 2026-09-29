@@ -83,6 +83,8 @@ struct Window {
     // Size we last proposed to the client.
     int32_t prop_w, prop_h;
 
+    int32_t reveal_dir, hide_dir;
+
     int space;
 
     char *title;
@@ -100,10 +102,7 @@ struct Window {
     bool closed;
     // space_hidden == (space != wm.current_space).
     bool space_hidden;
-
     bool has_target;
-
-    int32_t reveal_dir;
 };
 
 struct XkbBinding {
