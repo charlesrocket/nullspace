@@ -8,7 +8,9 @@
 #include "layouts/layout.h"
 #include "layouts/vertical.h"
 #include "output.h"
+#ifdef WALLPAPER
 #include "wallpaper.h"
+#endif
 
 #include <dev/evdev/input-event-codes.h>
 #include <errno.h>
@@ -48,6 +50,7 @@ struct LibinputConfig {
     int scroll_method;
 };
 
+#ifdef WALLPAPER
 struct WallpaperConfig {
     int32_t topbar_fade_h;
 
@@ -60,6 +63,7 @@ struct WallpaperConfig {
 
     char *path;
 };
+#endif
 
 struct Window {
     struct river_window_v1 *obj;
@@ -169,7 +173,9 @@ struct WindowManager {
     struct wl_list windows;     // Window, creation order (tile order)
     struct wl_list focus_stack; // Window, most recently focused last
     struct wl_list seats;       // Seat
+#ifdef WALLPAPER
     struct WallpaperConfig wallpaper;
+#endif
     struct LibinputConfig libinput;
     struct Output *default_output;
 
@@ -207,7 +213,9 @@ void wm_switch_space(int space);
 void wm_move_window_to_space(struct Seat *seat, int space);
 void wm_request_manage(void);
 
+#ifdef WALLPAPER
 bool wm_set_wallpaper_path(const char *path);
 void wm_invalidate_wallpaper(void);
+#endif
 
 #endif // NULLSPACE_H

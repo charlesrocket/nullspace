@@ -6,12 +6,16 @@
 #include "layouts/horizontal.h"
 #include "layouts/layout.h"
 #include "layouts/vertical.h"
+#ifdef WALLPAPER
 #include "wallpaper.h"
+#endif
 
 #include <river-libinput-config-v1-client-protocol.h>
 #include <sys/event.h>
 
+#ifdef WALLPAPER
 struct Wallpaper wp;
+#endif
 struct wl_shm *shm;
 struct WindowManager wm;
 
@@ -571,6 +575,7 @@ void wm_request_manage(void) {
     }
 }
 
+#ifdef WALLPAPER
 bool wm_set_wallpaper_path(const char *path) {
     if (path == NULL || path[0] == '\0') { return false; }
 
@@ -603,6 +608,7 @@ void wm_invalidate_wallpaper(void) {
     wallpaper_invalidate(&wp);
     wm_request_manage();
 }
+#endif
 
 static void wm_on_kb_layout_changed(const char *layout) {
     if (layout == NULL || layout[0] == '\0') { return; }
@@ -1075,10 +1081,12 @@ wm_handle_render_start(void *data, struct river_window_manager_v1 *obj) {
         }
     }
 
+#ifdef WALLPAPER
     wallpaper_manage(
         &wp, has_window, top_zone_h, wm.wallpaper.topbar_fade_h,
         wm.wallpaper.topbar_fade_h / 2
     );
+#endif
 
     river_window_manager_v1_render_finish(window_manager_v1);
 }
@@ -1119,7 +1127,9 @@ static void wm_handle_output(
         );
     }
 
+#ifdef WALLPAPER
     output->wallpaper = wallpaper_output_create(&wp);
+#endif
 
     wl_list_insert(wm.outputs.prev, &output->link);
 }
@@ -1192,6 +1202,7 @@ static void wm_init(void) {
     wm.animations = CFG_ANIMATIONS;
     animation_init();
 
+#ifdef WALLPAPER
     wm.wallpaper.path = strdup(CFG_WALLPAPER_PATH);
     wm.wallpaper.topbar_fade_h = CFG_WALLPAPER_TOPBAR_FADE_H;
 
@@ -1206,6 +1217,7 @@ static void wm_init(void) {
     wm.wallpaper.blur_radius = CFG_WALLPAPER_BLUR_RADIUS;
     wm.wallpaper.blur_passes = CFG_WALLPAPER_BLUR_PASSES;
     wm.wallpaper.blur_top_inset = CFG_WALLPAPER_BLUR_TOP_INSET;
+#endif
 
     wm.libinput.tap_state = CFG_LIBINPUT_TAP_STATE;
     wm.libinput.natural_scroll = CFG_LIBINPUT_NATURAL_SCROLL;
@@ -1467,12 +1479,10 @@ int main(void) {
     }
 
     if (shm == NULL) {
-        fprintf(
-            stderr, "wl_shm not supported by the Wayland server "
-                    "(wallpaper support will be unavailable)\n"
-        );
+        fprintf(stderr, "wl_shm not supported by the Wayland server\n");
     }
 
+#ifdef WALLPAPER
     wallpaper_init(&wp, compositor, shm, window_manager_v1);
 
     if (compositor != NULL && shm != NULL) {
@@ -1498,6 +1508,7 @@ int main(void) {
             }
         }
     }
+#endif
 
     river_window_manager_v1_add_listener(window_manager_v1, &wm_listener, NULL);
 

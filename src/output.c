@@ -1,7 +1,9 @@
 #include "output.h"
 
 #include "nullspace.h"
+#ifdef WALLPAPER
 #include "wallpaper.h"
+#endif
 
 #include <river-layer-shell-v1-client-protocol.h>
 #include <river-window-management-v1-client-protocol.h>
@@ -14,9 +16,11 @@ void output_maybe_destroy(struct Output *output) {
     if (!output->removed) { return; }
     if (wm.default_output == output) { wm.default_output = NULL; }
 
+#ifdef WALLPAPER
     if (output->wallpaper != NULL) {
         wallpaper_output_destroy(output->wallpaper);
     }
+#endif
 
     if (output->layer_shell != NULL) {
         river_layer_shell_output_v1_destroy(output->layer_shell);
@@ -44,9 +48,11 @@ void output_handle_position(
     output->pos_x = x;
     output->pos_y = y;
 
+#ifdef WALLPAPER
     if (output->wallpaper != NULL) {
         wallpaper_output_set_position(output->wallpaper, x, y);
     }
+#endif
 }
 
 void output_handle_dimensions(
@@ -56,7 +62,9 @@ void output_handle_dimensions(
     output->width = width;
     output->height = height;
 
+#ifdef WALLPAPER
     if (output->wallpaper != NULL) {
         wallpaper_output_set_dimensions(output->wallpaper, width, height);
     }
+#endif
 }

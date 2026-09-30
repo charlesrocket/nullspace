@@ -8,5 +8,10 @@ src_files = files(
   'input.c',
   'output.c',
   'animation.c',
-  'wallpaper.c',
-) + generated
+)
+
+if get_option('wallpaper')
+  src_files += files('wallpaper.c')
+endif
+
+src_files += generated

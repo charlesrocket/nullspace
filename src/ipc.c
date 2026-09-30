@@ -378,6 +378,7 @@ static void emit_config(struct IpcClient *c) {
     emit_bool(c, "center_overspread", wm.center_overspread);
     emit_bool(c, "center_when_single_stack", wm.center_when_single_stack);
 
+#ifdef WALLPAPER
     emit_int(c, "wallpaper_topbar_fade_h", wm.wallpaper.topbar_fade_h);
     emit_str(c, "wallpaper_path", wm.wallpaper.path ? wm.wallpaper.path : "");
     emit_int(c, "wallpaper_pattern_bg_r", wm.wallpaper.pattern_bg_r);
@@ -395,6 +396,7 @@ static void emit_config(struct IpcClient *c) {
     emit_int(c, "wallpaper_blur_radius", wm.wallpaper.blur_radius);
     emit_int(c, "wallpaper_blur_passes", wm.wallpaper.blur_passes);
     emit_int(c, "wallpaper_blur_top_inset", wm.wallpaper.blur_top_inset);
+#endif
 
     emit_int(c, "libinput_tap_state", wm.libinput.tap_state);
     emit_int(c, "libinput_natural_scroll", wm.libinput.natural_scroll);
@@ -732,6 +734,7 @@ static void handle_get(struct IpcClient *c, const char *key, const char *arg) {
         return;
     }
 
+#ifdef WALLPAPER
     if (!strcmp(key, "wallpaper_topbar_fade_h")) {
         resp_ok_int(c, wm.wallpaper.topbar_fade_h);
         return;
@@ -741,7 +744,9 @@ static void handle_get(struct IpcClient *c, const char *key, const char *arg) {
         resp_ok_str(c, wm.wallpaper.path ? wm.wallpaper.path : "");
         return;
     }
+#endif
 
+#ifdef WALLPAPER
     {
         struct {
             const char *key;
@@ -767,6 +772,7 @@ static void handle_get(struct IpcClient *c, const char *key, const char *arg) {
             }
         }
     }
+#endif
 
     {
         struct {
@@ -934,6 +940,7 @@ handle_set(struct IpcClient *c, const char *key, const char *value) {
         return;
     }
 
+#ifdef WALLPAPER
     if (!strcmp(key, "wallpaper_topbar_fade_h")) {
         long v;
         if (!parse_int(value, &v) || v < 0 || v > 1000) {
@@ -1004,6 +1011,7 @@ handle_set(struct IpcClient *c, const char *key, const char *value) {
             return;
         }
     }
+#endif
 
     {
         struct {
