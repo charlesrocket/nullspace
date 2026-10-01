@@ -157,6 +157,11 @@ static void window_maybe_destroy(struct Window *window) {
         }
     }
 
+    if (window->node != NULL) {
+        river_node_v1_destroy(window->node);
+        window->node = NULL;
+    }
+
     river_window_v1_destroy(window->obj);
     wl_list_remove(&window->link);
     wl_list_remove(&window->focus_link);
