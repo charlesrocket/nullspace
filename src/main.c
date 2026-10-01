@@ -150,7 +150,7 @@ static int run_event_loop(struct wl_display *display) {
         ipc_flush_pending();
 
         struct timespec timeout = {.tv_sec = 0, .tv_nsec = 16 * 1000 * 1000};
-        struct timespec *timeoutp = animation_active() ? &timeout : NULL;
+        struct timespec *timeoutp = wm_animation_active() ? &timeout : NULL;
 
         int n = kevent(kq, NULL, 0, events, 256, timeoutp);
         if (n < 0) {
@@ -167,7 +167,7 @@ static int run_event_loop(struct wl_display *display) {
 
         // Timeout fired with no events: ask for another manage pass so the
         // animation keeps stepping.
-        if (n == 0 && animation_active()) { wm_request_manage(); }
+        if (n == 0 && wm_animation_active()) { wm_request_manage(); }
 
         bool wl_readable = false;
 

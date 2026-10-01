@@ -184,7 +184,7 @@ void wm_handle_output(
     struct river_output_v1 *river_output
 );
 
-bool animation_active(void);
+bool wm_animation_active(void);
 
 #ifdef WALLPAPER
 bool wm_set_wallpaper_path(const char *path);

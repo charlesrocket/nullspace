@@ -97,7 +97,7 @@ static void window_propose_size(struct Window *window, int32_t w, int32_t h) {
     window_send_size(window, w, h);
 }
 
-bool animation_active(void) {
+bool wm_animation_active(void) {
     if (!wm.animations.enabled) return false;
 
     struct Window *w;
@@ -110,7 +110,7 @@ bool animation_active(void) {
     return false;
 }
 
-static void animation_tick_all(void) {
+static void wm_animation_tick_all(void) {
     if (!wm.animations.enabled) return;
 
     int64_t now = animation_now_ms();
@@ -710,7 +710,7 @@ void wm_handle_manage_start(void *data, struct river_window_manager_v1 *obj) {
     wl_list_for_each(seat, &wm.seats, link) { seat_manage(seat); }
 
     layout_apply();
-    animation_tick_all(); // by river protocol
+    wm_animation_tick_all(); // by river protocol
 
     // Sweep reveal flags (`layout_apply()` leftovers).
     wl_list_for_each(window, &wm.windows, link) {
@@ -725,7 +725,7 @@ void wm_handle_manage_start(void *data, struct river_window_manager_v1 *obj) {
         window->reveal_dir = 0;
     }
 
-    if (animation_active()) { wm_request_manage(); }
+    if (wm_animation_active()) { wm_request_manage(); }
 
     river_window_manager_v1_manage_finish(window_manager_v1);
 }
