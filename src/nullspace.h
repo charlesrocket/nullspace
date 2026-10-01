@@ -8,6 +8,7 @@
 #include "layouts/layout.h"
 #include "layouts/vertical.h"
 #include "output.h"
+#include "seat.h"
 #ifdef WALLPAPER
 #include "wallpaper.h"
 #endif
@@ -125,49 +126,6 @@ struct PointerBinding {
     const void *arg;
 };
 
-enum SeatOp {
-    SEAT_OP_NONE,
-    SEAT_OP_MOVE,
-    SEAT_OP_RESIZE,
-};
-
-struct Seat {
-    struct river_seat_v1 *obj;
-    struct river_layer_shell_seat_v1 *layer_shell;
-    struct wl_list link; // WindowManager.seats
-
-    struct Window *focused;
-    struct Window *hovered;
-    struct Window *interacted;
-    // For SEAT_OP_MOVE and SEAT_OP_RESIZE
-    struct Window *op_window;
-
-    struct wl_list xkb_bindings;     // XkbBinding
-    struct wl_list pointer_bindings; // PointerBinding
-
-    enum Action pending_action;
-    enum SeatOp op;
-
-    const void *pending_arg;
-
-    uint32_t op_edges;
-
-    int32_t op_start_x, op_start_y;
-    int32_t op_dx, op_dy;
-    // For SEAT_OP_RESIZE only
-    int32_t op_start_width;
-    int32_t op_start_height;
-
-    int32_t pointer_x;
-    int32_t pointer_y;
-
-    bool pointer_set;
-    bool op_release;
-
-    bool new;
-    bool removed;
-};
-
 struct WindowManager {
     struct wl_list outputs;     // Output
     struct wl_list windows;     // Window, creation order (tile order)
@@ -213,9 +171,15 @@ extern struct Wallpaper wp;
 
 struct Output *tiling_output(void);
 
+struct Window *focus_stack_top(void);
+struct Window *window_next(struct Window *window);
+
 void window_apply_target(
     struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh
 );
+
+void window_set_position(struct Window *window, int32_t x, int32_t y);
+void window_send_size(struct Window *window, int32_t w, int32_t h);
 
 void wm_init(void);
 void wm_set_layout(enum Layout layout);

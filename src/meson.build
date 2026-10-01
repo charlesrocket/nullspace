@@ -5,6 +5,7 @@ src_files = files(
   'layouts/vertical.c',
   'layouts/horizontal.c',
   'ipc.c',
+  'seat.c',
   'keymap.c',
   'input.c',
   'output.c',

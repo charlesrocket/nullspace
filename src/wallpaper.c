@@ -598,8 +598,8 @@ wpo_prepare_variants(struct Wallpaper *wlp, struct WallpaperOutput *wpo) {
     }
 
     scale_cover(
-        wlp->image_pixels, wlp->image_width, wlp->image_height, wpo->cached_sharp,
-        wpo->width, wpo->height
+        wlp->image_pixels, wlp->image_width, wlp->image_height,
+        wpo->cached_sharp, wpo->width, wpo->height
     );
 
     memcpy(wpo->cached_blurred, wpo->cached_sharp, image_size);
