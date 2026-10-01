@@ -5,6 +5,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <wayland-client-core.h>
 #include <xkbcommon/xkbcommon.h>
 
 struct Seat;
@@ -19,6 +20,22 @@ struct KeyDef {
 struct PointerDef {
     uint32_t mods;
     uint32_t button;
+    enum Action action;
+    const void *arg;
+};
+
+struct XkbBinding {
+    struct river_xkb_binding_v1 *obj;
+    struct Seat *seat;
+    struct wl_list link;
+    enum Action action;
+    const void *arg;
+};
+
+struct PointerBinding {
+    struct river_pointer_binding_v1 *obj;
+    struct Seat *seat;
+    struct wl_list link;
     enum Action action;
     const void *arg;
 };

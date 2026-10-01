@@ -80,22 +80,6 @@ struct Window {
     bool has_target;
 };
 
-struct XkbBinding {
-    struct river_xkb_binding_v1 *obj;
-    struct Seat *seat;
-    struct wl_list link;
-    enum Action action;
-    const void *arg;
-};
-
-struct PointerBinding {
-    struct river_pointer_binding_v1 *obj;
-    struct Seat *seat;
-    struct wl_list link;
-    enum Action action;
-    const void *arg;
-};
-
 struct WindowManager {
     struct wl_list outputs;     // Output
     struct wl_list windows;     // Window, creation order (tile order)
