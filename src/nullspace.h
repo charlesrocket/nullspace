@@ -173,6 +173,7 @@ struct WindowManager {
     struct wl_list windows;     // Window, creation order (tile order)
     struct wl_list focus_stack; // Window, most recently focused last
     struct wl_list seats;       // Seat
+    struct AnimationsConfig animations;
 #ifdef WALLPAPER
     struct WallpaperConfig wallpaper;
 #endif
@@ -195,8 +196,6 @@ struct WindowManager {
     bool smart_gaps;
     bool center_overspread; // let masters fill width when n <= nmasters
     bool center_when_single_stack;
-
-    bool animations;
 };
 
 extern struct WindowManager wm;

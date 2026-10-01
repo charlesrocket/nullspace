@@ -109,7 +109,7 @@ static void window_propose_size(struct Window *window, int32_t w, int32_t h) {
 }
 
 static bool animation_active(void) {
-    if (!wm.animations) return false;
+    if (!wm.animations.enabled) return false;
 
     struct Window *w;
     wl_list_for_each(w, &wm.windows, link) {
@@ -122,7 +122,7 @@ static bool animation_active(void) {
 }
 
 static void animation_tick_all(void) {
-    if (!wm.animations) return;
+    if (!wm.animations.enabled) return;
 
     int64_t now = animation_now_ms();
     struct Window *w;
@@ -373,7 +373,7 @@ void window_apply_target(
     w->target_box = target;
     w->has_target = true;
 
-    if (!wm.animations) {
+    if (!wm.animations.enabled) {
         w->anim.kind = ANIM_NONE;
         w->anim.from = target;
         w->anim.to = target;
@@ -394,17 +394,22 @@ void window_apply_target(
             struct Output *out = tiling_output();
             int32_t offset =
                 (out != NULL && out->width > 0) ? out->width : target.width;
+
             if (offset < 1) offset = 1;
 
             from = target;
             from.x = target.x + reveal_dir * offset;
             kind = ANIM_SPACE;
-            duration = CFG_ANIM_DURATION_SPACE;
-        } else { // slide from above
+            duration = wm.animations.duration_space;
+        } else {
+            // Slide from above/below
             from = target;
-            from.y = -target.height;
+            from.y = wm.animations.open_from_top ? -target.height
+                                                 : target.y + target.height;
+
             kind = ANIM_OPEN;
-            duration = CFG_ANIM_DURATION_OPEN;
+            duration = wm.animations.duration_open;
+            ;
         }
 
         window_set_position(w, from.x, from.y);
@@ -421,7 +426,7 @@ void window_apply_target(
         }
 
         kind = ANIM_MOVE;
-        duration = CFG_ANIM_DURATION_MOVE;
+        duration = wm.animations.duration_move;
     }
 
     animation_start(&w->anim, kind, &from, &target, duration);
@@ -461,7 +466,7 @@ static void window_hide_offscreen(struct Window *window, int32_t dir) {
     window->has_target = false;
     window->space_hidden = true;
 
-    if (!wm.animations || dir == 0) {
+    if (!wm.animations.enabled || dir == 0) {
         window->anim.running = false;
         window->hide_dir = 0;
         window_set_position(window, HIDDEN_POS_X, window->y);
@@ -497,7 +502,7 @@ static void window_hide_offscreen(struct Window *window, int32_t dir) {
 
     window->hide_dir = dir;
     animation_start(
-        &window->anim, ANIM_SPACE, &from, &target, CFG_ANIM_DURATION_SPACE
+        &window->anim, ANIM_SPACE, &from, &target, wm.animations.duration_space
     );
 }
 
@@ -1199,8 +1204,12 @@ static void wm_init(void) {
     wm.center_overspread = CFG_CENTER_OVERSPREAD;
     wm.center_when_single_stack = CFG_CENTER_WHEN_SINGLE_STACK;
 
-    wm.animations = CFG_ANIMATIONS;
-    animation_init();
+    wm.animations.enabled = CFG_ANIMATIONS;
+    wm.animations.open_from_top = CFG_ANIM_OPEN_FROM_TOP;
+    wm.animations.duration_move = CFG_ANIM_DURATION_MOVE;
+    wm.animations.duration_open = CFG_ANIM_DURATION_OPEN;
+    wm.animations.duration_close = CFG_ANIM_DURATION_CLOSE;
+    wm.animations.duration_space = CFG_ANIM_DURATION_SPACE;
 
 #ifdef WALLPAPER
     wm.wallpaper.path = strdup(CFG_WALLPAPER_PATH);
@@ -1235,6 +1244,7 @@ static void wm_init(void) {
     wm.kb_layout = NULL;
 
     keymap_set_layout_callback(wm_on_kb_layout_changed);
+    animation_init();
 }
 
 static void handle_global(

@@ -378,6 +378,13 @@ static void emit_config(struct IpcClient *c) {
     emit_bool(c, "center_overspread", wm.center_overspread);
     emit_bool(c, "center_when_single_stack", wm.center_when_single_stack);
 
+    emit_int(c, "animations_enabled", wm.animations.enabled);
+    emit_int(c, "animations_open_from_top", wm.animations.open_from_top);
+    emit_int(c, "animations_duration_move", wm.animations.duration_move);
+    emit_int(c, "animations_duration_open", wm.animations.duration_open);
+    emit_int(c, "animations_duration_close", wm.animations.duration_close);
+    emit_int(c, "animations_duration_space", wm.animations.duration_space);
+
 #ifdef WALLPAPER
     emit_int(c, "wallpaper_topbar_fade_h", wm.wallpaper.topbar_fade_h);
     emit_str(c, "wallpaper_path", wm.wallpaper.path ? wm.wallpaper.path : "");
@@ -734,6 +741,35 @@ static void handle_get(struct IpcClient *c, const char *key, const char *arg) {
         return;
     }
 
+    if (!strcmp(key, "animations_enabled")) {
+        resp_ok_bool(c, wm.animations.enabled);
+        return;
+    }
+
+    if (!strcmp(key, "animations_open_from_top")) {
+        resp_ok_bool(c, wm.animations.open_from_top);
+        return;
+    }
+
+    {
+        struct {
+            const char *key;
+            int32_t value;
+        } anims[] = {
+            { "animations_duration_move",  wm.animations.duration_move},
+            { "animations_duration_open",  wm.animations.duration_open},
+            {"animations_duration_close", wm.animations.duration_close},
+            {"animations_duration_space", wm.animations.duration_space},
+        };
+
+        for (size_t i = 0; i < sizeof(anims) / sizeof(anims[0]); i++) {
+            if (!strcmp(key, anims[i].key)) {
+                resp_ok_int(c, anims[i].value);
+                return;
+            }
+        }
+    }
+
 #ifdef WALLPAPER
     if (!strcmp(key, "wallpaper_topbar_fade_h")) {
         resp_ok_int(c, wm.wallpaper.topbar_fade_h);
@@ -926,6 +962,10 @@ handle_set(struct IpcClient *c, const char *key, const char *value) {
         bslot = &wm.center_overspread;
     else if (!strcmp(key, "center_when_single_stack"))
         bslot = &wm.center_when_single_stack;
+    else if (!strcmp(key, "animations_enabled"))
+        bslot = &wm.animations.enabled;
+    else if (!strcmp(key, "animations_open_from_top"))
+        bslot = &wm.animations.open_from_top;
     if (bslot) {
         bool b;
         if (!parse_bool(value, &b)) {
@@ -938,6 +978,34 @@ handle_set(struct IpcClient *c, const char *key, const char *value) {
         wm_request_manage();
         resp_ok(c);
         return;
+    }
+
+    {
+        struct {
+            const char *key;
+            int32_t *slot;
+        } anims[] = {
+            { "animations_duration_move",  &wm.animations.duration_move},
+            { "animations_duration_open",  &wm.animations.duration_open},
+            {"animations_duration_close", &wm.animations.duration_close},
+            {"animations_duration_space", &wm.animations.duration_space},
+        };
+
+        for (size_t i = 0; i < sizeof(anims) / sizeof(anims[0]); i++) {
+            if (strcmp(key, anims[i].key) != 0) { continue; }
+
+            long v;
+            if (!parse_int(value, &v) || v < 0 || v > 60000) {
+                resp_err(c, "bad value");
+                return;
+            }
+
+            *anims[i].slot = (int32_t)v;
+            broadcast_printf("EVT %s %d\n", key, *anims[i].slot);
+            wm_request_manage();
+            resp_ok(c);
+            return;
+        }
     }
 
 #ifdef WALLPAPER

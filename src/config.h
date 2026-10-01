@@ -68,6 +68,10 @@
 #define CFG_ANIM_DURATION_CLOSE        140
 #define CFG_ANIM_DURATION_SPACE        220
 
+// New window's vertical direction (set `true` to slide new windows from above
+// the screen).
+#define CFG_ANIM_OPEN_FROM_TOP         false
+
 // Cubic bezier control points (x1, y1, x2, y2).
 #define CFG_ANIM_CURVE_MOVE            {0.25, 0.10, 0.25, 1.00}
 #define CFG_ANIM_CURVE_OPEN            {0.00, 0.00, 0.20, 1.00}
