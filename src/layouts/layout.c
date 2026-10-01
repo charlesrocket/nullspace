@@ -40,7 +40,7 @@ static struct Window *layout_focused_window(void) {
 }
 
 static void layout_windows_apply(LayoutCompute compute) {
-    struct Output *output = tiling_output();
+    struct Output *output = output_primary();
     if (output == NULL) { return; }
 
     int32_t ax, ay, aw, ah;

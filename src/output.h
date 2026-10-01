@@ -34,7 +34,7 @@ struct Output {
 
 void output_maybe_destroy(struct Output *output);
 
-struct Output *tiling_output(void);
+struct Output *output_primary(void);
 
 void output_handle_removed(void *data, struct river_output_v1 *obj);
 

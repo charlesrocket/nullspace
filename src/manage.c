@@ -51,18 +51,6 @@ static const struct river_layer_shell_output_v1_listener
         .non_exclusive_area = layer_shell_output_handle_non_exclusive_area,
 };
 
-struct Output *tiling_output(void) {
-    struct Output *output;
-    wl_list_for_each(output, &wm.outputs, link) {
-        if (output->removed) { continue; }
-        if (output->width <= 0 || output->height <= 0) { continue; }
-
-        return output;
-    }
-
-    return NULL;
-}
-
 void window_set_position(struct Window *window, int32_t x, int32_t y) {
     if (window->pos_valid && window->x == x && window->y == y) { return; }
 
@@ -378,7 +366,7 @@ void window_apply_target(
     if (first && (reveal_dir != 0 || !w->pos_valid)) {
         if (reveal_dir != 0) {
             // Horizontal space slide across the whole output.
-            struct Output *out = tiling_output();
+            struct Output *out = output_primary();
             int32_t offset =
                 (out != NULL && out->width > 0) ? out->width : target.width;
 
@@ -460,7 +448,7 @@ static void window_hide_offscreen(struct Window *window, int32_t dir) {
         return;
     }
 
-    struct Output *out = tiling_output();
+    struct Output *out = output_primary();
     int32_t offset = (out != NULL && out->width > 0) ? out->width : 1920;
     if (offset < 1) offset = 1;
 

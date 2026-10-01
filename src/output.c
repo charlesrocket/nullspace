@@ -68,3 +68,15 @@ void output_handle_dimensions(
     }
 #endif
 }
+
+struct Output *output_primary(void) {
+    struct Output *output;
+    wl_list_for_each(output, &wm.outputs, link) {
+        if (output->removed) { continue; }
+        if (output->width <= 0 || output->height <= 0) { continue; }
+
+        return output;
+    }
+
+    return NULL;
+}

@@ -123,8 +123,6 @@ extern struct wl_shm *shm;
 extern struct Wallpaper wp;
 #endif
 
-struct Output *tiling_output(void);
-
 struct Window *focus_stack_top(void);
 struct Window *window_next(struct Window *window);
 
