@@ -36,21 +36,6 @@
 #define HIDDEN_POS_X (-1000000)
 #define HIDDEN_POS_Y (-1000000)
 
-struct LibinputConfig {
-    int tap_state;
-    int natural_scroll;
-    int left_handed;
-    int middle_emulation;
-    int dwt;
-    int drag;
-    int drag_lock;
-    int three_finger_drag;
-    int accel_profile;
-    float accel_speed;
-    int click_method;
-    int scroll_method;
-};
-
 #ifdef WALLPAPER
 struct WallpaperConfig {
     int32_t topbar_fade_h;

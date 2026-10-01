@@ -23,6 +23,21 @@ struct PointerDef {
     const void *arg;
 };
 
+struct LibinputConfig {
+    int tap_state;
+    int natural_scroll;
+    int left_handed;
+    int middle_emulation;
+    int dwt;
+    int drag;
+    int drag_lock;
+    int three_finger_drag;
+    int accel_profile;
+    float accel_speed;
+    int click_method;
+    int scroll_method;
+};
+
 extern const struct KeyDef cfg_keybinds[];
 extern const size_t cfg_keybinds_len;
 extern const struct PointerDef cfg_pointer_binds[];
