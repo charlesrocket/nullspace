@@ -277,6 +277,7 @@ static void outbuf_quoted(struct IpcClient *c, const char *s) {
             }
         }
     }
+
     outbuf_append(c, "\"", 1);
 }
 
@@ -1033,9 +1034,8 @@ handle_set(struct IpcClient *c, const char *key, const char *value) {
             return;
         }
 
-        broadcast_printf(
-            "EVT wallpaper_path \"%s\"\n",
-            wm.wallpaper.path ? wm.wallpaper.path : ""
+        broadcast_emit_str(
+            "wallpaper_path", wm.wallpaper.path ? wm.wallpaper.path : ""
         );
 
         resp_ok(c);
