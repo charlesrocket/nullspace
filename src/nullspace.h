@@ -36,21 +36,6 @@
 #define HIDDEN_POS_X (-1000000)
 #define HIDDEN_POS_Y (-1000000)
 
-#ifdef WALLPAPER
-struct WallpaperConfig {
-    int32_t topbar_fade_h;
-
-    int32_t pattern_bg_r, pattern_bg_g, pattern_bg_b;
-    int32_t pattern_dot_r, pattern_dot_g, pattern_dot_b;
-    int32_t pattern_grid_spacing;
-    int32_t pattern_dot_radius;
-
-    int32_t blur_radius, blur_passes, blur_top_inset;
-
-    char *path;
-};
-#endif
-
 struct Window {
     struct river_window_v1 *obj;
     struct river_node_v1 *node;

@@ -17,6 +17,19 @@ struct river_shell_surface_v1;
 
 #define WALLPAPER_TOPBAR_FADE_H CFG_WALLPAPER_TOPBAR_FADE_H
 
+struct WallpaperConfig {
+    int32_t topbar_fade_h;
+
+    int32_t pattern_bg_r, pattern_bg_g, pattern_bg_b;
+    int32_t pattern_dot_r, pattern_dot_g, pattern_dot_b;
+    int32_t pattern_grid_spacing;
+    int32_t pattern_dot_radius;
+
+    int32_t blur_radius, blur_passes, blur_top_inset;
+
+    char *path;
+};
+
 struct WallpaperOutput {
     struct river_shell_surface_v1 *shell_surface;
     struct river_node_v1 *node;
