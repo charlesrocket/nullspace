@@ -4,7 +4,7 @@
 
 #include "wallpaper.h"
 
-#include "nullspace.h"
+#include "manage.h"
 
 #include <errno.h>
 #include <fcntl.h>

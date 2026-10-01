@@ -1,6 +1,6 @@
 #include "layout.h"
 
-#include "../nullspace.h"
+#include "../manage.h"
 #include "horizontal.h"
 #include "vertical.h"
 

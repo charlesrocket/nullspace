@@ -4,7 +4,7 @@
 #include "layouts/horizontal.h"
 #include "layouts/layout.h"
 #include "layouts/vertical.h"
-#include "nullspace.h"
+#include "manage.h"
 #ifdef WALLPAPER
 #include "wallpaper.h"
 #endif

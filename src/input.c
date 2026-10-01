@@ -1,7 +1,7 @@
 #include "input.h"
 
 #include "config.h"
-#include "nullspace.h"
+#include "manage.h"
 
 #include <dev/evdev/input-event-codes.h>
 #include <river-libinput-config-v1-client-protocol.h>

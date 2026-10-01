@@ -2,7 +2,7 @@
 
 #include "input.h"
 #include "ipc.h"
-#include "nullspace.h"
+#include "manage.h"
 
 #include <river-window-management-v1-client-protocol.h>
 #include <stdlib.h>

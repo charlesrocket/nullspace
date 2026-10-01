@@ -6,7 +6,7 @@
 
 #include "input.h"
 #include "layouts/layout.h"
-#include "nullspace.h"
+#include "manage.h"
 
 #include <errno.h>
 #include <fcntl.h>

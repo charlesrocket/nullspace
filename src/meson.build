@@ -1,6 +1,6 @@
 src_files = files(
   'main.c',
-  'nullspace.c',
+  'manage.c',
   'layouts/layout.c',
   'layouts/vertical.c',
   'layouts/horizontal.c',
