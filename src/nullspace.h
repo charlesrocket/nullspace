@@ -201,16 +201,56 @@ struct WindowManager {
 extern struct WindowManager wm;
 extern struct river_xkb_bindings_v1 *xkb_bindings_v1;
 
+extern struct river_window_manager_v1 *window_manager_v1;
+extern struct river_input_manager_v1 *input_manager_v1;
+extern struct river_layer_shell_v1 *layer_shell_v1;
+extern struct wl_compositor *compositor;
+extern struct wl_shm *shm;
+
+#ifdef WALLPAPER
+extern struct Wallpaper wp;
+#endif
+
 struct Output *tiling_output(void);
 
 void window_apply_target(
     struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh
 );
 
+void wm_init(void);
 void wm_set_layout(enum Layout layout);
 void wm_switch_space(int space);
 void wm_move_window_to_space(struct Seat *seat, int space);
 void wm_request_manage(void);
+
+void wm_handle_unavailable(void *data, struct river_window_manager_v1 *obj);
+void wm_handle_finished(void *data, struct river_window_manager_v1 *obj);
+void wm_handle_manage_start(void *data, struct river_window_manager_v1 *obj);
+void wm_handle_render_start(void *data, struct river_window_manager_v1 *obj);
+
+void wm_handle_seat(
+    void *data, struct river_window_manager_v1 *obj,
+    struct river_seat_v1 *river_seat
+);
+
+// Ignored events
+void wm_handle_session_locked(void *data, struct river_window_manager_v1 *obj);
+
+void wm_handle_session_unlocked(
+    void *data, struct river_window_manager_v1 *obj
+);
+
+void wm_handle_window(
+    void *data, struct river_window_manager_v1 *obj,
+    struct river_window_v1 *river_window
+);
+
+void wm_handle_output(
+    void *data, struct river_window_manager_v1 *obj,
+    struct river_output_v1 *river_output
+);
+
+bool animation_active(void);
 
 #ifdef WALLPAPER
 bool wm_set_wallpaper_path(const char *path);

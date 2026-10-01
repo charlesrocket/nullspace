@@ -323,20 +323,20 @@ ppm_load(const char *path, uint8_t **out_rgba, int *out_w, int *out_h) {
     return true;
 }
 
-bool wallpaper_load_ppm(struct Wallpaper *wp, const char *path) {
+bool wallpaper_load_ppm(struct Wallpaper *wlp, const char *path) {
     uint8_t *pixels;
     int w, h;
 
     if (!ppm_load(path, &pixels, &w, &h)) { return false; }
 
-    free(wp->image_pixels);
+    free(wlp->image_pixels);
 
-    wp->image_pixels = pixels;
-    wp->image_width = w;
-    wp->image_height = h;
-    wp->loaded = true;
+    wlp->image_pixels = pixels;
+    wlp->image_width = w;
+    wlp->image_height = h;
+    wlp->loaded = true;
 
-    wallpaper_invalidate(wp);
+    wallpaper_invalidate(wlp);
 
     return true;
 }
@@ -484,11 +484,11 @@ static void wpo_destroy_cached_variants(struct WallpaperOutput *wpo) {
     wpo->drawn_valid = false;
 }
 
-void wallpaper_invalidate(struct Wallpaper *wp) {
-    if (wp == NULL) { return; }
+void wallpaper_invalidate(struct Wallpaper *wlp) {
+    if (wlp == NULL) { return; }
 
     struct WallpaperOutput *wpo;
-    wl_list_for_each(wpo, &wp->outputs, link) {
+    wl_list_for_each(wpo, &wlp->outputs, link) {
         wpo_destroy_cached_variants(wpo);
     }
 }
@@ -525,7 +525,7 @@ static void wpo_destroy_buffer(struct WallpaperOutput *wpo) {
 }
 
 static bool
-wpo_alloc_buffer(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
+wpo_alloc_buffer(struct Wallpaper *wlp, struct WallpaperOutput *wpo) {
     wpo_destroy_buffer(wpo);
 
     if (wpo->width <= 0 || wpo->height <= 0) { return false; }
@@ -548,7 +548,7 @@ wpo_alloc_buffer(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
         return false;
     }
 
-    struct wl_shm_pool *pool = wl_shm_create_pool(wp->shm, fd, (int32_t)size);
+    struct wl_shm_pool *pool = wl_shm_create_pool(wlp->shm, fd, (int32_t)size);
     if (pool == NULL) {
         fprintf(stderr, "Wallpaper: wl_shm_create_pool failed\n");
         munmap(data, size);
@@ -580,10 +580,10 @@ wpo_alloc_buffer(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
 }
 
 static void
-wpo_prepare_variants(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
+wpo_prepare_variants(struct Wallpaper *wlp, struct WallpaperOutput *wpo) {
     if (wpo->width <= 0 || wpo->height <= 0) { return; }
-    if (wp->image_pixels == NULL) { return; }
-    if (wp->image_width <= 0 || wp->image_height <= 0) { return; }
+    if (wlp->image_pixels == NULL) { return; }
+    if (wlp->image_width <= 0 || wlp->image_height <= 0) { return; }
 
     size_t image_size = (size_t)wpo->width * (size_t)wpo->height * 4;
 
@@ -598,7 +598,7 @@ wpo_prepare_variants(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
     }
 
     scale_cover(
-        wp->image_pixels, wp->image_width, wp->image_height, wpo->cached_sharp,
+        wlp->image_pixels, wlp->image_width, wlp->image_height, wpo->cached_sharp,
         wpo->width, wpo->height
     );
 
@@ -674,15 +674,15 @@ static void wpo_composite(
 }
 
 static bool
-wpo_needs_draw(const struct Wallpaper *wp, const struct WallpaperOutput *wpo) {
+wpo_needs_draw(const struct Wallpaper *wlp, const struct WallpaperOutput *wpo) {
     if (!wpo->drawn_valid) { return true; }
     if (wpo->drawn_w != wpo->width || wpo->drawn_h != wpo->height) {
         return true;
     }
 
-    if (wpo->drawn_loaded != wp->loaded) { return true; }
+    if (wpo->drawn_loaded != wlp->loaded) { return true; }
 
-    if (!wp->loaded) {
+    if (!wlp->loaded) {
         if (wpo->drawn_pattern_bg_r != wm.wallpaper.pattern_bg_r
             || wpo->drawn_pattern_bg_g != wm.wallpaper.pattern_bg_g
             || wpo->drawn_pattern_bg_b != wm.wallpaper.pattern_bg_b
@@ -705,31 +705,31 @@ wpo_needs_draw(const struct Wallpaper *wp, const struct WallpaperOutput *wpo) {
         return true;
     }
 
-    return wpo->drawn_blur_all != wp->blur_all
-        || wpo->drawn_top_h != wp->blur_top_h
-        || wpo->drawn_top_fade_h != wp->blur_top_fade_h
-        || wpo->drawn_fade_h != wp->blur_fade_h;
+    return wpo->drawn_blur_all != wlp->blur_all
+        || wpo->drawn_top_h != wlp->blur_top_h
+        || wpo->drawn_top_fade_h != wlp->blur_top_fade_h
+        || wpo->drawn_fade_h != wlp->blur_fade_h;
 }
 
-static void wpo_redraw(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
+static void wpo_redraw(struct Wallpaper *wlp, struct WallpaperOutput *wpo) {
     size_t image_size = (size_t)wpo->width * (size_t)wpo->height * 4;
 
-    if (!wp->loaded) {
+    if (!wlp->loaded) {
         paint_default_pattern(wpo->data, wpo->width, wpo->height);
     } else {
         if (wpo->cached_sharp == NULL || wpo->cached_blurred == NULL) {
-            wpo_prepare_variants(wp, wpo);
+            wpo_prepare_variants(wlp, wpo);
             if (wpo->cached_sharp == NULL || wpo->cached_blurred == NULL) {
                 return;
             }
         }
 
-        if (wp->blur_all) {
+        if (wlp->blur_all) {
             memcpy(wpo->data, wpo->cached_blurred, image_size);
-        } else if (wp->blur_top_h > 0) {
+        } else if (wlp->blur_top_h > 0) {
             wpo_composite(
-                wpo, wpo->data, wp->blur_top_h, wp->blur_top_fade_h,
-                wp->blur_fade_h
+                wpo, wpo->data, wlp->blur_top_h, wlp->blur_top_fade_h,
+                wlp->blur_fade_h
             );
         } else {
             memcpy(wpo->data, wpo->cached_sharp, image_size);
@@ -745,11 +745,11 @@ static void wpo_redraw(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
 
     wpo->drawn_w = wpo->width;
     wpo->drawn_h = wpo->height;
-    wpo->drawn_loaded = wp->loaded;
-    wpo->drawn_blur_all = wp->blur_all;
-    wpo->drawn_top_h = wp->blur_top_h;
-    wpo->drawn_top_fade_h = wp->blur_top_fade_h;
-    wpo->drawn_fade_h = wp->blur_fade_h;
+    wpo->drawn_loaded = wlp->loaded;
+    wpo->drawn_blur_all = wlp->blur_all;
+    wpo->drawn_top_h = wlp->blur_top_h;
+    wpo->drawn_top_fade_h = wlp->blur_top_fade_h;
+    wpo->drawn_fade_h = wlp->blur_fade_h;
 
     wpo->drawn_pattern_bg_r = wm.wallpaper.pattern_bg_r;
     wpo->drawn_pattern_bg_g = wm.wallpaper.pattern_bg_g;
@@ -767,15 +767,15 @@ static void wpo_redraw(struct Wallpaper *wp, struct WallpaperOutput *wpo) {
 }
 
 void wallpaper_init(
-    struct Wallpaper *wp, struct wl_compositor *compositor, struct wl_shm *shm,
+    struct Wallpaper *wlp, struct wl_compositor *cmp, struct wl_shm *wshm,
     struct river_window_manager_v1 *manager
 ) {
-    memset(wp, 0, sizeof(*wp));
-    wp->compositor = compositor;
-    wp->shm = shm;
-    wp->wm = manager;
+    memset(wlp, 0, sizeof(*wlp));
+    wlp->compositor = cmp;
+    wlp->shm = wshm;
+    wlp->wm = manager;
 
-    wl_list_init(&wp->outputs);
+    wl_list_init(&wlp->outputs);
 }
 
 static void wpo_destroy_unlinked(struct WallpaperOutput *wpo) {
@@ -789,20 +789,20 @@ static void wpo_destroy_unlinked(struct WallpaperOutput *wpo) {
     free(wpo);
 }
 
-struct WallpaperOutput *wallpaper_output_create(struct Wallpaper *wp) {
-    if (wp->compositor == NULL || wp->shm == NULL || wp->wm == NULL) {
+struct WallpaperOutput *wallpaper_output_create(struct Wallpaper *wlp) {
+    if (wlp->compositor == NULL || wlp->shm == NULL || wlp->wm == NULL) {
         return NULL;
     }
 
     struct WallpaperOutput *wpo = calloc(1, sizeof(struct WallpaperOutput));
     if (wpo == NULL) { return NULL; }
 
-    wpo->wp = wp;
-    wpo->surface = wl_compositor_create_surface(wp->compositor);
+    wpo->wp = wlp;
+    wpo->surface = wl_compositor_create_surface(wlp->compositor);
 
     if (wpo->surface != NULL) {
         wpo->shell_surface =
-            river_window_manager_v1_get_shell_surface(wp->wm, wpo->surface);
+            river_window_manager_v1_get_shell_surface(wlp->wm, wpo->surface);
     }
 
     if (wpo->shell_surface != NULL) {
@@ -814,7 +814,7 @@ struct WallpaperOutput *wallpaper_output_create(struct Wallpaper *wp) {
         return NULL;
     }
 
-    wl_list_insert(wp->outputs.prev, &wpo->link);
+    wl_list_insert(wlp->outputs.prev, &wpo->link);
     return wpo;
 }
 
@@ -856,7 +856,7 @@ void wallpaper_output_destroy(struct WallpaperOutput *wpo) {
 }
 
 void wallpaper_manage(
-    struct Wallpaper *wp, bool blur_all, int32_t blur_top_h,
+    struct Wallpaper *wlp, bool blur_all, int32_t blur_top_h,
     int32_t blur_top_fade_h, int32_t blur_fade_h
 ) {
     if (blur_all) {
@@ -869,21 +869,21 @@ void wallpaper_manage(
     if (blur_top_fade_h < 0) { blur_top_fade_h = 0; }
     if (blur_fade_h < 0) { blur_fade_h = 0; }
 
-    wp->blur_all = blur_all;
-    wp->blur_top_h = blur_top_h;
-    wp->blur_top_fade_h = blur_top_fade_h;
-    wp->blur_fade_h = blur_fade_h;
+    wlp->blur_all = blur_all;
+    wlp->blur_top_h = blur_top_h;
+    wlp->blur_top_fade_h = blur_top_fade_h;
+    wlp->blur_fade_h = blur_fade_h;
 
     struct WallpaperOutput *wpo;
 
-    wl_list_for_each(wpo, &wp->outputs, link) {
+    wl_list_for_each(wpo, &wlp->outputs, link) {
         if (wpo->width <= 0 || wpo->height <= 0) { continue; }
         if (wpo->buffer != NULL
             && (wpo->drawn_w != wpo->width || wpo->drawn_h != wpo->height)) {
             wpo_destroy_buffer(wpo);
         }
 
-        if (wpo->buffer == NULL && !wpo_alloc_buffer(wp, wpo)) { continue; }
+        if (wpo->buffer == NULL && !wpo_alloc_buffer(wlp, wpo)) { continue; }
         if (!wpo->placed) {
             river_node_v1_place_bottom(wpo->node);
             wpo->placed = true;
@@ -894,12 +894,12 @@ void wallpaper_manage(
             wpo->position_sent = true;
         }
 
-        if (!wpo_needs_draw(wp, wpo)) { continue; }
+        if (!wpo_needs_draw(wlp, wpo)) { continue; }
         if (wpo->busy) {
             wpo->deferred = true;
             continue;
         }
 
-        wpo_redraw(wp, wpo);
+        wpo_redraw(wlp, wpo);
     }
 }
