@@ -14,31 +14,52 @@
 #define CFG_CENTER_OVERSPREAD        false
 #define CFG_CENTER_WHEN_SINGLE_STACK true
 
-#ifdef WALLPAPER
-#define CFG_WALLPAPER_PATH                 ".local/share/nullspace/wallpaper.ppm"
-#define CFG_WALLPAPER_TOPBAR_FADE_H        42
+#define CFG_CMD_TERMINAL             "foot", NULL
+#define CFG_CMD_BROWSER              "firefox", NULL
+#define CFG_CMD_IDE                  "emacs", NULL
 
-#define CFG_WALLPAPER_PATTERN_BG_R         0x12
-#define CFG_WALLPAPER_PATTERN_BG_G         0x12
-#define CFG_WALLPAPER_PATTERN_BG_B         0x12
-#define CFG_WALLPAPER_PATTERN_DOT_R        0x3a
-#define CFG_WALLPAPER_PATTERN_DOT_G        0xb5
-#define CFG_WALLPAPER_PATTERN_DOT_B        0x5e
-#define CFG_WALLPAPER_PATTERN_GRID_SPACING 24
-#define CFG_WALLPAPER_PATTERN_DOT_RADIUS   1
+#define CFG_MOD_SUPER                RIVER_SEAT_V1_MODIFIERS_MOD4  // Super key
+#define CFG_MOD_SHIFT                RIVER_SEAT_V1_MODIFIERS_SHIFT // Shift key
 
-#define CFG_WALLPAPER_BLUR_RADIUS          12
-#define CFG_WALLPAPER_BLUR_PASSES          2
-#define CFG_WALLPAPER_BLUR_TOP_INSET       8
-#endif
+#define CFG_BIND(MODS, KEY, ACTION)  {MODS, KEY, ACTION, NULL},
 
-#define CFG_KB_LAYOUTS                 "us,no" // comma-separated keyboard layouts
+#define CFG_SPAWN_BIND(MODS, KEY, CMD)                                         \
+    {MODS, KEY, ACTION_SPAWN, (const char *const[]){CMD}},
+
+// Spaces key
+#define CFG_SPACEKEY(KEY, N)                                                   \
+    CFG_BIND(CFG_MOD_SUPER, KEY, ACTION_SPACE_##N)                             \
+    CFG_BIND(CFG_MOD_SUPER | CFG_MOD_SHIFT, KEY, ACTION_MOVE_TO_SPACE_##N)
+
+#define CFG_KEYBINDS                                                           \
+    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_Return, CFG_CMD_TERMINAL)            \
+    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F2, CFG_CMD_TERMINAL)                \
+    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F3, CFG_CMD_BROWSER)                 \
+    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F4, CFG_CMD_IDE)                     \
+    CFG_BIND(CFG_MOD_SUPER, XKB_KEY_q, ACTION_CLOSE)                           \
+    CFG_BIND(CFG_MOD_SUPER, XKB_KEY_f, ACTION_FOCUS_NEXT)                      \
+    CFG_BIND(CFG_MOD_SUPER, XKB_KEY_l, ACTION_CYCLE_LAYOUT)                    \
+    CFG_BIND(CFG_MOD_SUPER, XKB_KEY_r, ACTION_EXIT)                            \
+    CFG_SPACEKEY(XKB_KEY_1, 1)                                                 \
+    CFG_SPACEKEY(XKB_KEY_2, 2)                                                 \
+    CFG_SPACEKEY(XKB_KEY_3, 3)                                                 \
+    CFG_SPACEKEY(XKB_KEY_4, 4)                                                 \
+    CFG_SPACEKEY(XKB_KEY_5, 5)                                                 \
+    CFG_SPACEKEY(XKB_KEY_6, 6)                                                 \
+    CFG_SPACEKEY(XKB_KEY_7, 7)                                                 \
+    CFG_SPACEKEY(XKB_KEY_8, 8)                                                 \
+    CFG_SPACEKEY(XKB_KEY_9, 9)                                                 \
+    CFG_SPACEKEY(XKB_KEY_0, 10)
+
+#define CFG_POINTER_BINDS                                                      \
+    {CFG_MOD_SUPER, BTN_LEFT, ACTION_MOVE, NULL}, {                            \
+        CFG_MOD_SUPER, BTN_RIGHT, ACTION_RESIZE, NULL                          \
+    }
 
 // grp:alt_shift_toggle | grp:alt_space_toggle | grp:ctrl_shift_toggle |
 // grp:win_space_toggle | grp:alt_caps_toggle
+#define CFG_KB_LAYOUTS                 "us,no" // comma-separated layouts
 #define CFG_KB_OPTIONS                 "grp:alt_space_toggle" // XKB options
-
-#define CFG_TERMINAL                   {"foot", NULL}
 
 // -1 current | 0 disabled | 1 enabled
 #define CFG_LIBINPUT_TAP_STATE         1
@@ -77,5 +98,23 @@
 #define CFG_ANIM_CURVE_OPEN            {0.00, 0.00, 0.20, 1.00}
 #define CFG_ANIM_CURVE_CLOSE           {0.40, 0.00, 1.00, 1.00}
 #define CFG_ANIM_CURVE_SPACE           {0.25, 0.10, 0.25, 1.00}
+
+#ifdef WALLPAPER
+#define CFG_WALLPAPER_PATH                 ".local/share/nullspace/wallpaper.ppm"
+#define CFG_WALLPAPER_TOPBAR_FADE_H        42
+
+#define CFG_WALLPAPER_PATTERN_BG_R         0x12
+#define CFG_WALLPAPER_PATTERN_BG_G         0x12
+#define CFG_WALLPAPER_PATTERN_BG_B         0x12
+#define CFG_WALLPAPER_PATTERN_DOT_R        0x3a
+#define CFG_WALLPAPER_PATTERN_DOT_G        0xb5
+#define CFG_WALLPAPER_PATTERN_DOT_B        0x5e
+#define CFG_WALLPAPER_PATTERN_GRID_SPACING 24
+#define CFG_WALLPAPER_PATTERN_DOT_RADIUS   1
+
+#define CFG_WALLPAPER_BLUR_RADIUS          12
+#define CFG_WALLPAPER_BLUR_PASSES          2
+#define CFG_WALLPAPER_BLUR_TOP_INSET       8
+#endif
 
 #endif // CONFIG_H

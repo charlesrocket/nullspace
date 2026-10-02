@@ -14,33 +14,11 @@
 #include <wayland-util.h>
 #include <xkbcommon/xkbcommon-keysyms.h>
 
-#define SUPER RIVER_SEAT_V1_MODIFIERS_MOD4
-#define SHIFT RIVER_SEAT_V1_MODIFIERS_SHIFT
-
-static const char *const cmd_terminal[] = CFG_TERMINAL;
-
-#define SPACEKEY(KEY, N)                                                       \
-    {SUPER, KEY, ACTION_SPACE_##N, NULL},                                      \
-        {SUPER | SHIFT, KEY, ACTION_MOVE_TO_SPACE_##N, NULL},
-
-const struct KeyDef cfg_keybinds[] = {
-    {SUPER, XKB_KEY_Return,        ACTION_SPAWN, cmd_terminal},
-    {SUPER,      XKB_KEY_q,        ACTION_CLOSE,         NULL},
-    {SUPER,      XKB_KEY_f,   ACTION_FOCUS_NEXT,         NULL},
-    {SUPER,      XKB_KEY_l, ACTION_CYCLE_LAYOUT,         NULL},
-    {SUPER,      XKB_KEY_r,         ACTION_EXIT,         NULL},
-
-    SPACEKEY(XKB_KEY_1, 1) SPACEKEY(XKB_KEY_2, 2) SPACEKEY(XKB_KEY_3, 3)
-        SPACEKEY(XKB_KEY_4, 4) SPACEKEY(XKB_KEY_5, 5) SPACEKEY(XKB_KEY_6, 6)
-            SPACEKEY(XKB_KEY_7, 7) SPACEKEY(XKB_KEY_8, 8) SPACEKEY(XKB_KEY_9, 9)
-                SPACEKEY(XKB_KEY_0, 10)
-};
-
+const struct KeyDef cfg_keybinds[] = {CFG_KEYBINDS};
 const size_t cfg_keybinds_len = sizeof(cfg_keybinds) / sizeof(cfg_keybinds[0]);
-
 const struct PointerDef cfg_pointer_binds[] = {
-    {SUPER,  BTN_LEFT,   ACTION_MOVE, NULL},
-    {SUPER, BTN_RIGHT, ACTION_RESIZE, NULL},
+    {CFG_MOD_SUPER,  BTN_LEFT,   ACTION_MOVE, NULL},
+    {CFG_MOD_SUPER, BTN_RIGHT, ACTION_RESIZE, NULL},
 };
 
 const size_t cfg_pointer_binds_len =
