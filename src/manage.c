@@ -651,14 +651,19 @@ struct Window *focus_stack_top(void) {
 }
 
 struct Window *window_next(struct Window *window) {
-    if (wl_list_empty(&wm.windows)) { return NULL; }
+    struct wl_list *sentinel = &wm.windows;
+    struct wl_list *stop = window ? &window->link : sentinel;
+    struct wl_list *cur = stop->next;
 
-    struct wl_list *start = (window != NULL) ? &window->link : &wm.windows;
-    struct wl_list *cur = start->next;
+    while (cur != stop) {
+        if (cur == sentinel) {
+            cur = cur->next;
+            continue;
+        }
 
-    while (cur != &wm.windows) {
         struct Window *w = wl_container_of(cur, w, link);
         if (!w->closed && !w->space_hidden) { return w; }
+
         cur = cur->next;
     }
 
