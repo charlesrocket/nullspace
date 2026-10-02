@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.1] - 2026-10-02
+
+### Bug Fixes
+
+- Set animations via ipc
+- Destroy `node`
+- Sanitize wallpaper path
+- Update focus switch
+
+### Refactor
+
+- Move `main()`
+- Move `Seat`
+- Move `LibinputConfig`
+- Move `WallpaperConfig`
+- Move management structs
+- Rename animation functions
+- Move binding structs
+- Rename main output getter
+
 ## [0.1.0] - 2026-09-30
 
 ### Bug Fixes
