@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <wayland-util.h>
 
 void output_maybe_destroy(struct Output *output) {
     if (!output->removed) { return; }

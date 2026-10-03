@@ -1,5 +1,6 @@
 #include "input.h"
 
+#include "actions.h"
 #include "config.h"
 #include "manage.h"
 
@@ -11,6 +12,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <wayland-client-core.h>
+#include <wayland-client-protocol.h>
 #include <wayland-util.h>
 #include <xkbcommon/xkbcommon-keysyms.h>
 

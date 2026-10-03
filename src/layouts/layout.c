@@ -1,6 +1,7 @@
 #include "layout.h"
 
 #include "../manage.h"
+#include "../output.h"
 #include "horizontal.h"
 #include "vertical.h"
 
@@ -8,6 +9,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <wayland-util.h>
 
 static void output_usable_area(
     struct Output *output, int32_t *x, int32_t *y, int32_t *w, int32_t *h

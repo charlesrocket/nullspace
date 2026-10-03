@@ -1,17 +1,30 @@
 #include "manage.h"
 
+#include "animation.h"
+#include "config.h"
 #include "input.h"
 #include "ipc.h"
 #include "keymap.h"
-#include "layouts/horizontal.h"
 #include "layouts/layout.h"
-#include "layouts/vertical.h"
+#include "output.h"
+#include "seat.h"
 #ifdef WALLPAPER
 #include "wallpaper.h"
 #endif
 
+#include <river-input-management-v1-client-protocol.h>
+#include <river-layer-shell-v1-client-protocol.h>
 #include <river-libinput-config-v1-client-protocol.h>
+#include <river-window-management-v1-client-protocol.h>
+#include <river-xkb-bindings-v1-client-protocol.h>
+#include <river-xkb-config-v1-client-protocol.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/event.h>
+#include <wayland-client-core.h>
+#include <wayland-util.h>
 
 struct river_window_manager_v1 *window_manager_v1;
 struct river_input_manager_v1 *input_manager_v1;

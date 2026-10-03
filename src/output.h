@@ -9,6 +9,7 @@
 #include <river-window-management-v1-client-protocol.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <wayland-util.h>
 
 struct Output {
     struct river_output_v1 *obj;

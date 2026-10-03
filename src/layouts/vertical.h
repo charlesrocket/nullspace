@@ -3,6 +3,8 @@
 
 #include "layout.h"
 
+#include <stddef.h>
+
 void vertical_tile(
     struct LayoutWindow *lw, size_t n, const struct LayoutParams *p
 );

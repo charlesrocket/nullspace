@@ -1,10 +1,14 @@
 #include "seat.h"
 
+#include "actions.h"
 #include "input.h"
 #include "ipc.h"
+#include "layouts/layout.h"
 #include "manage.h"
 
+#include <river-layer-shell-v1-client-protocol.h>
 #include <river-window-management-v1-client-protocol.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>

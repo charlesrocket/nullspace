@@ -2,11 +2,8 @@
 #define NULLSPACE_H
 
 #include "animation.h"
-#include "config.h"
 #include "input.h"
-#include "layouts/horizontal.h"
 #include "layouts/layout.h"
-#include "layouts/vertical.h"
 #include "output.h"
 #include "seat.h"
 #ifdef WALLPAPER
@@ -14,21 +11,18 @@
 #endif
 
 #include <dev/evdev/input-event-codes.h>
-#include <errno.h>
 #include <river-input-management-v1-client-protocol.h>
 #include <river-layer-shell-v1-client-protocol.h>
 #include <river-libinput-config-v1-client-protocol.h>
+#include <river-window-management-v1-client-protocol.h>
 #include <river-xkb-bindings-v1-client-protocol.h>
 #include <river-xkb-config-v1-client-protocol.h>
-#include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 #include <wayland-client-core.h>
 #include <wayland-client-protocol.h>
+#include <wayland-util.h>
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include <xkbcommon/xkbcommon.h>
 

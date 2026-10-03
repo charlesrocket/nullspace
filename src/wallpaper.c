@@ -19,6 +19,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <wayland-client-protocol.h>
+#include <wayland-util.h>
 
 #define MAX_DIMENSION 32768
 #define PPM_TOKEN_MAX 12

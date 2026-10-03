@@ -2,6 +2,9 @@
 
 #include "layout.h"
 
+#include <stddef.h>
+#include <stdint.h>
+
 static struct LayoutParams
 effective_params(const struct LayoutParams *p, size_t n) {
     struct LayoutParams e = *p;

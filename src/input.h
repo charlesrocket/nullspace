@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <wayland-client-core.h>
+#include <wayland-util.h>
 #include <xkbcommon/xkbcommon.h>
 
 struct Seat;

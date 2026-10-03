@@ -1,13 +1,29 @@
 #include "input.h"
 #include "ipc.h"
 #include "keymap.h"
-#include "layouts/horizontal.h"
-#include "layouts/layout.h"
-#include "layouts/vertical.h"
 #include "manage.h"
 #ifdef WALLPAPER
 #include "wallpaper.h"
 #endif
+
+#include <errno.h>
+#include <river-input-management-v1-client-protocol.h>
+#include <river-layer-shell-v1-client-protocol.h>
+#include <river-libinput-config-v1-client-protocol.h>
+#include <river-window-management-v1-client-protocol.h>
+#include <river-xkb-bindings-v1-client-protocol.h>
+#include <river-xkb-config-v1-client-protocol.h>
+#include <signal.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/event.h>
+#include <sys/signal.h>
+#include <time.h>
+#include <unistd.h>
+#include <wayland-client-core.h>
+#include <wayland-client-protocol.h>
 
 static void
 input_manager_handle_finished(void *data, struct river_input_manager_v1 *obj) {}
