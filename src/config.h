@@ -82,7 +82,7 @@
 #define CFG_LIBINPUT_SCROLL_METHOD     -1
 
 // 0 disabled | 1 enabled
-#define CFG_ANIMATIONS                 1
+#define CFG_ANIMATIONS                 true
 
 #define CFG_ANIM_DURATION_MOVE         160
 #define CFG_ANIM_DURATION_OPEN         200

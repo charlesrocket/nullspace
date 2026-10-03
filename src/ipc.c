@@ -383,8 +383,8 @@ static void emit_config(struct IpcClient *c) {
     emit_bool(c, "center_overspread", wm.center_overspread);
     emit_bool(c, "center_when_single_stack", wm.center_when_single_stack);
 
-    emit_int(c, "animations_enabled", wm.animations.enabled);
-    emit_int(c, "animations_open_from_top", wm.animations.open_from_top);
+    emit_bool(c, "animations_enabled", wm.animations.enabled);
+    emit_bool(c, "animations_open_from_top", wm.animations.open_from_top);
     emit_int(c, "animations_duration_move", wm.animations.duration_move);
     emit_int(c, "animations_duration_open", wm.animations.duration_open);
     emit_int(c, "animations_duration_close", wm.animations.duration_close);
