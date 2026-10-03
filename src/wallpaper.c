@@ -171,22 +171,19 @@ read_whole_file(const char *path, uint8_t **out_data, size_t *out_size) {
     struct stat st;
 
     if (fstat(fd, &st) < 0) {
-        fprintf(
-            stderr, "Wallpaper: fstat('%s') failed: %s\n", path, strerror(errno)
-        );
-
+        log_warn("fstat('%s') failed: %s", path, strerror(errno));
         close(fd);
         return false;
     }
 
     if (!S_ISREG(st.st_mode)) {
-        fprintf(stderr, "Wallpaper: '%s' is not a regular file\n", path);
+        log_warn("'%s' is not a regular file", path);
         close(fd);
         return false;
     }
 
     if (st.st_size <= 0) {
-        fprintf(stderr, "Wallpaper: '%s' is empty\n", path);
+        log_warn("'%s' is empty", path);
         close(fd);
         return false;
     }
@@ -205,11 +202,7 @@ read_whole_file(const char *path, uint8_t **out_data, size_t *out_size) {
 
         if (n < 0) {
             if (errno == EINTR) { continue; }
-            fprintf(
-                stderr, "Wallpaper: read('%s') failed: %s\n", path,
-                strerror(errno)
-            );
-
+            log_warn("read('%s') failed: %s", path, strerror(errno));
             free(data);
             close(fd);
             return false;
@@ -222,7 +215,7 @@ read_whole_file(const char *path, uint8_t **out_data, size_t *out_size) {
     close(fd);
 
     if (got != size) {
-        fprintf(stderr, "Wallpaper: short read on '%s'\n", path);
+        log_warn("short read on '%s'", path);
         free(data);
         return false;
     }
@@ -250,7 +243,7 @@ ppm_load(const char *path, uint8_t **out_rgba, int *out_w, int *out_h) {
 
     if (ppm_buf_token(&b, token, sizeof(token)) != 0
         || strcmp(token, "P6") != 0) {
-        fprintf(stderr, "Wallpaper: '%s' is not a binary PPM (P6)\n", path);
+        log_warn("'%s' is not a binary PPM (P6)", path);
         free(filebuf);
         return false;
     }
@@ -258,16 +251,15 @@ ppm_load(const char *path, uint8_t **out_rgba, int *out_w, int *out_h) {
     int width, height, maxval;
     if (!ppm_buf_read_int(&b, &width) || !ppm_buf_read_int(&b, &height)
         || !ppm_buf_read_int(&b, &maxval)) {
-        fprintf(stderr, "Wallpaper: malformed PPM header in '%s'\n", path);
+        log_warn("malformed PPM header in '%s'", path);
         free(filebuf);
         return false;
     }
 
     if (width <= 0 || height <= 0 || maxval != 255) {
-        fprintf(
-            stderr,
-            "Wallpaper: unsupported PPM in '%s' (w=%d h=%d maxval=%d, "
-            "only maxval=255 supported)\n",
+        log_warn(
+            "unsupported PPM in '%s' (w=%d h=%d maxval=%d, "
+            "only maxval=255 supported)",
             path, width, height, maxval
         );
 
@@ -276,9 +268,9 @@ ppm_load(const char *path, uint8_t **out_rgba, int *out_w, int *out_h) {
     }
 
     if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
-        fprintf(
-            stderr, "Wallpaper: '%s' is too large (%dx%d, max %d)\n", path,
-            width, height, MAX_DIMENSION
+        log_warn(
+            "'%s' is too large (%dx%d, max %d)", path, width, height,
+            MAX_DIMENSION
         );
 
         free(filebuf);
@@ -287,14 +279,14 @@ ppm_load(const char *path, uint8_t **out_rgba, int *out_w, int *out_h) {
 
     size_t pixel_count = (size_t)width * (size_t)height;
     if (pixel_count > SIZE_MAX / 4) {
-        fprintf(stderr, "Wallpaper: '%s' dimensions overflow\n", path);
+        log_warn("'%s' dimensions overflow", path);
         free(filebuf);
         return false;
     }
 
     size_t needed = pixel_count * 3;
     if (needed > b.size - b.pos) {
-        fprintf(stderr, "Wallpaper: truncated pixel data in '%s'\n", path);
+        log_warn("truncated pixel data in '%s'", path);
         free(filebuf);
         return false;
     }
@@ -463,16 +455,12 @@ static int create_shm_fd(size_t size) {
     int fd = shm_open(SHM_ANON, O_RDWR | O_CREAT, 0600);
 
     if (fd < 0) {
-        fprintf(
-            stderr, "Wallpaper: shm_open(SHM_ANON) failed: %s\n",
-            strerror(errno)
-        );
-
+        log_warn("shm_open(SHM_ANON) failed: %s", strerror(errno));
         return -1;
     }
 
     if (ftruncate(fd, (off_t)size) < 0) {
-        fprintf(stderr, "Wallpaper: ftruncate failed: %s\n", strerror(errno));
+        log_warn("ftruncate failed: %s", strerror(errno));
         close(fd);
         return -1;
     }
@@ -548,14 +536,14 @@ wpo_alloc_buffer(struct Wallpaper *wlp, struct WallpaperOutput *wpo) {
 
     uint8_t *data = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (data == MAP_FAILED) {
-        fprintf(stderr, "Wallpaper: mmap failed: %s\n", strerror(errno));
+        log_warn("mmap failed: %s", strerror(errno));
         close(fd);
         return false;
     }
 
     struct wl_shm_pool *pool = wl_shm_create_pool(wlp->shm, fd, (int32_t)size);
     if (pool == NULL) {
-        fprintf(stderr, "Wallpaper: wl_shm_create_pool failed\n");
+        log_warn("wl_shm_create_pool failed");
         munmap(data, size);
         close(fd);
         return false;
@@ -570,7 +558,7 @@ wpo_alloc_buffer(struct Wallpaper *wlp, struct WallpaperOutput *wpo) {
     close(fd);
 
     if (buffer == NULL) {
-        fprintf(stderr, "Wallpaper: wl_shm_pool_create_buffer failed\n");
+        log_warn("wl_shm_pool_create_buffer failed");
         munmap(data, size);
         return false;
     }

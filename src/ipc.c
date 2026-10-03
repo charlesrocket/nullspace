@@ -1320,9 +1320,8 @@ static void accept_client(void) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) return;
 
             if (errno == EMFILE || errno == ENFILE) {
-                fprintf(
-                    stderr,
-                    "IPC: out of file descriptors (%s); shedding connection\n",
+                log_warn(
+                    "out of file descriptors (%s) (shedding connection)",
                     errno == EMFILE ? "EMFILE" : "ENFILE"
                 );
 
@@ -1343,7 +1342,7 @@ static void accept_client(void) {
                 return;
             }
 
-            fprintf(stderr, "IPC: accept() failed: %s\n", strerror(errno));
+            log_warn("accept() failed: %s", strerror(errno));
             return;
         }
 
@@ -1375,7 +1374,7 @@ static void register_server_in_kq(void) {
     EV_SET(&ev, (uintptr_t)ipc_server_fd, EVFILT_READ, EV_ADD, 0, 0, NULL);
 
     if (kevent(ipc_kq, &ev, 1, NULL, 0, NULL) < 0) {
-        fprintf(stderr, "IPC: kevent(server) failed: %s\n", strerror(errno));
+        log_warn("kevent(server) failed: %s", strerror(errno));
     }
 }
 
@@ -1457,7 +1456,7 @@ static int make_socket(void) {
     addr.sun_family = AF_UNIX;
 
     if (strlen(ipc_path) >= sizeof(addr.sun_path)) {
-        fprintf(stderr, "IPC: socket path too long: %s\n", ipc_path);
+        log_warn("socket path too long: %s", ipc_path);
         return -1;
     }
 
@@ -1467,14 +1466,12 @@ static int make_socket(void) {
 
     ipc_reserve_fd = open("/dev/null", O_RDONLY | O_CLOEXEC);
     if (ipc_reserve_fd < 0) {
-        fprintf(
-            stderr, "IPC: reserve open(/dev/null) failed: %s\n", strerror(errno)
-        );
+        log_warn("reserve open(/dev/null) failed: %s", strerror(errno));
     }
 
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd < 0) {
-        fprintf(stderr, "IPC: socket() failed: %s\n", strerror(errno));
+        log_warn("socket() failed: %s", strerror(errno));
         if (ipc_reserve_fd >= 0) {
             close(ipc_reserve_fd);
             ipc_reserve_fd = -1;
@@ -1498,11 +1495,7 @@ static int make_socket(void) {
                 ipc_reserve_fd = -1;
             }
 
-            fprintf(
-                stderr, "IPC: another instance is already listening on %s\n",
-                ipc_path
-            );
-
+            log_warn("another instance is already listening on %s", ipc_path);
             return -1;
         }
 
@@ -1512,10 +1505,7 @@ static int make_socket(void) {
     unlink(ipc_path);
 
     if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        fprintf(
-            stderr, "IPC: bind(%s) failed: %s\n", ipc_path, strerror(errno)
-        );
-
+        log_warn("bind(%s) failed: %s", ipc_path, strerror(errno));
         close(fd);
         if (ipc_reserve_fd >= 0) {
             close(ipc_reserve_fd);
@@ -1526,13 +1516,11 @@ static int make_socket(void) {
     }
 
     if (chmod(ipc_path, 0600) < 0) {
-        fprintf(
-            stderr, "IPC: chmod(%s) failed: %s\n", ipc_path, strerror(errno)
-        );
+        log_warn("chmod(%s) failed: %s", ipc_path, strerror(errno));
     }
 
     if (listen(fd, SOMAXCONN) < 0) {
-        fprintf(stderr, "IPC: listen() failed: %s\n", strerror(errno));
+        log_warn("listen() failed: %s", strerror(errno));
         close(fd);
         unlink(ipc_path);
         if (ipc_reserve_fd >= 0) {
