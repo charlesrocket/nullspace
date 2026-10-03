@@ -11,6 +11,7 @@ project(
 
 cc = meson.get_compiler('c')
 add_project_arguments(cc.get_supported_arguments([
+  '-DVERSION="@0@"'.format(meson.project_version()),
   '-D_POSIX_C_SOURCE=200809L',
   '-Wshadow',
   '-Wconversion',
@@ -21,8 +22,8 @@ add_project_arguments(cc.get_supported_arguments([
   '-Wredundant-decls',
   '-Wswitch',
   '-Wunreachable-code',
-  '-Wno-extra-semi',
-  '-Wno-unused-parameter',
+  '-Wextra-semi',
+  '-Wunused',
 ]), language: 'c')
 
 if get_option('wallpaper')

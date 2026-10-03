@@ -27,6 +27,9 @@
 #include <wayland-client-protocol.h>
 
 #define LOG_TOPIC ""
+#ifndef VERSION
+#define VERSION "dirty"
+#endif
 
 static void
 input_manager_handle_finished(void *data, struct river_input_manager_v1 *obj) {}
@@ -251,6 +254,8 @@ static int run_event_loop(struct wl_display *display) {
 
 int main(void) {
     log_init();
+    log_info("starting nullspace %s", VERSION);
+
     struct wl_display *display = wl_display_connect(NULL);
 
     if (display == NULL) {

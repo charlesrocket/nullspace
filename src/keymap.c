@@ -48,17 +48,22 @@ void keymap_init(void) {
 
 static void
 keyboard_handle_removed(void *data, struct river_xkb_keyboard_v1 *obj) {
+    (void)obj;
+
     struct Keyboard *kb = data;
     river_xkb_keyboard_v1_destroy(kb->obj);
     wl_list_remove(&kb->link);
     free(kb);
 }
 
-// Ignored events
 static void keyboard_handle_input_device(
     void *data, struct river_xkb_keyboard_v1 *obj,
     struct river_input_device_v1 *device
-) {}
+) {
+    (void)data;
+    (void)obj;
+    (void)device;
+}
 
 static void keyboard_handle_layout(
     void *data, struct river_xkb_keyboard_v1 *obj, uint32_t index,
@@ -75,19 +80,30 @@ static void keyboard_handle_layout(
 
 static void keyboard_handle_capslock_enabled(
     void *data, struct river_xkb_keyboard_v1 *obj
-) {}
+) {
+    (void)data;
+    (void)obj;
+}
 
 static void keyboard_handle_capslock_disabled(
     void *data, struct river_xkb_keyboard_v1 *obj
-) {}
+) {
+    (void)data;
+    (void)obj;
+}
 
 static void
 keyboard_handle_numlock_enabled(void *data, struct river_xkb_keyboard_v1 *obj) {
+    (void)data;
+    (void)obj;
 }
 
 static void keyboard_handle_numlock_disabled(
     void *data, struct river_xkb_keyboard_v1 *obj
-) {}
+) {
+    (void)data;
+    (void)obj;
+}
 
 static const struct river_xkb_keyboard_v1_listener keyboard_listener = {
     .removed = keyboard_handle_removed,
@@ -100,6 +116,9 @@ static const struct river_xkb_keyboard_v1_listener keyboard_listener = {
 };
 
 static void keymap_handle_success(void *data, struct river_xkb_keymap_v1 *obj) {
+    (void)data;
+    (void)obj;
+
     keymap_ready = true;
 
     struct Keyboard *kb;
@@ -111,6 +130,8 @@ static void keymap_handle_success(void *data, struct river_xkb_keymap_v1 *obj) {
 static void keymap_handle_failure(
     void *data, struct river_xkb_keymap_v1 *obj, const char *error_msg
 ) {
+    (void)data;
+
     log_warn("compositor rejected keymap: %s", error_msg);
     keymap_ready = false;
     river_xkb_keymap_v1_destroy(obj);
@@ -204,6 +225,9 @@ static struct river_xkb_keymap_v1 *keymap_create(void) {
 
 static void
 config_handle_finished(void *data, struct river_xkb_config_v1 *obj) {
+    (void)data;
+    (void)obj;
+
     river_xkb_config_v1_destroy(obj);
     xkb_config = NULL;
 }
@@ -212,6 +236,9 @@ static void config_handle_xkb_keyboard(
     void *data, struct river_xkb_config_v1 *obj,
     struct river_xkb_keyboard_v1 *id
 ) {
+    (void)data;
+    (void)obj;
+
     struct Keyboard *kb = calloc(1, sizeof(struct Keyboard));
     if (kb == NULL) {
         river_xkb_keyboard_v1_destroy(id);
