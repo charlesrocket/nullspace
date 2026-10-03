@@ -1,6 +1,6 @@
 src_files = files(
   'main.c',
-  'manage.c',
+  'manager.c',
   'layouts/layout.c',
   'layouts/vertical.c',
   'layouts/horizontal.c',
@@ -10,6 +10,7 @@ src_files = files(
   'input.c',
   'output.c',
   'animation.c',
+  'log.c',
 )
 
 if get_option('wallpaper')

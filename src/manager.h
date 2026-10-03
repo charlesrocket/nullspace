@@ -1,5 +1,5 @@
-#ifndef NULLSPACE_H
-#define NULLSPACE_H
+#ifndef MANAGER_H
+#define MANAGER_H
 
 #include "animation.h"
 #include "input.h"
@@ -167,4 +167,4 @@ bool wm_set_wallpaper_path(const char *path);
 void wm_invalidate_wallpaper(void);
 #endif
 
-#endif // NULLSPACE_H
+#endif // MANAGER_H

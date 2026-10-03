@@ -1,7 +1,8 @@
 #include "input.h"
 #include "ipc.h"
 #include "keymap.h"
-#include "manage.h"
+#include "log.h"
+#include "manager.h"
 #ifdef WALLPAPER
 #include "wallpaper.h"
 #endif
@@ -24,6 +25,8 @@
 #include <unistd.h>
 #include <wayland-client-core.h>
 #include <wayland-client-protocol.h>
+
+#define LOG_TOPIC ""
 
 static void
 input_manager_handle_finished(void *data, struct river_input_manager_v1 *obj) {}
@@ -99,10 +102,9 @@ static const struct river_window_manager_v1_listener wm_listener = {
 
 static int run_event_loop(struct wl_display *display) {
     int wl_fd = wl_display_get_fd(display);
-
     int kq = kqueue();
     if (kq < 0) {
-        perror("kqueue");
+        log_err("kqueue: %s", strerror(errno));
         return 1;
     }
 
@@ -110,13 +112,13 @@ static int run_event_loop(struct wl_display *display) {
 
     EV_SET(&ev, (uintptr_t)wl_fd, EVFILT_READ, EV_ADD, 0, 0, NULL);
     if (kevent(kq, &ev, 1, NULL, 0, NULL) < 0) {
-        perror("kevent(wayland)");
+        log_err("kevent(wayland): %s", strerror(errno));
+
         close(kq);
         return 1;
     }
 
     ipc_kqueue_register(kq);
-
     bool wl_write_armed = false;
 
     struct kevent events[256];
@@ -124,7 +126,7 @@ static int run_event_loop(struct wl_display *display) {
     while (true) {
         while (wl_display_prepare_read(display) != 0) {
             if (wl_display_dispatch_pending(display) < 0) {
-                fprintf(stderr, "Dispatch failed\n");
+                log_err("dispatch failed");
                 close(kq);
                 return 1;
             }
@@ -136,9 +138,10 @@ static int run_event_loop(struct wl_display *display) {
                     EV_SET(
                         &ev, (uintptr_t)wl_fd, EVFILT_WRITE, EV_ADD, 0, 0, NULL
                     );
+
                     if (kevent(kq, &ev, 1, NULL, 0, NULL) < 0) {
                         wl_display_cancel_read(display);
-                        perror("kevent(wayland write)");
+                        log_err("kevent(wayland write): %s", strerror(errno));
                         close(kq);
                         return 1;
                     }
@@ -155,7 +158,7 @@ static int run_event_loop(struct wl_display *display) {
             EV_SET(&ev, (uintptr_t)wl_fd, EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
             if (kevent(kq, &ev, 1, NULL, 0, NULL) < 0 && errno != ENOENT) {
                 wl_display_cancel_read(display);
-                perror("kevent(wayland write delete)");
+                log_err("kevent(wayland write delete): %s", strerror(errno));
                 close(kq);
                 return 1;
             }
@@ -176,7 +179,7 @@ static int run_event_loop(struct wl_display *display) {
             }
 
             wl_display_cancel_read(display);
-            perror("kevent");
+            log_err("kevent: %s", strerror(errno));
             close(kq);
             return 1;
         }
@@ -204,14 +207,18 @@ static int run_event_loop(struct wl_display *display) {
                         if (kevent(kq, &ev, 1, NULL, 0, NULL) < 0
                             && errno != ENOENT) {
                             wl_display_cancel_read(display);
-                            perror("kevent(wayland write delete)");
+                            log_err(
+                                "kevent(wayland write delete): %s",
+                                strerror(errno)
+                            );
                             close(kq);
                             return 1;
                         }
+
                         wl_write_armed = false;
                     } else if (errno != EAGAIN) {
                         wl_display_cancel_read(display);
-                        perror("wl_display_flush");
+                        log_err("wl_display_flush: %s", strerror(errno));
                         close(kq);
                         return 1;
                     }
@@ -225,7 +232,7 @@ static int run_event_loop(struct wl_display *display) {
 
         if (wl_readable) {
             if (wl_display_read_events(display) < 0) {
-                perror("wl_display_read_events");
+                log_err("wl_display_read_events: %s", strerror(errno));
                 close(kq);
                 return 1;
             }
@@ -235,7 +242,7 @@ static int run_event_loop(struct wl_display *display) {
         }
 
         if (wl_display_dispatch_pending(display) < 0) {
-            fprintf(stderr, "Dispatch failed\n");
+            log_err("dispatch failed: %s", strerror(errno));
             close(kq);
             return 1;
         }
@@ -243,10 +250,11 @@ static int run_event_loop(struct wl_display *display) {
 }
 
 int main(void) {
+    log_init();
     struct wl_display *display = wl_display_connect(NULL);
 
     if (display == NULL) {
-        fprintf(stderr, "Failed to connect to Wayland server\n");
+        log_err("failed to connect to Wayland server");
         return 1;
     }
 
@@ -265,62 +273,37 @@ int main(void) {
     struct wl_registry *registry = wl_display_get_registry(display);
     wl_registry_add_listener(registry, &registry_listener, NULL);
 
-    if (wl_display_roundtrip(display) < 0) {
-        fprintf(stderr, "Roundtrip failed\n");
+    if (wl_display_roundtrip(display) < 0) { // main thread now
+        log_err("roundtrip failed: %s", strerror(errno));
         return 1;
     }
 
     if (window_manager_v1 == NULL || xkb_bindings_v1 == NULL) {
-        fprintf(
-            stderr, "river_window_manager_v1 or river_xkb_bindings_v1 "
-                    "not supported by the Wayland server\n"
-        );
+        log_err("river_window_manager_v1/river_xkb_bindings_v1 not "
+                "supported by the Wayland server");
 
         return 1;
     }
 
     if (layer_shell_v1 == NULL) {
-        fprintf(
-            stderr, "river_layer_shell_v1 not supported by the Wayland "
-                    "server (layer surfaces will be unavailable)\n"
-        );
+        log_warn("river_layer_shell_v1 not supported by the Wayland "
+                 "server (layer surfaces will be unavailable)");
     }
 
     if (compositor == NULL) {
-        fprintf(stderr, "wl_compositor not supported by the Wayland server\n");
+        log_err("wl_compositor not supported by the Wayland server");
         return 1;
     }
 
-    if (shm == NULL) {
-        fprintf(stderr, "wl_shm not supported by the Wayland server\n");
-    }
+    if (shm == NULL) { log_warn("wl_shm not supported by the Wayland server"); }
 
 #ifdef WALLPAPER
     wallpaper_init(&wp, compositor, shm, window_manager_v1);
 
-    if (compositor != NULL && shm != NULL) {
-        const char *wallpaper_path = getenv("NSP_WALLPAPER");
-        char default_path[4096];
-
-        if (wallpaper_path == NULL && wm.wallpaper.path != NULL) {
-            const char *home = getenv("HOME");
-
-            if (home != NULL) {
-                snprintf(
-                    default_path, sizeof(default_path), "%s/%s", home,
-                    wm.wallpaper.path
-                );
-
-                wallpaper_path = default_path;
-            }
-        }
-
-        if (wallpaper_path != NULL) {
-            if (!wallpaper_load_ppm(&wp, wallpaper_path)) {
-                fprintf(stderr, "Wallpaper: using default pattern\n");
-            }
-        }
-    }
+    const char *wallpaper_path = getenv("NSP_WALLPAPER");
+    wm_set_wallpaper_path(
+        wallpaper_path != NULL ? wallpaper_path : wm.wallpaper.path
+    );
 #endif
 
     river_window_manager_v1_add_listener(window_manager_v1, &wm_listener, NULL);

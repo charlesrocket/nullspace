@@ -1,6 +1,6 @@
 #include "output.h"
 
-#include "manage.h"
+#include "manager.h"
 #ifdef WALLPAPER
 #include "wallpaper.h"
 #endif

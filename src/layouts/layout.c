@@ -1,6 +1,6 @@
 #include "layout.h"
 
-#include "../manage.h"
+#include "../manager.h"
 #include "../output.h"
 #include "horizontal.h"
 #include "vertical.h"

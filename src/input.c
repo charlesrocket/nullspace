@@ -2,7 +2,8 @@
 
 #include "actions.h"
 #include "config.h"
-#include "manage.h"
+#include "log.h"
+#include "manager.h"
 
 #include <dev/evdev/input-event-codes.h>
 #include <river-libinput-config-v1-client-protocol.h>
@@ -16,6 +17,8 @@
 #include <wayland-client-protocol.h>
 #include <wayland-util.h>
 #include <xkbcommon/xkbcommon-keysyms.h>
+
+#define LOG_TOPIC "input"
 
 const struct KeyDef cfg_keybinds[] = {CFG_KEYBINDS};
 const size_t cfg_keybinds_len = sizeof(cfg_keybinds) / sizeof(cfg_keybinds[0]);
@@ -53,14 +56,14 @@ static void libinput_result_handle_success(
 static void libinput_result_handle_unsupported(
     void *data, struct river_libinput_result_v1 *obj
 ) {
-    fprintf(stderr, "Input: setting is unsupported by the device, ignored\n");
+    log_warn("setting is unsupported by device (ignored)");
     wl_proxy_destroy((struct wl_proxy *)obj);
 }
 
 static void libinput_result_handle_invalid(
     void *data, struct river_libinput_result_v1 *obj
 ) {
-    fprintf(stderr, "Input: invalid setting (ignored)\n");
+    log_warn("invalid setting (ignored)");
     wl_proxy_destroy((struct wl_proxy *)obj);
 }
 

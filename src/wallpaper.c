@@ -4,7 +4,8 @@
 
 #include "wallpaper.h"
 
-#include "manage.h"
+#include "log.h"
+#include "manager.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -20,6 +21,8 @@
 #include <unistd.h>
 #include <wayland-client-protocol.h>
 #include <wayland-util.h>
+
+#define LOG_TOPIC     "wallpaper"
 
 #define MAX_DIMENSION 32768
 #define PPM_TOKEN_MAX 12
@@ -161,11 +164,7 @@ static bool
 read_whole_file(const char *path, uint8_t **out_data, size_t *out_size) {
     int fd = open(path, O_RDONLY);
     if (fd < 0) {
-        fprintf(
-            stderr, "Wallpaper: failed to open '%s': %s\n", path,
-            strerror(errno)
-        );
-
+        log_warn("failed to open '%s': %s", path, strerror(errno));
         return false;
     }
 
@@ -328,7 +327,12 @@ bool wallpaper_load_ppm(struct Wallpaper *wlp, const char *path) {
     uint8_t *pixels;
     int w, h;
 
-    if (!ppm_load(path, &pixels, &w, &h)) { return false; }
+    if (!ppm_load(path, &pixels, &w, &h)) {
+        log_warn("using default pattern");
+        return false;
+    }
+
+    log_info("loaded '%s'", path);
 
     free(wlp->image_pixels);
 

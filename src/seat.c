@@ -4,7 +4,7 @@
 #include "input.h"
 #include "ipc.h"
 #include "layouts/layout.h"
-#include "manage.h"
+#include "manager.h"
 
 #include <river-layer-shell-v1-client-protocol.h>
 #include <river-window-management-v1-client-protocol.h>

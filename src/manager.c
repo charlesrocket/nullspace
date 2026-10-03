@@ -1,4 +1,4 @@
-#include "manage.h"
+#include "manager.h"
 
 #include "animation.h"
 #include "config.h"
@@ -6,6 +6,7 @@
 #include "ipc.h"
 #include "keymap.h"
 #include "layouts/layout.h"
+#include "log.h"
 #include "output.h"
 #include "seat.h"
 #ifdef WALLPAPER
@@ -25,6 +26,8 @@
 #include <sys/event.h>
 #include <wayland-client-core.h>
 #include <wayland-util.h>
+
+#define LOG_TOPIC "wm"
 
 struct river_window_manager_v1 *window_manager_v1;
 struct river_input_manager_v1 *input_manager_v1;
@@ -684,7 +687,7 @@ struct Window *window_next(struct Window *window) {
 }
 
 void wm_handle_unavailable(void *data, struct river_window_manager_v1 *obj) {
-    fprintf(stderr, "error: another window manager is already running\n");
+    log_err("another window manager is already running");
     exit(1);
 }
 

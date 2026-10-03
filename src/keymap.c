@@ -5,6 +5,7 @@
 #include "keymap.h"
 
 #include "config.h"
+#include "log.h"
 
 #include <fcntl.h>
 #include <river-input-management-v1-client-protocol.h>
@@ -20,6 +21,8 @@
 #include <wayland-client-protocol.h>
 #include <wayland-util.h>
 #include <xkbcommon/xkbcommon.h>
+
+#define LOG_TOPIC "keymap"
 
 struct Keyboard {
     struct river_xkb_keyboard_v1 *obj;
@@ -108,8 +111,7 @@ static void keymap_handle_success(void *data, struct river_xkb_keymap_v1 *obj) {
 static void keymap_handle_failure(
     void *data, struct river_xkb_keymap_v1 *obj, const char *error_msg
 ) {
-    fprintf(stderr, "Keymap: compositor rejected keymap: %s\n", error_msg);
-
+    log_warn("compositor rejected keymap: %s", error_msg);
     keymap_ready = false;
     river_xkb_keymap_v1_destroy(obj);
     xkb_keymap = NULL;
@@ -151,10 +153,9 @@ static struct river_xkb_keymap_v1 *keymap_create(void) {
     );
 
     if (keymap == NULL) {
-        fprintf(
-            stderr,
-            "Keymap: failed to compile layouts \"%s\" with options \"%s\"\n",
-            CFG_KB_LAYOUTS, CFG_KB_OPTIONS
+        log_err(
+            "failed to compile layouts '%s' with options '%s'", CFG_KB_LAYOUTS,
+            CFG_KB_OPTIONS
         );
 
         return NULL;
@@ -167,21 +168,21 @@ static struct river_xkb_keymap_v1 *keymap_create(void) {
     xkb_keymap_unref(keymap);
 
     if (str == NULL) {
-        fprintf(stderr, "Keymap: failed to serialize keymap\n");
+        log_err("failed to serialize keymap");
         return NULL;
     }
 
     size_t len = strlen(str) + 1;
     int fd = keymap_shm_create(len);
     if (fd < 0) {
-        fprintf(stderr, "Keymap: failed to create shm fd\n");
+        log_err("failed to create shm fd");
         free(str);
         return NULL;
     }
 
     void *map = mmap(NULL, len, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (map == MAP_FAILED) {
-        fprintf(stderr, "Keymap: mmap failed\n");
+        log_err("mmap failed");
         close(fd);
         free(str);
         return NULL;
@@ -232,7 +233,7 @@ static const struct river_xkb_config_v1_listener config_listener = {
 
 void keymap_bind(struct wl_registry *registry, uint32_t name) {
     if (xkb_context == NULL) {
-        fprintf(stderr, "Keymap: no xkb context\n");
+        log_warn("no xkb context");
         return;
     }
 

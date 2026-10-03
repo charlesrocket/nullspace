@@ -6,10 +6,12 @@
 
 #include "input.h"
 #include "layouts/layout.h"
-#include "manage.h"
+#include "log.h"
+#include "manager.h"
 
 #include <errno.h>
 #include <fcntl.h>
+#include <river-window-management-v1-client-protocol.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -26,6 +28,7 @@
 #include <unistd.h>
 #include <wayland-util.h>
 
+#define LOG_TOPIC       "ipc"
 #define IPC_INBUF_SIZE  4096
 #define IPC_OUTBUF_SOFT 4096
 #define IPC_OUTBUF_HARD (256 * 1024)
@@ -1552,14 +1555,14 @@ void ipc_init(void) {
 
     ipc_server_fd = make_socket();
     if (ipc_server_fd < 0) {
-        fprintf(stderr, "IPC: disabled (socket unavailable)\n");
+        log_warn("socket unavailable");
         ipc_server_fd = -1;
         return;
     }
 
     ipc_initialized = true;
     register_server_in_kq();
-    fprintf(stderr, "IPC: listening on %s\n", ipc_path);
+    log_info("listening on '%s'", ipc_path);
 }
 
 void ipc_destroy(void) {
