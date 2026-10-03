@@ -1540,6 +1540,8 @@ static int make_socket(void) {
         return -1;
     }
 
+    setenv("NULLSPACE_INSTANCE_SIGNATURE", ipc_path, 1);
+
     return fd;
 }
 
@@ -1563,6 +1565,7 @@ void ipc_init(void) {
 void ipc_destroy(void) {
     if (!ipc_initialized) return;
 
+    unsetenv("NULLSPACE_INSTANCE_SIGNATURE");
     ipc_kq = -1;
 
     struct IpcClient *c, *tmp;
@@ -1584,6 +1587,5 @@ void ipc_destroy(void) {
 
     if (ipc_path[0]) unlink(ipc_path);
     ipc_path[0] = '\0';
-
     ipc_initialized = false;
 }
