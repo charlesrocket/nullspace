@@ -54,6 +54,8 @@ static void layer_shell_output_handle_non_exclusive_area(
     void *data, struct river_layer_shell_output_v1 *obj, int32_t x, int32_t y,
     int32_t width, int32_t height
 ) {
+    (void)obj;
+
     struct Output *output = data;
     output->area_x = x;
     output->area_y = y;
@@ -177,6 +179,8 @@ static void window_maybe_destroy(struct Window *window) {
 }
 
 static void window_handle_closed(void *data, struct river_window_v1 *obj) {
+    (void)obj;
+
     struct Window *window = data;
     if (window->closed) { return; }
     window->closed = true;
@@ -186,6 +190,8 @@ static void window_handle_closed(void *data, struct river_window_v1 *obj) {
 static void window_handle_dimensions(
     void *data, struct river_window_v1 *obj, int32_t width, int32_t height
 ) {
+    (void)obj;
+
     struct Window *window = data;
     window->width = width;
     window->height = height;
@@ -195,6 +201,8 @@ static void window_handle_dimensions(
 static void window_handle_pointer_move_requested(
     void *data, struct river_window_v1 *obj, struct river_seat_v1 *river_seat
 ) {
+    (void)obj;
+
     struct Window *window = data;
     window->pointer_move_requested = river_seat_v1_get_user_data(river_seat);
 }
@@ -203,6 +211,9 @@ static void window_handle_pointer_resize_requested(
     void *data, struct river_window_v1 *obj, struct river_seat_v1 *river_seat,
     uint32_t edges
 ) {
+    ;
+    (void)obj;
+
     struct Window *window = data;
 
     window->pointer_resize_requested = river_seat_v1_get_user_data(river_seat);
@@ -213,11 +224,20 @@ static void window_handle_pointer_resize_requested(
 static void window_handle_dimensions_hint(
     void *data, struct river_window_v1 *obj, int32_t min_width,
     int32_t min_height, int32_t max_width, int32_t max_height
-) {}
+) {
+    (void)data;
+    (void)obj;
+    (void)min_width;
+    (void)min_height;
+    (void)max_width;
+    (void)max_height;
+}
 
 static void window_handle_app_id(
     void *data, struct river_window_v1 *obj, const char *app_id
 ) {
+    (void)obj;
+
     struct Window *window = data;
     const char *new_id = app_id ? app_id : "";
     const char *old_id = window->app_id ? window->app_id : "";
@@ -231,6 +251,8 @@ static void window_handle_app_id(
 static void window_handle_title(
     void *data, struct river_window_v1 *obj, const char *title
 ) {
+    (void)obj;
+
     struct Window *window = data;
     const char *new_title = title ? title : "";
     const char *old_title = window->title ? window->title : "";
@@ -243,45 +265,86 @@ static void window_handle_title(
 
 static void window_handle_parent(
     void *data, struct river_window_v1 *obj, struct river_window_v1 *parent
-) {}
+) {
+    (void)data;
+    (void)obj;
+    (void)parent;
+}
 
 static void window_handle_decoration_hint(
     void *data, struct river_window_v1 *obj, uint32_t hint
-) {}
+) {
+    (void)data;
+    (void)obj;
+    (void)hint;
+}
 
 static void window_handle_show_window_menu_requested(
     void *data, struct river_window_v1 *obj, int32_t x, int32_t y
-) {}
+) {
+    (void)data;
+    (void)obj;
+    (void)x;
+    (void)y;
+}
 
 static void
-window_handle_maximize_requested(void *data, struct river_window_v1 *obj) {}
+window_handle_maximize_requested(void *data, struct river_window_v1 *obj) {
+    (void)data;
+    (void)obj;
+}
 
 static void
-window_handle_unmaximize_requested(void *data, struct river_window_v1 *obj) {}
+window_handle_unmaximize_requested(void *data, struct river_window_v1 *obj) {
+    (void)data;
+    (void)obj;
+}
 
 static void window_handle_fullscreen_requested(
     void *data, struct river_window_v1 *obj,
     struct river_output_v1 *river_output
-) {}
+) {
+    (void)data;
+    (void)obj;
+    (void)river_output;
+}
 
 static void window_handle_exit_fullscreen_requested(
     void *data, struct river_window_v1 *obj
-) {}
+) {
+    (void)data;
+    (void)obj;
+}
 
 static void
-window_handle_minimize_requested(void *data, struct river_window_v1 *obj) {}
+window_handle_minimize_requested(void *data, struct river_window_v1 *obj) {
+    (void)data;
+    (void)obj;
+}
 
 static void window_handle_unreliable_pid(
     void *data, struct river_window_v1 *obj, int32_t unreliable_pid
-) {}
+) {
+    (void)data;
+    (void)obj;
+    (void)unreliable_pid;
+}
 
 static void window_handle_presentation_hint(
     void *data, struct river_window_v1 *obj, uint32_t hint
-) {}
+) {
+    (void)data;
+    (void)obj;
+    (void)hint;
+}
 
 static void window_handle_identifier(
     void *data, struct river_window_v1 *obj, const char *identifier
-) {}
+) {
+    (void)data;
+    (void)obj;
+    (void)identifier;
+}
 
 const struct river_window_v1_listener river_window_listener = {
     .closed = window_handle_closed,
@@ -636,15 +699,24 @@ static void wm_maybe_set_default_output(void) {
 
 static void layer_shell_seat_handle_focus_exclusive(
     void *data, struct river_layer_shell_seat_v1 *obj
-) {}
+) {
+    (void)data;
+    (void)obj;
+}
 
 static void layer_shell_seat_handle_focus_non_exclusive(
     void *data, struct river_layer_shell_seat_v1 *obj
-) {}
+) {
+    (void)data;
+    (void)obj;
+}
 
 static void layer_shell_seat_handle_focus_none(
     void *data, struct river_layer_shell_seat_v1 *obj
-) {}
+) {
+    (void)data;
+    (void)obj;
+}
 
 static const struct river_layer_shell_seat_v1_listener
     river_layer_shell_seat_listener = {
@@ -687,15 +759,24 @@ struct Window *window_next(struct Window *window) {
 }
 
 void wm_handle_unavailable(void *data, struct river_window_manager_v1 *obj) {
+    (void)data;
+    (void)obj;
+
     log_err("another window manager is already running");
     exit(1);
 }
 
 void wm_handle_finished(void *data, struct river_window_manager_v1 *obj) {
+    (void)data;
+    (void)obj;
+
     exit(0);
 }
 
 void wm_handle_manage_start(void *data, struct river_window_manager_v1 *obj) {
+    (void)data;
+    (void)obj;
+
     struct Output *output, *output_tmp;
     wl_list_for_each_safe(output, output_tmp, &wm.outputs, link) {
         // Destroy closed windows and removed outputs/seats.
@@ -745,6 +826,9 @@ void wm_handle_manage_start(void *data, struct river_window_manager_v1 *obj) {
 }
 
 void wm_handle_render_start(void *data, struct river_window_manager_v1 *obj) {
+    (void)data;
+    (void)obj;
+
     bool has_window = false;
     struct Window *window;
     wl_list_for_each(window, &wm.windows, link) {
@@ -786,6 +870,9 @@ void wm_handle_window(
     void *data, struct river_window_manager_v1 *obj,
     struct river_window_v1 *river_window
 ) {
+    (void)data;
+    (void)obj;
+
     struct Window *window = calloc(1, sizeof(struct Window));
     window->obj = river_window;
     window->node = river_window_v1_get_node(window->obj);
@@ -801,16 +888,24 @@ void wm_handle_window(
 }
 
 void wm_handle_session_locked(void *data, struct river_window_manager_v1 *obj) {
+    (void)data;
+    (void)obj;
 }
 
 void wm_handle_session_unlocked(
     void *data, struct river_window_manager_v1 *obj
-) {}
+) {
+    (void)data;
+    (void)obj;
+}
 
 void wm_handle_output(
     void *data, struct river_window_manager_v1 *obj,
     struct river_output_v1 *river_output
 ) {
+    (void)data;
+    (void)obj;
+
     struct Output *output = calloc(1, sizeof(struct Output));
     output->obj = river_output;
 
@@ -836,6 +931,9 @@ void wm_handle_seat(
     void *data, struct river_window_manager_v1 *obj,
     struct river_seat_v1 *river_seat
 ) {
+    (void)data;
+    (void)obj;
+
     struct Seat *seat = calloc(1, sizeof(struct Seat));
     seat->obj = river_seat;
     seat->new = true;

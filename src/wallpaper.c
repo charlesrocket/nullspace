@@ -487,6 +487,8 @@ void wallpaper_invalidate(struct Wallpaper *wlp) {
 }
 
 static void buffer_handle_release(void *data, struct wl_buffer *buffer) {
+    (void)buffer;
+
     struct WallpaperOutput *wpo = data;
     wpo->busy = false;
 

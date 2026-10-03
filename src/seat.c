@@ -15,11 +15,19 @@
 #include <wayland-util.h>
 
 static void
-seat_handle_wl_seat(void *data, struct river_seat_v1 *obj, uint32_t id) {}
+seat_handle_wl_seat(void *data, struct river_seat_v1 *obj, uint32_t id) {
+    (void)obj;
+    (void)data;
+    (void)id;
+}
 static void seat_handle_shell_surface_interaction(
     void *data, struct river_seat_v1 *obj,
     struct river_shell_surface_v1 *river_shell_surface
-) {}
+) {
+    (void)obj;
+    (void)data;
+    (void)river_shell_surface;
+}
 
 void seat_maybe_destroy(struct Seat *seat) {
     if (!seat->removed) { return; }
@@ -261,6 +269,8 @@ void seat_manage(struct Seat *seat) {
 }
 
 static void seat_handle_removed(void *data, struct river_seat_v1 *obj) {
+    (void)obj;
+
     struct Seat *seat = data;
     seat->removed = true;
 }
@@ -268,11 +278,15 @@ static void seat_handle_removed(void *data, struct river_seat_v1 *obj) {
 static void seat_handle_pointer_enter(
     void *data, struct river_seat_v1 *obj, struct river_window_v1 *river_window
 ) {
+    (void)obj;
+
     struct Seat *seat = data;
     seat->hovered = river_window_v1_get_user_data(river_window);
 }
 
 static void seat_handle_pointer_leave(void *data, struct river_seat_v1 *obj) {
+    (void)obj;
+
     struct Seat *seat = data;
     seat->hovered = NULL;
 }
@@ -280,6 +294,8 @@ static void seat_handle_pointer_leave(void *data, struct river_seat_v1 *obj) {
 static void seat_handle_window_interaction(
     void *data, struct river_seat_v1 *obj, struct river_window_v1 *river_window
 ) {
+    (void)obj;
+
     struct Seat *seat = data;
     seat->interacted = river_window_v1_get_user_data(river_window);
 }
@@ -287,12 +303,16 @@ static void seat_handle_window_interaction(
 static void seat_handle_op_delta(
     void *data, struct river_seat_v1 *obj, int32_t dx, int32_t dy
 ) {
+    (void)obj;
+
     struct Seat *seat = data;
     seat->op_dx = dx;
     seat->op_dy = dy;
 }
 
 static void seat_handle_op_release(void *data, struct river_seat_v1 *obj) {
+    (void)obj;
+
     struct Seat *seat = data;
     seat->op_release = true;
 }
@@ -300,6 +320,8 @@ static void seat_handle_op_release(void *data, struct river_seat_v1 *obj) {
 static void seat_handle_pointer_position(
     void *data, struct river_seat_v1 *obj, int32_t x, int32_t y
 ) {
+    (void)obj;
+
     struct Seat *seat = data;
     seat->pointer_x = x;
     seat->pointer_y = y;

@@ -34,13 +34,18 @@ extern struct river_xkb_bindings_v1 *xkb_bindings_v1;
 
 static void
 xkb_binding_handle_pressed(void *data, struct river_xkb_binding_v1 *obj) {
+    (void)obj;
+
     struct XkbBinding *binding = data;
     binding->seat->pending_action = binding->action;
     binding->seat->pending_arg = binding->arg;
 }
 
 static void
-xkb_binding_handle_released(void *data, struct river_xkb_binding_v1 *obj) {}
+xkb_binding_handle_released(void *data, struct river_xkb_binding_v1 *obj) {
+    (void)data;
+    (void)obj;
+}
 
 static const struct river_xkb_binding_v1_listener xkb_binding_listener = {
     .pressed = xkb_binding_handle_pressed,
@@ -50,12 +55,16 @@ static const struct river_xkb_binding_v1_listener xkb_binding_listener = {
 static void libinput_result_handle_success(
     void *data, struct river_libinput_result_v1 *obj
 ) {
+    (void)data;
+
     wl_proxy_destroy((struct wl_proxy *)obj);
 }
 
 static void libinput_result_handle_unsupported(
     void *data, struct river_libinput_result_v1 *obj
 ) {
+    (void)data;
+
     log_warn("setting is unsupported by device (ignored)");
     wl_proxy_destroy((struct wl_proxy *)obj);
 }
@@ -63,6 +72,8 @@ static void libinput_result_handle_unsupported(
 static void libinput_result_handle_invalid(
     void *data, struct river_libinput_result_v1 *obj
 ) {
+    (void)data;
+
     log_warn("invalid setting (ignored)");
     wl_proxy_destroy((struct wl_proxy *)obj);
 }
@@ -117,6 +128,8 @@ static void xkb_binding_create(struct Seat *seat, const struct KeyDef *def) {
 static void pointer_binding_handle_pressed(
     void *data, struct river_pointer_binding_v1 *obj
 ) {
+    ;
+    (void)obj;
     struct PointerBinding *binding = data;
     binding->seat->pending_action = binding->action;
     binding->seat->pending_arg = binding->arg;
@@ -124,7 +137,10 @@ static void pointer_binding_handle_pressed(
 
 static void pointer_binding_handle_released(
     void *data, struct river_pointer_binding_v1 *obj
-) {}
+) {
+    (void)data;
+    (void)obj;
+}
 
 static const struct river_pointer_binding_v1_listener pointer_binding_listener =
     {
@@ -199,6 +215,8 @@ void libinput_init(void) { wl_list_init(&devices); }
 static void device_handle_tap_support(
     void *data, struct river_libinput_device_v1 *obj, int32_t finger_count
 ) {
+    (void)data;
+
     if (wm.libinput.tap_state < 0) { return; }
     if (finger_count < 1) { return; }
 
@@ -210,6 +228,8 @@ static void device_handle_tap_support(
 static void device_handle_natural_scroll_support(
     void *data, struct river_libinput_device_v1 *obj, int32_t supported
 ) {
+    (void)data;
+
     if (wm.libinput.natural_scroll < 0) { return; }
     if (!supported) { return; }
 
@@ -221,6 +241,8 @@ static void device_handle_natural_scroll_support(
 static void device_handle_left_handed_support(
     void *data, struct river_libinput_device_v1 *obj, int32_t supported
 ) {
+    (void)data;
+
     if (wm.libinput.left_handed < 0) { return; }
     if (!supported) { return; }
 
@@ -232,6 +254,8 @@ static void device_handle_left_handed_support(
 static void device_handle_middle_emulation_support(
     void *data, struct river_libinput_device_v1 *obj, int32_t supported
 ) {
+    (void)data;
+
     if (wm.libinput.middle_emulation < 0) { return; }
     if (!supported) { return; }
 
@@ -243,6 +267,8 @@ static void device_handle_middle_emulation_support(
 static void device_handle_dwt_support(
     void *data, struct river_libinput_device_v1 *obj, int32_t supported
 ) {
+    (void)data;
+
     if (wm.libinput.dwt < 0) { return; }
     if (!supported) { return; }
 
@@ -254,6 +280,9 @@ static void device_handle_dwt_support(
 static void device_handle_drag_default(
     void *data, struct river_libinput_device_v1 *obj, uint32_t state
 ) {
+    (void)data;
+    (void)state;
+
     if (wm.libinput.drag < 0) { return; }
 
     libinput_result_track(
@@ -264,6 +293,9 @@ static void device_handle_drag_default(
 static void device_handle_drag_lock_default(
     void *data, struct river_libinput_device_v1 *obj, uint32_t state
 ) {
+    (void)data;
+    (void)state;
+
     if (wm.libinput.drag_lock < 0) { return; }
 
     libinput_result_track(river_libinput_device_v1_set_drag_lock(
@@ -274,6 +306,8 @@ static void device_handle_drag_lock_default(
 static void device_handle_three_finger_drag_support(
     void *data, struct river_libinput_device_v1 *obj, int32_t finger_count
 ) {
+    (void)data;
+
     if (wm.libinput.three_finger_drag < 0) { return; }
     if (finger_count < 3) { return; }
 
@@ -285,6 +319,8 @@ static void device_handle_three_finger_drag_support(
 static void device_handle_accel_profiles_support(
     void *data, struct river_libinput_device_v1 *obj, uint32_t profiles
 ) {
+    (void)data;
+
     if (wm.libinput.accel_profile < 0) { return; }
 
     uint32_t profile = (uint32_t)wm.libinput.accel_profile;
@@ -298,6 +334,9 @@ static void device_handle_accel_profiles_support(
 static void device_handle_accel_speed_default(
     void *data, struct river_libinput_device_v1 *obj, struct wl_array *speed
 ) {
+    (void)data;
+    (void)speed;
+
     if (wm.libinput.accel_speed <= -2.0f) { return; }
 
     struct wl_array buf;
@@ -318,6 +357,8 @@ static void device_handle_accel_speed_default(
 static void device_handle_click_method_support(
     void *data, struct river_libinput_device_v1 *obj, uint32_t methods
 ) {
+    (void)data;
+
     if (wm.libinput.click_method < 0) { return; }
 
     uint32_t method = (uint32_t)wm.libinput.click_method;
@@ -330,6 +371,8 @@ static void device_handle_click_method_support(
 static void device_handle_scroll_method_support(
     void *data, struct river_libinput_device_v1 *obj, uint32_t methods
 ) {
+    (void)data;
+
     if (wm.libinput.scroll_method < 0) { return; }
 
     uint32_t method = (uint32_t)wm.libinput.scroll_method;
@@ -342,6 +385,9 @@ static void device_handle_scroll_method_support(
 
 static void
 device_handle_removed(void *data, struct river_libinput_device_v1 *obj) {
+    ;
+    (void)obj;
+
     struct LibinputDevice *dev = data;
 
     river_libinput_device_v1_destroy(dev->obj);
@@ -351,23 +397,42 @@ device_handle_removed(void *data, struct river_libinput_device_v1 *obj) {
 
 static void device_ignore_i32(
     void *data, struct river_libinput_device_v1 *obj, int32_t value
-) {}
+) {
+    (void)data;
+    (void)obj;
+    (void)value;
+}
 
 static void device_ignore_u32(
     void *data, struct river_libinput_device_v1 *obj, uint32_t value
-) {}
+) {
+    (void)data;
+    (void)obj;
+    (void)value;
+}
 
 static void device_ignore_array(
     void *data, struct river_libinput_device_v1 *obj, struct wl_array *value
-) {}
+) {
+    (void)data;
+    (void)obj;
+    (void)value;
+}
 
 static void device_ignore_object(
     void *data, struct river_libinput_device_v1 *obj,
     struct river_input_device_v1 *value
-) {}
+) {
+    (void)data;
+    (void)obj;
+    (void)value;
+}
 
 static void
-device_handle_done(void *data, struct river_libinput_device_v1 *obj) {}
+device_handle_done(void *data, struct river_libinput_device_v1 *obj) {
+    (void)data;
+    (void)obj;
+}
 
 static const struct river_libinput_device_v1_listener device_listener = {
     .removed = device_handle_removed,
@@ -444,6 +509,8 @@ static const struct river_libinput_device_v1_listener device_listener = {
 
 static void
 config_handle_finished(void *data, struct river_libinput_config_v1 *obj) {
+    (void)data;
+
     struct LibinputDevice *dev, *tmp;
     wl_list_for_each_safe(dev, tmp, &devices, link) {
         wl_list_remove(&dev->link);
@@ -459,6 +526,9 @@ static void config_handle_libinput_device(
     void *data, struct river_libinput_config_v1 *obj,
     struct river_libinput_device_v1 *id
 ) {
+    (void)data;
+    (void)obj;
+
     struct LibinputDevice *dev = calloc(1, sizeof(struct LibinputDevice));
     if (dev == NULL) {
         river_libinput_device_v1_destroy(id);

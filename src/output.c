@@ -33,6 +33,9 @@ void output_maybe_destroy(struct Output *output) {
 }
 
 void output_handle_removed(void *data, struct river_output_v1 *obj) {
+    ;
+    (void)obj;
+
     struct Output *output = data;
     output->removed = true;
 }
@@ -40,11 +43,18 @@ void output_handle_removed(void *data, struct river_output_v1 *obj) {
 // Ignored events
 void output_handle_wl_output(
     void *data, struct river_output_v1 *obj, uint32_t name
-) {}
+) {
+    (void)data;
+    (void)obj;
+    (void)name;
+}
 
 void output_handle_position(
     void *data, struct river_output_v1 *obj, int32_t x, int32_t y
 ) {
+    ;
+    (void)obj;
+
     struct Output *output = data;
     output->pos_x = x;
     output->pos_y = y;
@@ -59,6 +69,8 @@ void output_handle_position(
 void output_handle_dimensions(
     void *data, struct river_output_v1 *obj, int32_t width, int32_t height
 ) {
+    (void)obj;
+
     struct Output *output = data;
     output->width = width;
     output->height = height;

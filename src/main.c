@@ -32,12 +32,19 @@
 #endif
 
 static void
-input_manager_handle_finished(void *data, struct river_input_manager_v1 *obj) {}
+input_manager_handle_finished(void *data, struct river_input_manager_v1 *obj) {
+    (void)obj;
+    (void)data;
+}
 
 static void input_manager_handle_input_device(
     void *data, struct river_input_manager_v1 *obj,
     struct river_input_device_v1 *device
-) {}
+) {
+    (void)obj;
+    (void)device;
+    (void)data;
+}
 
 static const struct river_input_manager_v1_listener input_manager_listener = {
     .finished = input_manager_handle_finished,
@@ -48,6 +55,8 @@ static void handle_global(
     void *data, struct wl_registry *registry, uint32_t name,
     const char *interface, uint32_t version
 ) {
+    (void)data;
+
     if (strcmp(interface, river_window_manager_v1_interface.name) == 0) {
         if (version >= 4) {
             window_manager_v1 = wl_registry_bind(
@@ -84,7 +93,11 @@ static void handle_global(
 }
 
 static void
-handle_global_remove(void *data, struct wl_registry *registry, uint32_t name) {}
+handle_global_remove(void *data, struct wl_registry *registry, uint32_t name) {
+    (void)name;
+    (void)data;
+    (void)registry;
+}
 
 static const struct wl_registry_listener registry_listener = {
     .global = handle_global,
