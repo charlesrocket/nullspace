@@ -22,6 +22,16 @@
 #include <wayland-util.h>
 #include <xkbcommon/xkbcommon.h>
 
+#if defined(__has_feature)
+#if __has_feature(memory_sanitizer)
+#define MSAN 1
+#endif
+#endif
+
+#ifdef MSAN
+#include <sanitizer/msan_interface.h>
+#endif
+
 #define LOG_TOPIC "keymap"
 
 struct Keyboard {
@@ -168,10 +178,16 @@ static struct river_xkb_keymap_v1 *keymap_create(void) {
     names.layout = CFG_KB_LAYOUTS;
     names.options = CFG_KB_OPTIONS;
 
+#ifdef MSAN
+    __msan_scoped_disable_interceptor_checks();
+#endif
     struct xkb_keymap *keymap = xkb_keymap_new_from_names2(
         xkb_context, &names, XKB_KEYMAP_FORMAT_TEXT_V2,
         XKB_KEYMAP_COMPILE_NO_FLAGS
     );
+#ifdef MSAN
+    __msan_scoped_enable_interceptor_checks();
+#endif
 
     if (keymap == NULL) {
         log_err(
@@ -193,6 +209,9 @@ static struct river_xkb_keymap_v1 *keymap_create(void) {
         return NULL;
     }
 
+#ifdef MSAN
+    __msan_unpoison_string(str);
+#endif
     size_t len = strlen(str) + 1;
     int fd = keymap_shm_create(len);
     if (fd < 0) {
