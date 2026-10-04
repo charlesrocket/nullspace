@@ -137,7 +137,7 @@ static int run_event_loop(struct wl_display *display) {
     ipc_kqueue_register(kq);
     bool wl_write_armed = false;
 
-    struct kevent events[256];
+    struct kevent events[256] = {0};
 
     while (true) {
         while (wl_display_prepare_read(display) != 0) {
