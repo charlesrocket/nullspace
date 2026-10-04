@@ -113,9 +113,7 @@ bool layouts_is_tiled(enum Layout layout) {
     return false;
 }
 
-static void floating_layout(
-    struct LayoutWindow *lw, size_t n, const struct LayoutParams *p
-) {
+static void floating_layout(struct LayoutWindow *lw, size_t n) {
     for (size_t i = 0; i < n; i++) {
         struct Window *w = lw[i].window;
 
@@ -149,7 +147,7 @@ size_t layouts_compute(
         case LAYOUT_HORIZONTAL_MONOCLE: horizontal_monocle(out, n, p); return n;
         case LAYOUT_HORIZONTAL_GRID: horizontal_grid(out, n, p); return n;
 
-        case LAYOUT_FLOATING: floating_layout(out, n, p); return n;
+        case LAYOUT_FLOATING: floating_layout(out, n); return n;
     }
 
     return 0;

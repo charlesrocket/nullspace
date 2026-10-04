@@ -48,10 +48,7 @@ static void strip_h(
     }
 }
 
-// Master/stack vertical split. Returns the
-// virtual master boundary measured from p->y.
-static int32_t
-master_boundary(const struct LayoutParams *g, int32_t inner_h, size_t nstack) {
+static int32_t master_boundary(const struct LayoutParams *g, size_t nstack) {
     if (nstack == 0) { return g->height - 2 * g->gap_outer_v + g->gap_inner_v; }
 
     return (int32_t)((float)(g->height + g->gap_inner_v) * g->mfact);
@@ -73,9 +70,9 @@ void vertical_tile(
     if (inner_w < 1) { inner_w = 1; }
     if (inner_h < 1) { inner_h = 1; }
 
-    int32_t mh = master_boundary(&g, inner_h, nstack);
-
+    int32_t mh = master_boundary(&g, nstack);
     int32_t master_h = mh - g.gap_inner_v;
+
     if (master_h < 1) { master_h = 1; }
 
     strip_h(
