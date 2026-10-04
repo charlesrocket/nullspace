@@ -26,6 +26,13 @@ add_project_arguments(cc.get_supported_arguments([
   '-Wunused',
 ]), language: 'c')
 
+if get_option('asan')
+  add_project_arguments([
+    '-fno-omit-frame-pointer',
+    '-fno-optimize-sibling-calls',
+  ], language: 'c')
+endif
+
 if get_option('wallpaper')
   add_project_arguments('-DWALLPAPER', language: 'c')
 endif
