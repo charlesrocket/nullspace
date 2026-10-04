@@ -226,7 +226,13 @@ static struct river_xkb_keymap_v1 *keymap_create(void) {
 static void
 config_handle_finished(void *data, struct river_xkb_config_v1 *obj) {
     (void)data;
-    (void)obj;
+
+    struct Keyboard *kb, *tmp;
+    wl_list_for_each_safe(kb, tmp, &keyboards, link) {
+        wl_list_remove(&kb->link);
+        river_xkb_keyboard_v1_destroy(kb->obj);
+        free(kb);
+    }
 
     river_xkb_config_v1_destroy(obj);
     xkb_config = NULL;
@@ -275,12 +281,25 @@ void keymap_bind(struct wl_registry *registry, uint32_t name) {
 }
 
 void keymap_destroy(void) {
-    if (xkb_config != NULL) { river_xkb_config_v1_stop(xkb_config); }
+    struct Keyboard *kb, *tmp;
+    wl_list_for_each_safe(kb, tmp, &keyboards, link) {
+        wl_list_remove(&kb->link);
+        river_xkb_keyboard_v1_destroy(kb->obj);
+        free(kb);
+    }
+
+    if (xkb_config != NULL) {
+        river_xkb_config_v1_stop(xkb_config);
+        xkb_config = NULL;
+    }
 
     if (xkb_keymap != NULL) {
         river_xkb_keymap_v1_destroy(xkb_keymap);
         xkb_keymap = NULL;
     }
 
-    if (xkb_context != NULL) { xkb_context_unref(xkb_context); }
+    if (xkb_context != NULL) {
+        xkb_context_unref(xkb_context);
+        xkb_context = NULL;
+    }
 }
