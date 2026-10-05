@@ -961,7 +961,7 @@ void wm_init(void) {
     wl_list_init(&wm.focus_stack);
     wl_list_init(&wm.seats);
 
-    wm.current_space = 0;
+    wm.current_space = 1;
     wm.default_output = NULL;
 
     wm.layout = CFG_DEFAULT_LAYOUT;
