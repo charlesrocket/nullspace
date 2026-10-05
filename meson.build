@@ -50,6 +50,9 @@ generated = wl_mod.scan_xml(
   'protocol/river-layer-shell-v1.xml',
 )
 
+inc_public = include_directories('include')
+
+subdir('contrib')
 subdir('src')
 
 exe = executable(
@@ -59,5 +62,6 @@ exe = executable(
     wayland_client,
     xkbcommon,
   ],
+  include_directories: inc_public,
   install: true,
 )

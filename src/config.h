@@ -9,8 +9,8 @@
 #define CFG_GAP_INNER_V              8
 #define CFG_SMART_GAPS               false
 
-#define CFG_NMASTERS                 1
-#define CFG_MFACT                    0.55f
+#define CFG_NMASTERS                 2
+#define CFG_MFACT                    0.5f
 #define CFG_CENTER_OVERSPREAD        false
 #define CFG_CENTER_WHEN_SINGLE_STACK true
 
@@ -49,7 +49,7 @@
     CFG_SPACEKEY(XKB_KEY_7, 7)                                                 \
     CFG_SPACEKEY(XKB_KEY_8, 8)                                                 \
     CFG_SPACEKEY(XKB_KEY_9, 9)                                                 \
-    CFG_SPACEKEY(XKB_KEY_0, 10)
+    CFG_SPACEKEY(XKB_KEY_0, 0)
 
 #define CFG_POINTER_BINDS                                                      \
     {CFG_MOD_SUPER, BTN_LEFT, ACTION_MOVE, NULL}, {                            \

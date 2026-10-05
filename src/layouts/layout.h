@@ -1,22 +1,11 @@
 #ifndef LAYOUT_H
 #define LAYOUT_H
 
+#include "layouts.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-
-enum Layout {
-    LAYOUT_VERTICAL_TILE,
-    LAYOUT_VERTICAL_GRID,
-
-    LAYOUT_HORIZONTAL_TILE,
-    LAYOUT_HORIZONTAL_RIGHT_TILE,
-    LAYOUT_HORIZONTAL_MONOCLE,
-    LAYOUT_HORIZONTAL_GRID,
-
-    LAYOUT_FLOATING,
-    LAYOUT_LAST = LAYOUT_FLOATING,
-};
 
 struct Window;
 

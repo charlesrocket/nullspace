@@ -5,6 +5,8 @@
 #include "ipc.h"
 
 #include "input.h"
+#include "keys.h"
+#include "layouts.h"
 #include "layouts/layout.h"
 #include "log.h"
 #include "manager.h"
@@ -82,34 +84,21 @@ static void set_nosigpipe(int fd) {
 }
 
 static const char *layout_name(enum Layout l) {
-    switch (l) {
-        case LAYOUT_VERTICAL_TILE: return "vtile";
-        case LAYOUT_VERTICAL_GRID: return "vgrid";
-        case LAYOUT_HORIZONTAL_TILE: return "htile";
-        case LAYOUT_HORIZONTAL_RIGHT_TILE: return "hrtile";
-        case LAYOUT_HORIZONTAL_MONOCLE: return "monocle";
-        case LAYOUT_HORIZONTAL_GRID: return "hgrid";
-        case LAYOUT_FLOATING: return "float";
-    }
-
+#define NAME(id, label, desc)                                                  \
+    if ((l) == (id)) return (label);
+    LAYOUTS_TABLE(NAME)
+#undef NAME
     return "?";
 }
 
 static bool parse_layout(const char *s, enum Layout *out) {
-    for (int i = 0; i <= (int)LAYOUT_LAST; i++) {
-        const char *n = layout_name((enum Layout)i);
-        if (strcmp(n, "?") == 0) continue;
-        if (strcmp(s, n) == 0) {
-            *out = (enum Layout)i;
-            return true;
-        }
+#define PARSE(id, label, desc)                                                 \
+    if (strcmp(s, label) == 0) {                                               \
+        *out = (id);                                                           \
+        return true;                                                           \
     }
-
-    if (strcmp(s, "floating") == 0) {
-        *out = LAYOUT_FLOATING;
-        return true;
-    }
-
+    LAYOUTS_TABLE(PARSE)
+#undef PARSE
     return false;
 }
 
@@ -310,7 +299,26 @@ static void reap_dead_clients(void) {
     }
 }
 
+static void resp_cfg_int(struct IpcClient *c, const char *key, long v) {
+    outbuf_printf(c, "CFG %s %ld\n", key, v);
+}
+
+static void resp_cfg_float(struct IpcClient *c, const char *key, float v) {
+    outbuf_printf(c, "CFG %s %g\n", key, (double)v);
+}
+
+static void resp_cfg_bool(struct IpcClient *c, const char *key, bool v) {
+    outbuf_printf(c, "CFG %s %s\n", key, v ? "true" : "false");
+}
+
+static void resp_cfg_str(struct IpcClient *c, const char *key, const char *s) {
+    outbuf_printf(c, "CFG %s ", key);
+    outbuf_quoted(c, s);
+    outbuf_append(c, "\n", 1);
+}
+
 static void resp_ok(struct IpcClient *c) { outbuf_append(c, "OK\n", 3); }
+
 static void resp_ok_int(struct IpcClient *c, long v) {
     outbuf_printf(c, "OK %ld\n", v);
 }
@@ -369,59 +377,34 @@ static void emit_config(struct IpcClient *c) {
     emit_str(c, "layout", layout_name(wm.layout));
     emit_int(c, "current_space", wm.current_space);
     emit_int(c, "space_count", SPACE_COUNT);
-    emit_str(c, "kb_layout", wm.kb_layout ? wm.kb_layout : "");
-
-    emit_int(c, "nmasters", wm.nmasters);
     emit_float(c, "mfact", wm.mfact);
-
-    emit_int(c, "gap_outer_h", wm.tiled_gap_outer_h);
-    emit_int(c, "gap_outer_v", wm.tiled_gap_outer_v);
-    emit_int(c, "gap_inner_h", wm.tiled_gap_inner_h);
-    emit_int(c, "gap_inner_v", wm.tiled_gap_inner_v);
-    emit_bool(c, "smart_gaps", wm.smart_gaps);
-
-    emit_bool(c, "center_overspread", wm.center_overspread);
-    emit_bool(c, "center_when_single_stack", wm.center_when_single_stack);
-
-    emit_bool(c, "animations_enabled", wm.animations.enabled);
-    emit_bool(c, "animations_open_from_top", wm.animations.open_from_top);
-    emit_int(c, "animations_duration_move", wm.animations.duration_move);
-    emit_int(c, "animations_duration_open", wm.animations.duration_open);
-    emit_int(c, "animations_duration_close", wm.animations.duration_close);
-    emit_int(c, "animations_duration_space", wm.animations.duration_space);
-
 #ifdef WALLPAPER
-    emit_int(c, "wallpaper_topbar_fade_h", wm.wallpaper.topbar_fade_h);
     emit_str(c, "wallpaper_path", wm.wallpaper.path ? wm.wallpaper.path : "");
-    emit_int(c, "wallpaper_pattern_bg_r", wm.wallpaper.pattern_bg_r);
-    emit_int(c, "wallpaper_pattern_bg_g", wm.wallpaper.pattern_bg_g);
-    emit_int(c, "wallpaper_pattern_bg_b", wm.wallpaper.pattern_bg_b);
-    emit_int(c, "wallpaper_pattern_dot_r", wm.wallpaper.pattern_dot_r);
-    emit_int(c, "wallpaper_pattern_dot_g", wm.wallpaper.pattern_dot_g);
-    emit_int(c, "wallpaper_pattern_dot_b", wm.wallpaper.pattern_dot_b);
-    emit_int(
-        c, "wallpaper_pattern_grid_spacing", wm.wallpaper.pattern_grid_spacing
-    );
-    emit_int(
-        c, "wallpaper_pattern_dot_radius", wm.wallpaper.pattern_dot_radius
-    );
-    emit_int(c, "wallpaper_blur_radius", wm.wallpaper.blur_radius);
-    emit_int(c, "wallpaper_blur_passes", wm.wallpaper.blur_passes);
-    emit_int(c, "wallpaper_blur_top_inset", wm.wallpaper.blur_top_inset);
 #endif
 
-    emit_int(c, "libinput_tap_state", wm.libinput.tap_state);
-    emit_int(c, "libinput_natural_scroll", wm.libinput.natural_scroll);
-    emit_int(c, "libinput_left_handed", wm.libinput.left_handed);
-    emit_int(c, "libinput_middle_emulation", wm.libinput.middle_emulation);
-    emit_int(c, "libinput_dwt", wm.libinput.dwt);
-    emit_int(c, "libinput_drag", wm.libinput.drag);
-    emit_int(c, "libinput_drag_lock", wm.libinput.drag_lock);
-    emit_int(c, "libinput_three_finger_drag", wm.libinput.three_finger_drag);
-    emit_int(c, "libinput_accel_profile", wm.libinput.accel_profile);
-    emit_float(c, "libinput_accel_speed", wm.libinput.accel_speed);
-    emit_int(c, "libinput_click_method", wm.libinput.click_method);
-    emit_int(c, "libinput_scroll_method", wm.libinput.scroll_method);
+#define IPC_KEY_INT(name, access, after, desc, field, min, max)                \
+    emit_int(c, name, (long)(field));
+#define IPC_KEY_FLOAT(name, access, after, desc, field, min, max)              \
+    emit_float(c, name, (float)(field));
+#define IPC_KEY_BOOL(name, access, after, range, desc, field)                  \
+    emit_bool(c, name, (field));
+#define IPC_KEY_STR(name, access, after, range, desc, field)                   \
+    emit_str(c, name, (field) != NULL ? (field) : "");
+#define IPC_KEY_SPECIAL(name, access, range, desc)
+
+    KEYS_TABLE(
+        IPC_KEY_INT, IPC_KEY_FLOAT, IPC_KEY_BOOL, IPC_KEY_STR, IPC_KEY_SPECIAL
+    )
+
+    KEYS_TABLE_WALLPAPER(
+        IPC_KEY_INT, IPC_KEY_FLOAT, IPC_KEY_BOOL, IPC_KEY_STR, IPC_KEY_SPECIAL
+    )
+
+#undef IPC_KEY_INT
+#undef IPC_KEY_FLOAT
+#undef IPC_KEY_BOOL
+#undef IPC_KEY_STR
+#undef IPC_KEY_SPECIAL
 }
 
 static void emit_spaces(struct IpcClient *c) {
@@ -675,11 +658,105 @@ void ipc_notify_all_state(void) {
     }
 }
 
+static void after_set(enum IpcAfter a) {
+    switch (a) {
+        case IPC_AFTER_NONE: break;
+        case IPC_AFTER_MANAGE: wm_request_manage(); break;
+        case IPC_AFTER_LIBINPUT: libinput_reconfigure(); break;
+        case IPC_AFTER_WALLPAPER:
+#ifdef WALLPAPER
+            wm_invalidate_wallpaper();
+#endif
+            break;
+    }
+}
+
+static void handle_config(struct IpcClient *c) {
+    resp_cfg_str(c, "layout", layout_name(wm.layout));
+    resp_cfg_int(c, "current_space", wm.current_space);
+    resp_cfg_int(c, "space_count", SPACE_COUNT);
+    resp_cfg_float(c, "mfact", wm.mfact);
+#ifdef WALLPAPER
+    resp_cfg_str(
+        c, "wallpaper_path", wm.wallpaper.path ? wm.wallpaper.path : ""
+    );
+#endif
+
+#define IPC_KEY_INT(name, access, after, desc, field, min, max)                \
+    if ((access) & IPC_A_R) resp_cfg_int(c, name, (long)(field));
+#define IPC_KEY_FLOAT(name, access, after, desc, field, min, max)              \
+    if ((access) & IPC_A_R) resp_cfg_float(c, name, (float)(field));
+#define IPC_KEY_BOOL(name, access, after, range, desc, field)                  \
+    if ((access) & IPC_A_R) resp_cfg_bool(c, name, (field));
+#define IPC_KEY_STR(name, access, after, range, desc, field)                   \
+    if ((access) & IPC_A_R)                                                    \
+        resp_cfg_str(c, name, (field) != NULL ? (field) : "");
+
+#define IPC_KEY_SPECIAL(name, access, range, desc)
+
+    KEYS_TABLE(
+        IPC_KEY_INT, IPC_KEY_FLOAT, IPC_KEY_BOOL, IPC_KEY_STR, IPC_KEY_SPECIAL
+    )
+
+    KEYS_TABLE_WALLPAPER(
+        IPC_KEY_INT, IPC_KEY_FLOAT, IPC_KEY_BOOL, IPC_KEY_STR, IPC_KEY_SPECIAL
+    )
+
+#undef IPC_KEY_INT
+#undef IPC_KEY_FLOAT
+#undef IPC_KEY_BOOL
+#undef IPC_KEY_STR
+#undef IPC_KEY_SPECIAL
+
+    resp_ok(c);
+}
+
 static void handle_get(struct IpcClient *c, const char *key, const char *arg) {
-    if (!key) {
-        resp_err(c, "key missing");
+    if (key == NULL) {
+        resp_err(c, "key is missing");
         return;
     }
+
+#define IPC_KEY_INT(name, access, after, desc, field, min, max)                \
+    if (((access) & IPC_A_R) != 0 && strcmp(key, name) == 0) {                 \
+        resp_ok_int(c, (long)(field));                                         \
+        return;                                                                \
+    }
+
+#define IPC_KEY_FLOAT(name, access, after, desc, field, min, max)              \
+    if (((access) & IPC_A_R) != 0 && strcmp(key, name) == 0) {                 \
+        resp_ok_float(c, (float)(field));                                      \
+        return;                                                                \
+    }
+
+#define IPC_KEY_BOOL(name, access, after, range, desc, field)                  \
+    if (((access) & IPC_A_R) != 0 && strcmp(key, name) == 0) {                 \
+        resp_ok_bool(c, (field));                                              \
+        return;                                                                \
+    }
+
+#define IPC_KEY_STR(name, access, after, range, desc, field)                   \
+    if (((access) & IPC_A_R) != 0 && strcmp(key, name) == 0) {                 \
+        const char *s = (field);                                               \
+        resp_ok_str(c, s != NULL ? s : "");                                    \
+        return;                                                                \
+    }
+
+#define IPC_KEY_SPECIAL(name, access, range, desc)
+
+    KEYS_TABLE(
+        IPC_KEY_INT, IPC_KEY_FLOAT, IPC_KEY_BOOL, IPC_KEY_STR, IPC_KEY_SPECIAL
+    )
+
+    KEYS_TABLE_WALLPAPER(
+        IPC_KEY_INT, IPC_KEY_FLOAT, IPC_KEY_BOOL, IPC_KEY_STR, IPC_KEY_SPECIAL
+    )
+
+#undef IPC_KEY_INT
+#undef IPC_KEY_FLOAT
+#undef IPC_KEY_BOOL
+#undef IPC_KEY_STR
+#undef IPC_KEY_SPECIAL
 
     if (!strcmp(key, "layout")) {
         resp_ok_str(c, layout_name(wm.layout));
@@ -696,153 +773,8 @@ static void handle_get(struct IpcClient *c, const char *key, const char *arg) {
         return;
     }
 
-    if (!strcmp(key, "kb_layout")) {
-        resp_ok_str(c, wm.kb_layout ? wm.kb_layout : "");
-        return;
-    }
-
-    if (!strcmp(key, "nmasters")) {
-        resp_ok_int(c, wm.nmasters);
-        return;
-    }
-
     if (!strcmp(key, "mfact")) {
         resp_ok_float(c, wm.mfact);
-        return;
-    }
-
-    if (!strcmp(key, "smart_gaps")) {
-        resp_ok_bool(c, wm.smart_gaps);
-        return;
-    }
-
-    if (!strcmp(key, "center_overspread")) {
-        resp_ok_bool(c, wm.center_overspread);
-        return;
-    }
-
-    if (!strcmp(key, "center_when_single_stack")) {
-        resp_ok_bool(c, wm.center_when_single_stack);
-        return;
-    }
-
-    if (!strcmp(key, "gap_outer_h")) {
-        resp_ok_int(c, wm.tiled_gap_outer_h);
-        return;
-    }
-
-    if (!strcmp(key, "gap_outer_v")) {
-        resp_ok_int(c, wm.tiled_gap_outer_v);
-        return;
-    }
-
-    if (!strcmp(key, "gap_inner_h")) {
-        resp_ok_int(c, wm.tiled_gap_inner_h);
-        return;
-    }
-
-    if (!strcmp(key, "gap_inner_v")) {
-        resp_ok_int(c, wm.tiled_gap_inner_v);
-        return;
-    }
-
-    if (!strcmp(key, "animations_enabled")) {
-        resp_ok_bool(c, wm.animations.enabled);
-        return;
-    }
-
-    if (!strcmp(key, "animations_open_from_top")) {
-        resp_ok_bool(c, wm.animations.open_from_top);
-        return;
-    }
-
-    {
-        struct {
-            const char *key;
-            int32_t value;
-        } anims[] = {
-            { "animations_duration_move",  wm.animations.duration_move},
-            { "animations_duration_open",  wm.animations.duration_open},
-            {"animations_duration_close", wm.animations.duration_close},
-            {"animations_duration_space", wm.animations.duration_space},
-        };
-
-        for (size_t i = 0; i < sizeof(anims) / sizeof(anims[0]); i++) {
-            if (!strcmp(key, anims[i].key)) {
-                resp_ok_int(c, anims[i].value);
-                return;
-            }
-        }
-    }
-
-#ifdef WALLPAPER
-    if (!strcmp(key, "wallpaper_topbar_fade_h")) {
-        resp_ok_int(c, wm.wallpaper.topbar_fade_h);
-        return;
-    }
-
-    if (!strcmp(key, "wallpaper_path")) {
-        resp_ok_str(c, wm.wallpaper.path ? wm.wallpaper.path : "");
-        return;
-    }
-#endif
-
-#ifdef WALLPAPER
-    {
-        struct {
-            const char *key;
-            int32_t value;
-        } wps[] = {
-            {        "wallpaper_pattern_bg_r",         wm.wallpaper.pattern_bg_r},
-            {        "wallpaper_pattern_bg_g",         wm.wallpaper.pattern_bg_g},
-            {        "wallpaper_pattern_bg_b",         wm.wallpaper.pattern_bg_b},
-            {       "wallpaper_pattern_dot_r",        wm.wallpaper.pattern_dot_r},
-            {       "wallpaper_pattern_dot_g",        wm.wallpaper.pattern_dot_g},
-            {       "wallpaper_pattern_dot_b",        wm.wallpaper.pattern_dot_b},
-            {"wallpaper_pattern_grid_spacing", wm.wallpaper.pattern_grid_spacing},
-            {  "wallpaper_pattern_dot_radius",   wm.wallpaper.pattern_dot_radius},
-            {         "wallpaper_blur_radius",          wm.wallpaper.blur_radius},
-            {         "wallpaper_blur_passes",          wm.wallpaper.blur_passes},
-            {      "wallpaper_blur_top_inset",       wm.wallpaper.blur_top_inset},
-        };
-
-        for (size_t i = 0; i < sizeof(wps) / sizeof(wps[0]); i++) {
-            if (!strcmp(key, wps[i].key)) {
-                resp_ok_int(c, wps[i].value);
-                return;
-            }
-        }
-    }
-#endif
-
-    {
-        struct {
-            const char *key;
-            int32_t value;
-        } lis[] = {
-            {        "libinput_tap_state",         wm.libinput.tap_state},
-            {   "libinput_natural_scroll",    wm.libinput.natural_scroll},
-            {      "libinput_left_handed",       wm.libinput.left_handed},
-            { "libinput_middle_emulation",  wm.libinput.middle_emulation},
-            {              "libinput_dwt",               wm.libinput.dwt},
-            {             "libinput_drag",              wm.libinput.drag},
-            {        "libinput_drag_lock",         wm.libinput.drag_lock},
-            {"libinput_three_finger_drag", wm.libinput.three_finger_drag},
-            {    "libinput_accel_profile",     wm.libinput.accel_profile},
-            {     "libinput_click_method",      wm.libinput.click_method},
-            {    "libinput_scroll_method",     wm.libinput.scroll_method},
-        };
-
-        for (size_t i = 0; i < sizeof(lis) / sizeof(lis[0]); i++) {
-            if (!strcmp(key, lis[i].key)) {
-                resp_ok_int(c, lis[i].value);
-                return;
-            }
-        }
-    }
-
-    if (!strcmp(key, "libinput_accel_speed")) {
-        resp_ok_float(c, wm.libinput.accel_speed);
         return;
     }
 
@@ -864,25 +796,93 @@ static void handle_get(struct IpcClient *c, const char *key, const char *arg) {
             resp_err(c, "bad space");
             return;
         }
+
         int n = 0;
         struct Window *w;
         wl_list_for_each(w, &wm.windows, link) {
-            if (w->closed || w->space != (int)s) continue;
+            if (w->closed || w->space != (int)s) { continue; }
             n++;
         }
+
         resp_ok_int(c, n);
         return;
     }
+
+#ifdef WALLPAPER
+    if (!strcmp(key, "wallpaper_path")) {
+        resp_ok_str(c, wm.wallpaper.path ? wm.wallpaper.path : "");
+        return;
+    }
+#endif
 
     resp_err(c, "unknown key");
 }
 
 static void
 handle_set(struct IpcClient *c, const char *key, const char *value) {
-    if (!key || !value) {
+    if (key == NULL || value == NULL) {
         resp_err(c, "missing key/value");
         return;
     }
+
+#define IPC_KEY_INT(name, access, after, desc, field, min, max)                \
+    if (((access) & IPC_A_W) != 0 && strcmp(key, name) == 0) {                 \
+        long v;                                                                \
+        if (!parse_int(value, &v) || v < (min) || v > (max)) {                 \
+            resp_err(c, "bad value");                                          \
+            return;                                                            \
+        }                                                                      \
+        (field) = (int32_t)v;                                                  \
+        broadcast_printf("EVT %s %ld\n", name, v);                             \
+        after_set(after);                                                      \
+        resp_ok(c);                                                            \
+        return;                                                                \
+    }
+
+#define IPC_KEY_FLOAT(name, access, after, desc, field, min, max)              \
+    if (((access) & IPC_A_W) != 0 && strcmp(key, name) == 0) {                 \
+        float v;                                                               \
+        if (!parse_float(value, &v) || v < (min) || v > (max)) {               \
+            resp_err(c, "bad value");                                          \
+            return;                                                            \
+        }                                                                      \
+        (field) = v;                                                           \
+        broadcast_printf("EVT %s %g\n", name, (double)v);                      \
+        after_set(after);                                                      \
+        resp_ok(c);                                                            \
+        return;                                                                \
+    }
+
+#define IPC_KEY_BOOL(name, access, after, range, desc, field)                  \
+    if (((access) & IPC_A_W) != 0 && strcmp(key, name) == 0) {                 \
+        bool b;                                                                \
+        if (!parse_bool(value, &b)) {                                          \
+            resp_err(c, "bad bool");                                           \
+            return;                                                            \
+        }                                                                      \
+        (field) = b;                                                           \
+        broadcast_printf("EVT %s %s\n", name, b ? "true" : "false");           \
+        after_set(after);                                                      \
+        resp_ok(c);                                                            \
+        return;                                                                \
+    }
+
+#define IPC_KEY_STR(name, access, after, range, desc, field)
+#define IPC_KEY_SPECIAL(name, access, range, desc)
+
+    KEYS_TABLE(
+        IPC_KEY_INT, IPC_KEY_FLOAT, IPC_KEY_BOOL, IPC_KEY_STR, IPC_KEY_SPECIAL
+    )
+
+    KEYS_TABLE_WALLPAPER(
+        IPC_KEY_INT, IPC_KEY_FLOAT, IPC_KEY_BOOL, IPC_KEY_STR, IPC_KEY_SPECIAL
+    )
+
+#undef IPC_KEY_INT
+#undef IPC_KEY_FLOAT
+#undef IPC_KEY_BOOL
+#undef IPC_KEY_STR
+#undef IPC_KEY_SPECIAL
 
     if (!strcmp(key, "layout")) {
         enum Layout l;
@@ -910,19 +910,6 @@ handle_set(struct IpcClient *c, const char *key, const char *value) {
         return;
     }
 
-    if (!strcmp(key, "nmasters")) {
-        long v;
-        if (!parse_int(value, &v) || v < 1 || v > 1024) {
-            resp_err(c, "bad value");
-            return;
-        }
-        wm.nmasters = (int32_t)v;
-        broadcast_printf("EVT nmasters %d\n", wm.nmasters);
-        wm_request_manage();
-        resp_ok(c);
-        return;
-    }
-
     if (!strcmp(key, "mfact")) {
         float v;
         if (!parse_float(value, &v) || v <= 0.0f || v >= 1.0f) {
@@ -937,96 +924,7 @@ handle_set(struct IpcClient *c, const char *key, const char *value) {
         return;
     }
 
-    int32_t *slot = NULL;
-    if (!strcmp(key, "gap_outer_h"))
-        slot = &wm.tiled_gap_outer_h;
-    else if (!strcmp(key, "gap_outer_v"))
-        slot = &wm.tiled_gap_outer_v;
-    else if (!strcmp(key, "gap_inner_h"))
-        slot = &wm.tiled_gap_inner_h;
-    else if (!strcmp(key, "gap_inner_v"))
-        slot = &wm.tiled_gap_inner_v;
-    if (slot) {
-        long v;
-        if (!parse_int(value, &v) || v < 0 || v > 500) {
-            resp_err(c, "bad value");
-            return;
-        }
-
-        *slot = (int32_t)v;
-        broadcast_printf("EVT %s %d\n", key, *slot);
-        wm_request_manage();
-        resp_ok(c);
-        return;
-    }
-
-    bool *bslot = NULL;
-    if (!strcmp(key, "smart_gaps"))
-        bslot = &wm.smart_gaps;
-    else if (!strcmp(key, "center_overspread"))
-        bslot = &wm.center_overspread;
-    else if (!strcmp(key, "center_when_single_stack"))
-        bslot = &wm.center_when_single_stack;
-    else if (!strcmp(key, "animations_enabled"))
-        bslot = &wm.animations.enabled;
-    else if (!strcmp(key, "animations_open_from_top"))
-        bslot = &wm.animations.open_from_top;
-    if (bslot) {
-        bool b;
-        if (!parse_bool(value, &b)) {
-            resp_err(c, "bad bool");
-            return;
-        }
-
-        *bslot = b;
-        broadcast_printf("EVT %s %s\n", key, b ? "true" : "false");
-        wm_request_manage();
-        resp_ok(c);
-        return;
-    }
-
-    {
-        struct {
-            const char *key;
-            int32_t *slot;
-        } anims[] = {
-            { "animations_duration_move",  &wm.animations.duration_move},
-            { "animations_duration_open",  &wm.animations.duration_open},
-            {"animations_duration_close", &wm.animations.duration_close},
-            {"animations_duration_space", &wm.animations.duration_space},
-        };
-
-        for (size_t i = 0; i < sizeof(anims) / sizeof(anims[0]); i++) {
-            if (strcmp(key, anims[i].key) != 0) { continue; }
-
-            long v;
-            if (!parse_int(value, &v) || v < 0 || v > 60000) {
-                resp_err(c, "bad value");
-                return;
-            }
-
-            *anims[i].slot = (int32_t)v;
-            broadcast_printf("EVT %s %d\n", key, *anims[i].slot);
-            wm_request_manage();
-            resp_ok(c);
-            return;
-        }
-    }
-
 #ifdef WALLPAPER
-    if (!strcmp(key, "wallpaper_topbar_fade_h")) {
-        long v;
-        if (!parse_int(value, &v) || v < 0 || v > 1000) {
-            resp_err(c, "bad value");
-            return;
-        }
-
-        wm.wallpaper.topbar_fade_h = (int32_t)v;
-        broadcast_printf("EVT wallpaper_topbar_fade_h %d\n", (int32_t)v);
-        resp_ok(c);
-        return;
-    }
-
     if (!strcmp(key, "wallpaper_path")) {
         if (value[0] == '\0') {
             resp_err(c, "bad value");
@@ -1045,95 +943,7 @@ handle_set(struct IpcClient *c, const char *key, const char *value) {
         resp_ok(c);
         return;
     }
-
-    {
-        struct {
-            const char *key;
-            int32_t *slot;
-            int32_t min, max;
-        } wps[] = {
-            {        "wallpaper_pattern_bg_r",&wm.wallpaper.pattern_bg_r,0, 255                                                                                },
-            {        "wallpaper_pattern_bg_g",       &wm.wallpaper.pattern_bg_g, 0, 255},
-            {        "wallpaper_pattern_bg_b",       &wm.wallpaper.pattern_bg_b, 0, 255},
-            {       "wallpaper_pattern_dot_r",      &wm.wallpaper.pattern_dot_r, 0, 255},
-            {       "wallpaper_pattern_dot_g",      &wm.wallpaper.pattern_dot_g, 0, 255},
-            {       "wallpaper_pattern_dot_b",      &wm.wallpaper.pattern_dot_b, 0, 255},
-            {"wallpaper_pattern_grid_spacing",
-             &wm.wallpaper.pattern_grid_spacing, 1, 512                                },
-            {  "wallpaper_pattern_dot_radius", &wm.wallpaper.pattern_dot_radius,
-             0, 128                                                                    },
-            {         "wallpaper_blur_radius",        &wm.wallpaper.blur_radius, 0, 256},
-            {         "wallpaper_blur_passes",        &wm.wallpaper.blur_passes, 0,  16},
-            {      "wallpaper_blur_top_inset",     &wm.wallpaper.blur_top_inset, 0, 512},
-        };
-
-        for (size_t i = 0; i < sizeof(wps) / sizeof(wps[0]); i++) {
-            if (strcmp(key, wps[i].key) != 0) { continue; }
-
-            long v;
-            if (!parse_int(value, &v) || v < wps[i].min || v > wps[i].max) {
-                resp_err(c, "bad value");
-                return;
-            }
-
-            *wps[i].slot = (int32_t)v;
-            broadcast_printf("EVT %s %d\n", key, *wps[i].slot);
-            wm_invalidate_wallpaper();
-            resp_ok(c);
-            return;
-        }
-    }
 #endif
-
-    {
-        struct {
-            const char *key;
-            int32_t *slot;
-            int32_t min, max;
-        } lis[] = {
-            {        "libinput_tap_state",         &wm.libinput.tap_state, -1, 1},
-            {   "libinput_natural_scroll",    &wm.libinput.natural_scroll, -1, 1},
-            {      "libinput_left_handed",       &wm.libinput.left_handed, -1, 1},
-            { "libinput_middle_emulation",  &wm.libinput.middle_emulation, -1, 1},
-            {              "libinput_dwt",               &wm.libinput.dwt, -1, 1},
-            {             "libinput_drag",              &wm.libinput.drag, -1, 1},
-            {        "libinput_drag_lock",         &wm.libinput.drag_lock, -1, 2},
-            {"libinput_three_finger_drag", &wm.libinput.three_finger_drag, -1, 2},
-            {    "libinput_accel_profile",     &wm.libinput.accel_profile, -1, 7},
-            {     "libinput_click_method",      &wm.libinput.click_method, -1, 2},
-            {    "libinput_scroll_method",     &wm.libinput.scroll_method, -1, 7},
-        };
-
-        for (size_t i = 0; i < sizeof(lis) / sizeof(lis[0]); i++) {
-            if (strcmp(key, lis[i].key) != 0) { continue; }
-
-            long v;
-            if (!parse_int(value, &v) || v < lis[i].min || v > lis[i].max) {
-                resp_err(c, "bad value");
-                return;
-            }
-
-            *lis[i].slot = (int32_t)v;
-            broadcast_printf("EVT %s %d\n", key, *lis[i].slot);
-            libinput_reconfigure();
-            resp_ok(c);
-            return;
-        }
-    }
-
-    if (!strcmp(key, "libinput_accel_speed")) {
-        float v;
-        if (!parse_float(value, &v) || v < -2.0f || v > 1.0f) {
-            resp_err(c, "bad value");
-            return;
-        }
-
-        wm.libinput.accel_speed = v;
-        broadcast_printf("EVT libinput_accel_speed %g\n", (double)v);
-        libinput_reconfigure();
-        resp_ok(c);
-        return;
-    }
 
     resp_err(c, "unknown/read-only key");
 }
@@ -1155,6 +965,11 @@ static void dispatch_line(struct IpcClient *c, char *line) {
     if (rest) {
         *rest++ = '\0';
         while (*rest == ' ' || *rest == '\t') rest++;
+    }
+
+    if (!strcmp(cmd, "CONFIG")) {
+        handle_config(c);
+        return;
     }
 
     if (!strcmp(cmd, "PING")) {
@@ -1182,7 +997,7 @@ static void dispatch_line(struct IpcClient *c, char *line) {
 
     if (!strcmp(cmd, "GET")) {
         if (!rest) {
-            resp_err(c, "missing key");
+            resp_err(c, "key is missing");
             return;
         }
 
@@ -1198,13 +1013,13 @@ static void dispatch_line(struct IpcClient *c, char *line) {
 
     if (!strcmp(cmd, "SET")) {
         if (!rest) {
-            resp_err(c, "missing key");
+            resp_err(c, "key is missing");
             return;
         }
 
         char *val = strpbrk(rest, " \t");
         if (!val) {
-            resp_err(c, "missing value");
+            resp_err(c, "value is missing");
             return;
         }
 

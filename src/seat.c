@@ -156,26 +156,26 @@ void seat_action(struct Seat *seat, enum Action action, const void *arg) {
         case ACTION_EXIT:
             river_window_manager_v1_exit_session(window_manager_v1);
             break;
-        case ACTION_SPACE_1: wm_switch_space(0); break;
-        case ACTION_SPACE_2: wm_switch_space(1); break;
-        case ACTION_SPACE_3: wm_switch_space(2); break;
-        case ACTION_SPACE_4: wm_switch_space(3); break;
-        case ACTION_SPACE_5: wm_switch_space(4); break;
-        case ACTION_SPACE_6: wm_switch_space(5); break;
-        case ACTION_SPACE_7: wm_switch_space(6); break;
-        case ACTION_SPACE_8: wm_switch_space(7); break;
-        case ACTION_SPACE_9: wm_switch_space(8); break;
-        case ACTION_SPACE_10: wm_switch_space(9); break;
-        case ACTION_MOVE_TO_SPACE_1: wm_move_window_to_space(seat, 0); break;
-        case ACTION_MOVE_TO_SPACE_2: wm_move_window_to_space(seat, 1); break;
-        case ACTION_MOVE_TO_SPACE_3: wm_move_window_to_space(seat, 2); break;
-        case ACTION_MOVE_TO_SPACE_4: wm_move_window_to_space(seat, 3); break;
-        case ACTION_MOVE_TO_SPACE_5: wm_move_window_to_space(seat, 4); break;
-        case ACTION_MOVE_TO_SPACE_6: wm_move_window_to_space(seat, 5); break;
-        case ACTION_MOVE_TO_SPACE_7: wm_move_window_to_space(seat, 6); break;
-        case ACTION_MOVE_TO_SPACE_8: wm_move_window_to_space(seat, 7); break;
-        case ACTION_MOVE_TO_SPACE_9: wm_move_window_to_space(seat, 8); break;
-        case ACTION_MOVE_TO_SPACE_10: wm_move_window_to_space(seat, 9); break;
+        case ACTION_SPACE_1: wm_switch_space(1); break;
+        case ACTION_SPACE_2: wm_switch_space(2); break;
+        case ACTION_SPACE_3: wm_switch_space(3); break;
+        case ACTION_SPACE_4: wm_switch_space(4); break;
+        case ACTION_SPACE_5: wm_switch_space(5); break;
+        case ACTION_SPACE_6: wm_switch_space(6); break;
+        case ACTION_SPACE_7: wm_switch_space(7); break;
+        case ACTION_SPACE_8: wm_switch_space(8); break;
+        case ACTION_SPACE_9: wm_switch_space(9); break;
+        case ACTION_SPACE_0: wm_switch_space(0); break;
+        case ACTION_MOVE_TO_SPACE_1: wm_move_window_to_space(seat, 1); break;
+        case ACTION_MOVE_TO_SPACE_2: wm_move_window_to_space(seat, 2); break;
+        case ACTION_MOVE_TO_SPACE_3: wm_move_window_to_space(seat, 3); break;
+        case ACTION_MOVE_TO_SPACE_4: wm_move_window_to_space(seat, 4); break;
+        case ACTION_MOVE_TO_SPACE_5: wm_move_window_to_space(seat, 5); break;
+        case ACTION_MOVE_TO_SPACE_6: wm_move_window_to_space(seat, 6); break;
+        case ACTION_MOVE_TO_SPACE_7: wm_move_window_to_space(seat, 7); break;
+        case ACTION_MOVE_TO_SPACE_8: wm_move_window_to_space(seat, 8); break;
+        case ACTION_MOVE_TO_SPACE_9: wm_move_window_to_space(seat, 9); break;
+        case ACTION_MOVE_TO_SPACE_0: wm_move_window_to_space(seat, 0); break;
     }
 }
 
