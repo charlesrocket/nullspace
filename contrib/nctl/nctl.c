@@ -57,7 +57,7 @@ static const size_t layout_table_len =
 
 #define RANGE_STR_INNER_(x) #x
 #define RANGE_STR_(x)       RANGE_STR_INNER_(x)
-#define RANGE_STR(min, max) RANGE_STR_(min) ".." RANGE_STR_(max)
+#define RANGE_STR(min, max) RANGE_STR_(min) "," RANGE_STR_(max)
 
 static const struct IpcKeyMeta nctl_keys[] = {
 #define IPC_KEY_INT(name, access, after, desc, field, min, max)                \
@@ -88,56 +88,6 @@ static const struct IpcKeyMeta nctl_keys[] = {
 
 static const size_t nctl_keys_len = sizeof(nctl_keys) / sizeof(nctl_keys[0]);
 
-static void list_commands(void) {
-    printf("\033[1m\033[4mCOMMANDS\033[0m\n\n");
-    for (size_t i = 0; i < sizeof(COMMANDS) / sizeof(COMMANDS[0]); i++) {
-        printf("  %-22s %s\n", COMMANDS[i].name, COMMANDS[i].desc);
-    }
-
-    fputs("\n", stdout);
-}
-
-static void list_layouts(void) {
-    printf("\033[1m\033[4mLAYOUTS\033[0m\n\n");
-    for (size_t i = 0; i < layout_table_len; i++) {
-        printf("  %-10s %s\n", layout_table[i].name, layout_table[i].desc);
-    }
-
-    fputs("\n", stdout);
-}
-
-static void list_keys(const char *title, enum IpcAccess want) {
-    printf("%s\n", title);
-
-    for (size_t i = 0; i < nctl_keys_len; i++) {
-        if ((nctl_keys[i].access & want) == 0) { continue; }
-
-        printf(
-            "  %-32s %s\n", nctl_keys[i].name,
-            nctl_keys[i].desc ? nctl_keys[i].desc : ""
-        );
-
-        if (nctl_keys[i].range != NULL) {
-            printf("  %-32s   range: %s\n", "", nctl_keys[i].range);
-        }
-    }
-
-    fputs("\n", stdout);
-}
-
-static void list_all(const char *what) {
-    bool all = (what == NULL || *what == '\0');
-
-    if (all || strcmp(what, "commands") == 0) list_commands();
-    if (all || strcmp(what, "layouts") == 0) list_layouts();
-    if (all || strcmp(what, "get") == 0) {
-        list_keys("\033[1m\033[4mGETTERS\033[0m\n", IPC_A_R);
-    }
-    if (all || strcmp(what, "set") == 0) {
-        list_keys("\033[1m\033[4mSETTERS\033[0m\n", IPC_A_W);
-    }
-}
-
 static void usage(FILE *out) {
     fprintf(
         out, "\033[1mnctl\033[0m v" VERSION "\n"
@@ -148,6 +98,16 @@ static void usage(FILE *out) {
              "A command line interface for Nullspace WM.\n"
              "List all available commands with `nctl list`.\n"
     );
+}
+
+static int append_arg(
+    char *buf, size_t *off, size_t cap, const char *arg, const char *sep
+) {
+    int n = snprintf(buf + *off, cap - *off, "%s%s", sep, arg);
+    if (n < 0 || (size_t)n >= cap - *off) return -1;
+
+    *off += (size_t)n;
+    return 0;
 }
 
 static void translate_cmd(char *s) {
@@ -164,14 +124,67 @@ static void translate_cmd(char *s) {
     }
 }
 
-static int append_arg(
-    char *buf, size_t *off, size_t cap, const char *arg, const char *sep
-) {
-    int n = snprintf(buf + *off, cap - *off, "%s%s", sep, arg);
-    if (n < 0 || (size_t)n >= cap - *off) return -1;
+static void list_commands(void) {
+    printf("\033[1m\033[4mCOMMANDS\033[0m\n\n");
+    for (size_t i = 0; i < sizeof(COMMANDS) / sizeof(COMMANDS[0]); i++) {
+        printf("  %-22s %s\n", COMMANDS[i].name, COMMANDS[i].desc);
+    }
 
-    *off += (size_t)n;
-    return 0;
+    putchar('\n');
+}
+
+static void list_layouts(void) {
+    printf("\033[1m\033[4mLAYOUTS\033[0m\n\n");
+    for (size_t i = 0; i < layout_table_len; i++) {
+        printf("  %-10s %s\n", layout_table[i].name, layout_table[i].desc);
+    }
+
+    putchar('\n');
+}
+
+static void list_keys(const char *title, enum IpcAccess w, bool show_range) {
+    printf("%s\n", title);
+
+    size_t name_w = 0, desc_w = 0;
+    for (size_t i = 0; i < nctl_keys_len; i++) {
+        if ((nctl_keys[i].access & w) == 0) { continue; }
+
+        size_t n = strlen(nctl_keys[i].name);
+        size_t d = nctl_keys[i].desc ? strlen(nctl_keys[i].desc) : 0;
+        if (n > name_w) { name_w = n; }
+        if (d > desc_w) { desc_w = d; }
+    }
+
+    for (size_t i = 0; i < nctl_keys_len; i++) {
+        if ((nctl_keys[i].access & w) == 0) { continue; }
+
+        printf(
+            "  %-*s  %s ", (int)name_w, nctl_keys[i].name,
+            nctl_keys[i].desc ? nctl_keys[i].desc : ""
+        );
+
+        if (show_range && nctl_keys[i].range != NULL) {
+            printf("[%s]", nctl_keys[i].range);
+        }
+
+        putchar('\n');
+    }
+
+    putchar('\n');
+}
+
+static void list_all(const char *w) {
+    bool all = (w == NULL || *w == '\0');
+
+    if (all || strcmp(w, "commands") == 0) list_commands();
+    if (all || strcmp(w, "layouts") == 0) list_layouts();
+    if (all || strcmp(w, "get") == 0) {
+        list_keys("\033[1m\033[4mGETTERS\033[0m\n", IPC_A_R, false);
+    }
+
+    if (all || strcmp(w, "set") == 0) {
+        list_keys("\033[1m\033[4mSETTERS\033[0m\n", IPC_A_W, true);
+    }
 }
 
 int main(int argc, char *argv[]) {

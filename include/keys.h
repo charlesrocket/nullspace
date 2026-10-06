@@ -35,7 +35,7 @@ struct IpcKeyMeta {
         "layout", IPC_A_RW, "vtile|vgrid|htile|hrtile|monocle|hgrid|float",    \
         "current layout"                                                       \
     )                                                                          \
-    K_SPECIAL("current_space", IPC_A_RW, "0-9", "active space index")         \
+    K_SPECIAL("current_space", IPC_A_RW, "0,9", "active space index")          \
     K_SPECIAL("space_count", IPC_A_R, NULL, "number of spaces")                \
     K_SPECIAL(                                                                 \
         "space_window_count", IPC_A_R, NULL,                                   \
@@ -43,9 +43,9 @@ struct IpcKeyMeta {
     )                                                                          \
     K_SPECIAL("focused_title", IPC_A_R, NULL, "title of focused window")       \
     K_SPECIAL("focused_app_id", IPC_A_R, NULL, "app_id of focused window")     \
-    K_SPECIAL("mfact", IPC_A_RW, "0.0..1", "master area factor")            \
+    K_SPECIAL("mfact", IPC_A_RW, "0.0,1", "master area factor")                \
     K_SPECIAL(                                                                 \
-        "wallpaper_path", IPC_A_RW, "path to a P6 PPM", "wallpaper image path" \
+        "wallpaper_path", IPC_A_RW, NULL, "wallpaper image path"               \
     )                                                                          \
                                                                                \
     K_INT(                                                                     \
@@ -91,20 +91,20 @@ struct IpcKeyMeta {
     )                                                                          \
     K_INT(                                                                     \
         "animations_duration_move", IPC_A_RW, IPC_AFTER_MANAGE,                \
-        "move animation duration (ms)", wm.animations.duration_move, 0, 60000  \
+        "move animation duration in ms", wm.animations.duration_move, 0, 60000 \
     )                                                                          \
     K_INT(                                                                     \
         "animations_duration_open", IPC_A_RW, IPC_AFTER_MANAGE,                \
-        "open animation duration (ms)", wm.animations.duration_open, 0, 60000  \
+        "open animation duration in ms", wm.animations.duration_open, 0, 60000 \
     )                                                                          \
     K_INT(                                                                     \
         "animations_duration_close", IPC_A_RW, IPC_AFTER_MANAGE,               \
-        "close animation duration (ms)", wm.animations.duration_close, 0,      \
+        "close animation duration in ms", wm.animations.duration_close, 0,     \
         60000                                                                  \
     )                                                                          \
     K_INT(                                                                     \
         "animations_duration_space", IPC_A_RW, IPC_AFTER_MANAGE,               \
-        "space slide duration (ms)", wm.animations.duration_space, 0, 60000    \
+        "space slide duration in ms", wm.animations.duration_space, 0, 60000   \
     )                                                                          \
                                                                                \
     K_STR(                                                                     \
@@ -146,7 +146,7 @@ struct IpcKeyMeta {
     )                                                                          \
     K_INT(                                                                     \
         "libinput_accel_profile", IPC_A_RW, IPC_AFTER_LIBINPUT,                \
-        "accel profile bits (0 none, 1 flat, 2 adaptive, 4 custom)",           \
+        "accel profile bits: 0 none, 1 flat, 2 adaptive, 4 custom",            \
         wm.libinput.accel_profile, -1, 4                                       \
     )                                                                          \
     K_FLOAT(                                                                   \
@@ -159,7 +159,7 @@ struct IpcKeyMeta {
     )                                                                          \
     K_INT(                                                                     \
         "libinput_scroll_method", IPC_A_RW, IPC_AFTER_LIBINPUT,                \
-        "scroll method bits (0 none, 1 two_finger, 2 edge, 4 button)",         \
+        "scroll method bits: 0 none, 1 two_finger, 2 edge, 4 button",          \
         wm.libinput.scroll_method, -1, 4                                       \
     )
 
