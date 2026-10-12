@@ -1,50 +1,16 @@
-#ifndef __BSD_VISIBLE
-#define __BSD_VISIBLE 1
-#endif
-
 #include "keymap.h"
 
 #include "config.h"
 #include "log.h"
 
-#include <fcntl.h>
-#include <river-input-management-v1-client-protocol.h>
-#include <river-xkb-config-v1-client-protocol.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <wayland-client-protocol.h>
-#include <wayland-util.h>
+#include <wlr/types/wlr_keyboard.h>
 #include <xkbcommon/xkbcommon.h>
-
-#if defined(__has_feature)
-#if __has_feature(memory_sanitizer)
-#define MSAN 1
-#endif
-#endif
-
-#ifdef MSAN
-#include <sanitizer/msan_interface.h>
-#endif
 
 #define LOG_TOPIC "keymap"
 
-struct Keyboard {
-    struct river_xkb_keyboard_v1 *obj;
-    struct wl_list link;
-};
-
-static struct xkb_context *xkb_context;
-static struct river_xkb_config_v1 *xkb_config;
-static struct river_xkb_keymap_v1 *xkb_keymap;
-static bool keymap_ready;        // success event received
-static struct wl_list keyboards; // Keyboard
-
+static struct xkb_context *xkb_context = NULL;
+static struct xkb_keymap *xkb_keymap = NULL;
 static KeymapLayoutCallback on_layout_change = NULL;
 
 void keymap_set_layout_callback(KeymapLayoutCallback cb) {
@@ -52,268 +18,34 @@ void keymap_set_layout_callback(KeymapLayoutCallback cb) {
 }
 
 void keymap_init(void) {
-    wl_list_init(&keyboards);
+    if (xkb_context != NULL) return;
+
     xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-}
-
-static void
-keyboard_handle_removed(void *data, struct river_xkb_keyboard_v1 *obj) {
-    (void)obj;
-
-    struct Keyboard *kb = data;
-    river_xkb_keyboard_v1_destroy(kb->obj);
-    wl_list_remove(&kb->link);
-    free(kb);
-}
-
-static void keyboard_handle_input_device(
-    void *data, struct river_xkb_keyboard_v1 *obj,
-    struct river_input_device_v1 *device
-) {
-    (void)data;
-    (void)obj;
-    (void)device;
-}
-
-static void keyboard_handle_layout(
-    void *data, struct river_xkb_keyboard_v1 *obj, uint32_t index,
-    const char *name // may be NULL
-) {
-    (void)data;
-    (void)obj;
-    (void)index;
-
-    if (name == NULL || name[0] == '\0') { return; }
-
-    if (on_layout_change != NULL) { on_layout_change(name); }
-}
-
-static void keyboard_handle_capslock_enabled(
-    void *data, struct river_xkb_keyboard_v1 *obj
-) {
-    (void)data;
-    (void)obj;
-}
-
-static void keyboard_handle_capslock_disabled(
-    void *data, struct river_xkb_keyboard_v1 *obj
-) {
-    (void)data;
-    (void)obj;
-}
-
-static void
-keyboard_handle_numlock_enabled(void *data, struct river_xkb_keyboard_v1 *obj) {
-    (void)data;
-    (void)obj;
-}
-
-static void keyboard_handle_numlock_disabled(
-    void *data, struct river_xkb_keyboard_v1 *obj
-) {
-    (void)data;
-    (void)obj;
-}
-
-static const struct river_xkb_keyboard_v1_listener keyboard_listener = {
-    .removed = keyboard_handle_removed,
-    .input_device = keyboard_handle_input_device,
-    .layout = keyboard_handle_layout,
-    .capslock_enabled = keyboard_handle_capslock_enabled,
-    .capslock_disabled = keyboard_handle_capslock_disabled,
-    .numlock_enabled = keyboard_handle_numlock_enabled,
-    .numlock_disabled = keyboard_handle_numlock_disabled,
-};
-
-static void keymap_handle_success(void *data, struct river_xkb_keymap_v1 *obj) {
-    (void)data;
-    (void)obj;
-
-    keymap_ready = true;
-
-    struct Keyboard *kb;
-    wl_list_for_each(kb, &keyboards, link) {
-        river_xkb_keyboard_v1_set_keymap(kb->obj, xkb_keymap);
-    }
-}
-
-static void keymap_handle_failure(
-    void *data, struct river_xkb_keymap_v1 *obj, const char *error_msg
-) {
-    (void)data;
-
-    log_warn("compositor rejected keymap: %s", error_msg);
-    keymap_ready = false;
-    river_xkb_keymap_v1_destroy(obj);
-    xkb_keymap = NULL;
-}
-
-static const struct river_xkb_keymap_v1_listener keymap_listener = {
-    .success = keymap_handle_success,
-    .failure = keymap_handle_failure,
-};
-
-static int keymap_shm_create(size_t len) {
-    int fd = shm_open(SHM_ANON, O_RDWR | O_CREAT | O_CLOEXEC, 0600);
-    if (fd < 0) { return -1; }
-
-    if (ftruncate(fd, (off_t)len) < 0) {
-        close(fd);
-        return -1;
+    if (xkb_context == NULL) {
+        log_err("Failed to create xkb context");
+        return;
     }
 
-    return fd;
-}
+    struct xkb_rule_names names = {
+        .layout = CFG_KB_LAYOUTS,
+        .options = CFG_KB_OPTIONS,
+    };
 
-static void keymap_shm_seal(int fd) {
-    (void)fcntl(
-        fd, F_ADD_SEALS,
-        F_SEAL_SHRINK | F_SEAL_GROW | F_SEAL_WRITE | F_SEAL_SEAL
+    xkb_keymap = xkb_keymap_new_from_names(
+        xkb_context, &names, XKB_KEYMAP_COMPILE_NO_FLAGS
     );
-}
 
-static struct river_xkb_keymap_v1 *keymap_create(void) {
-    struct xkb_rule_names names = {0};
-
-    names.layout = CFG_KB_LAYOUTS;
-    names.options = CFG_KB_OPTIONS;
-
-#ifdef MSAN
-    __msan_scoped_disable_interceptor_checks();
-#endif
-    struct xkb_keymap *keymap = xkb_keymap_new_from_names2(
-        xkb_context, &names, XKB_KEYMAP_FORMAT_TEXT_V2,
-        XKB_KEYMAP_COMPILE_NO_FLAGS
-    );
-#ifdef MSAN
-    __msan_scoped_enable_interceptor_checks();
-#endif
-
-    if (keymap == NULL) {
+    if (xkb_keymap == NULL) {
         log_err(
-            "failed to compile layouts '%s' with options '%s'", CFG_KB_LAYOUTS,
+            "Failed to compile layouts '%s' with options '%s'", CFG_KB_LAYOUTS,
             CFG_KB_OPTIONS
         );
-
-        return NULL;
-    }
-
-    char *str = xkb_keymap_get_as_string2(
-        keymap, XKB_KEYMAP_FORMAT_TEXT_V2, XKB_KEYMAP_SERIALIZE_NO_FLAGS
-    );
-
-    xkb_keymap_unref(keymap);
-
-    if (str == NULL) {
-        log_err("failed to serialize keymap");
-        return NULL;
-    }
-
-#ifdef MSAN
-    __msan_unpoison_string(str);
-#endif
-    size_t len = strlen(str) + 1;
-    int fd = keymap_shm_create(len);
-    if (fd < 0) {
-        log_err("failed to create shm fd");
-        free(str);
-        return NULL;
-    }
-
-    void *map = mmap(NULL, len, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    if (map == MAP_FAILED) {
-        log_err("mmap failed");
-        close(fd);
-        free(str);
-        return NULL;
-    }
-
-    memcpy(map, str, len);
-    free(str);
-    munmap(map, len);
-
-    keymap_shm_seal(fd);
-
-    struct river_xkb_keymap_v1 *obj = river_xkb_config_v1_create_keymap(
-        xkb_config, fd, RIVER_XKB_CONFIG_V1_KEYMAP_FORMAT_TEXT_V2
-    );
-
-    close(fd);
-    return obj;
-}
-
-static void
-config_handle_finished(void *data, struct river_xkb_config_v1 *obj) {
-    (void)data;
-
-    struct Keyboard *kb, *tmp;
-    wl_list_for_each_safe(kb, tmp, &keyboards, link) {
-        wl_list_remove(&kb->link);
-        river_xkb_keyboard_v1_destroy(kb->obj);
-        free(kb);
-    }
-
-    river_xkb_config_v1_destroy(obj);
-    xkb_config = NULL;
-}
-
-static void config_handle_xkb_keyboard(
-    void *data, struct river_xkb_config_v1 *obj,
-    struct river_xkb_keyboard_v1 *id
-) {
-    (void)data;
-    (void)obj;
-
-    struct Keyboard *kb = calloc(1, sizeof(struct Keyboard));
-    if (kb == NULL) {
-        river_xkb_keyboard_v1_destroy(id);
-        return;
-    }
-
-    kb->obj = id;
-    wl_list_insert(keyboards.prev, &kb->link);
-
-    river_xkb_keyboard_v1_add_listener(id, &keyboard_listener, kb);
-
-    if (keymap_ready) { river_xkb_keyboard_v1_set_keymap(id, xkb_keymap); }
-}
-
-static const struct river_xkb_config_v1_listener config_listener = {
-    .finished = config_handle_finished,
-    .xkb_keyboard = config_handle_xkb_keyboard,
-};
-
-void keymap_bind(struct wl_registry *registry, uint32_t name) {
-    if (xkb_context == NULL) {
-        log_warn("no xkb context");
-        return;
-    }
-
-    xkb_config =
-        wl_registry_bind(registry, name, &river_xkb_config_v1_interface, 1);
-    river_xkb_config_v1_add_listener(xkb_config, &config_listener, NULL);
-
-    xkb_keymap = keymap_create();
-    if (xkb_keymap != NULL) {
-        river_xkb_keymap_v1_add_listener(xkb_keymap, &keymap_listener, NULL);
     }
 }
 
 void keymap_destroy(void) {
-    struct Keyboard *kb, *tmp;
-    wl_list_for_each_safe(kb, tmp, &keyboards, link) {
-        wl_list_remove(&kb->link);
-        river_xkb_keyboard_v1_destroy(kb->obj);
-        free(kb);
-    }
-
-    if (xkb_config != NULL) {
-        river_xkb_config_v1_stop(xkb_config);
-        xkb_config = NULL;
-    }
-
     if (xkb_keymap != NULL) {
-        river_xkb_keymap_v1_destroy(xkb_keymap);
+        xkb_keymap_unref(xkb_keymap);
         xkb_keymap = NULL;
     }
 
@@ -321,4 +53,34 @@ void keymap_destroy(void) {
         xkb_context_unref(xkb_context);
         xkb_context = NULL;
     }
+
+    on_layout_change = NULL;
+}
+
+void keymap_apply(struct wlr_keyboard *keyboard) {
+    if (keyboard == NULL || xkb_keymap == NULL) return;
+    wlr_keyboard_set_keymap(keyboard, xkb_keymap);
+    wlr_keyboard_set_repeat_info(keyboard, CFG_KB_RATE_HZ, CFG_KB_DELAY_MS);
+    keymap_notify_layout(keyboard);
+}
+
+void keymap_notify_layout(struct wlr_keyboard *keyboard) {
+    if (keyboard == NULL || keyboard->xkb_state == NULL) return;
+    if (on_layout_change == NULL) return;
+
+    struct xkb_keymap *km =
+        keyboard->keymap != NULL ? keyboard->keymap : xkb_keymap;
+
+    if (km == NULL) return;
+
+    xkb_layout_index_t idx = xkb_state_serialize_layout(
+        keyboard->xkb_state, XKB_STATE_LAYOUT_EFFECTIVE
+    );
+
+    if (idx >= xkb_keymap_num_layouts(km)) return;
+
+    const char *name = xkb_keymap_layout_get_name(km, idx);
+    if (name == NULL || name[0] == '\0') return;
+
+    on_layout_change(name);
 }

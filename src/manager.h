@@ -2,89 +2,33 @@
 #define MANAGER_H
 
 #include "animation.h"
+#include "include/layouts.h"
 #include "input.h"
 #include "layouts/layout.h"
-#include "output.h"
 #include "seat.h"
+#include "view.h"
 #ifdef WALLPAPER
 #include "wallpaper.h"
 #endif
 
-#include <dev/evdev/input-event-codes.h>
-#include <river-input-management-v1-client-protocol.h>
-#include <river-layer-shell-v1-client-protocol.h>
-#include <river-libinput-config-v1-client-protocol.h>
-#include <river-window-management-v1-client-protocol.h>
-#include <river-xkb-bindings-v1-client-protocol.h>
-#include <river-xkb-config-v1-client-protocol.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <unistd.h>
-#include <wayland-client-core.h>
-#include <wayland-client-protocol.h>
 #include <wayland-util.h>
-#include <xkbcommon/xkbcommon-keysyms.h>
-#include <xkbcommon/xkbcommon.h>
 
 #define SPACE_COUNT  10
 #define HIDDEN_POS_X (-1000000)
 #define HIDDEN_POS_Y (-1000000)
 
-struct Window {
-    struct river_window_v1 *obj;
-    struct river_node_v1 *node;
-    struct wl_list link;       // WindowManager.windows
-    struct wl_list focus_link; // WindowManager.focus_stack
-    struct Seat *pointer_move_requested, *pointer_resize_requested;
-    struct Animation anim;
-    struct AnimationBox target_box;
-
-    enum Layout decoration_state;
-
-    uint32_t pointer_resize_requested_edges;
-
-    int32_t saved_x, saved_y;
-
-    // Position and dimensions last given to the compositor.
-    int32_t x, y;
-    int32_t width, height;
-
-    int32_t reveal_dir, hide_dir;
-
-    // Size we last proposed to the client.
-    int32_t prop_w, prop_h;
-
-    int space;
-
-    char *title;
-    char *app_id;
-
-    bool decoration_state_set;
-    // The client must report dimensions at least once.
-    bool mapped;
-    // False until a proposal has been sent/after something invalidates
-    // the cache (layout switch). While false, `window_propose_size()` always
-    // sends instead of deduplicating.
-    bool prop_valid;
-    bool pos_valid; // false until a position has been sent
-
-    bool closed;
-    // space_hidden == (space != wm.current_space).
-    bool space_hidden;
-    bool has_target;
-};
-
 struct WindowManager {
-    struct wl_list outputs;     // Output
-    struct wl_list windows;     // Window, creation order (tile order)
-    struct wl_list focus_stack; // Window, most recently focused last
-    struct wl_list seats;       // Seat
+    struct wl_list windows;        // Window, creation order
+    struct wl_list focus_stack;    // Window, most recently focused last
+    struct wl_list layer_surfaces; // LayerSurface
+
     struct AnimationsConfig animations;
 #ifdef WALLPAPER
     struct WallpaperConfig wallpaper;
 #endif
     struct LibinputConfig libinput;
-    struct Output *default_output;
 
     enum Layout layout;
 
@@ -105,62 +49,22 @@ struct WindowManager {
 };
 
 extern struct WindowManager wm;
-extern struct river_xkb_bindings_v1 *xkb_bindings_v1;
 
-extern struct river_window_manager_v1 *window_manager_v1;
-extern struct river_input_manager_v1 *input_manager_v1;
-extern struct river_layer_shell_v1 *layer_shell_v1;
-extern struct wl_compositor *compositor;
-extern struct wl_shm *shm;
+void wm_init(void);
+void wm_set_layout(enum Layout layout);
+void wm_switch_space(int space);
+void wm_move_window_to_space(struct Window *window, int space);
+void wm_set_kb_layout(const char *layout);
 
-#ifdef WALLPAPER
-extern struct Wallpaper wp;
-#endif
-
-struct Window *focus_stack_top(void);
-struct Window *window_next(struct Window *window);
+bool wm_animation_active(void);
+void wm_animation_tick_all(void);
 
 void window_apply_target(
     struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh
 );
 
-void window_set_position(struct Window *window, int32_t x, int32_t y);
-void window_send_size(struct Window *window, int32_t w, int32_t h);
-
-void wm_init(void);
-void wm_set_layout(enum Layout layout);
-void wm_switch_space(int space);
-void wm_move_window_to_space(struct Seat *seat, int space);
-void wm_request_manage(void);
-
-void wm_handle_unavailable(void *data, struct river_window_manager_v1 *obj);
-void wm_handle_finished(void *data, struct river_window_manager_v1 *obj);
-void wm_handle_manage_start(void *data, struct river_window_manager_v1 *obj);
-void wm_handle_render_start(void *data, struct river_window_manager_v1 *obj);
-
-void wm_handle_seat(
-    void *data, struct river_window_manager_v1 *obj,
-    struct river_seat_v1 *river_seat
-);
-
-// Ignored events
-void wm_handle_session_locked(void *data, struct river_window_manager_v1 *obj);
-
-void wm_handle_session_unlocked(
-    void *data, struct river_window_manager_v1 *obj
-);
-
-void wm_handle_window(
-    void *data, struct river_window_manager_v1 *obj,
-    struct river_window_v1 *river_window
-);
-
-void wm_handle_output(
-    void *data, struct river_window_manager_v1 *obj,
-    struct river_output_v1 *river_output
-);
-
-bool wm_animation_active(void);
+struct Window *focus_stack_top(void);
+struct Window *window_next(struct Window *window);
 
 #ifdef WALLPAPER
 bool wm_set_wallpaper_path(const char *path);

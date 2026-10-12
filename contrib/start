@@ -1,8 +1,5 @@
 #!/bin/sh
 
-export XDG_CURRENT_DESKTOP="nullspace"
-export XDG_SESSION_TYPE="wayland"
-
 if [ -z "$XDG_RUNTIME_DIR" ]; then
     XDG_RUNTIME_DIR="/tmp/$(id -u)-runtime-dir"
 
@@ -13,9 +10,9 @@ if [ -z "$XDG_RUNTIME_DIR" ]; then
 fi
 
 if [ -n "$DBUS_SESSION_BUS_ADDRESS" ]; then
-    exec river -c nullspace
+    exec nullspace
 elif command -v dbus-run-session >/dev/null 2>&1; then
-    exec dbus-run-session river -c nullspace
+    exec dbus-run-session nullspace
 else
-    exec dbus-launch --exit-with-session river -c nullspace
+    exec dbus-launch --exit-with-session nullspace
 fi

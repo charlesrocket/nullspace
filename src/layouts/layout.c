@@ -3,6 +3,7 @@
 #include "../manager.h"
 #include "../output.h"
 #include "horizontal.h"
+#include "include/layouts.h"
 #include "vertical.h"
 
 #include <stdbool.h>
@@ -30,12 +31,14 @@ static void output_usable_area(
     *h = output->area_height;
 }
 
+static bool window_is_layoutable(const struct Window *w) {
+    return !w->closed && !w->space_hidden && w->mapped;
+}
+
 static struct Window *layout_focused_window(void) {
     struct Window *window;
     wl_list_for_each_reverse(window, &wm.focus_stack, focus_link) {
-        if (window->closed) { continue; }
-        if (window->space_hidden) { continue; }
-        return window;
+        if (window_is_layoutable(window)) { return window; }
     }
 
     return NULL;
@@ -52,7 +55,7 @@ static void layout_windows_apply(LayoutCompute compute) {
     size_t n = 0;
     struct Window *w;
     wl_list_for_each(w, &wm.windows, link) {
-        if (!w->closed && !w->space_hidden) { n++; }
+        if (window_is_layoutable(w)) { n++; }
     }
 
     if (n == 0) { return; }
@@ -62,8 +65,13 @@ static void layout_windows_apply(LayoutCompute compute) {
 
     size_t i = 0;
     wl_list_for_each(w, &wm.windows, link) {
-        if (w->closed || w->space_hidden) { continue; }
+        if (!window_is_layoutable(w)) { continue; }
         lw[i++].window = w;
+    }
+
+    if (i != n) { // TODO maybe maybe
+        free(lw);
+        return;
     }
 
     struct LayoutParams lp = {
@@ -88,6 +96,8 @@ static void layout_windows_apply(LayoutCompute compute) {
         free(lw);
         return;
     }
+
+    if (written > n) { written = n; } // TODO
 
     for (size_t j = 0; j < written; j++) {
         window_apply_target(lw[j].window, lw[j].x, lw[j].y, lw[j].w, lw[j].h);

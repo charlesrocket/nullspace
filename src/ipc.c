@@ -1,19 +1,16 @@
-#ifndef __BSD_VISIBLE
-#define __BSD_VISIBLE 1
-#endif
-
 #include "ipc.h"
 
+#include "include/layouts.h"
 #include "input.h"
 #include "keys.h"
-#include "layouts.h"
 #include "layouts/layout.h"
 #include "log.h"
 #include "manager.h"
+#include "server.h"
+#include "view.h"
 
 #include <errno.h>
 #include <fcntl.h>
-#include <river-window-management-v1-client-protocol.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -21,13 +18,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/event.h>
 #include <sys/signal.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <wayland-server-core.h>
 #include <wayland-util.h>
 
 #define LOG_TOPIC       "ipc"
@@ -36,17 +33,22 @@
 #define IPC_OUTBUF_HARD (256 * 1024)
 
 struct IpcClient {
+    struct wl_list link;
+    struct wl_event_source *source;
+
+    char inbuf[IPC_INBUF_SIZE];
+    char *outbuf;
+
     int fd;
+
     bool subscribed;
     bool dead;
     bool read_closed;
     bool write_armed;
-    char inbuf[IPC_INBUF_SIZE];
+
     size_t inlen;
-    char *outbuf;
     size_t outlen;
     size_t outcap;
-    struct wl_list link;
 };
 
 enum IpcCommandKind {
@@ -58,14 +60,15 @@ enum IpcCommandKind {
 };
 
 struct IpcCommand {
+    struct wl_list link;
     enum IpcCommandKind kind;
     int arg;
-    struct wl_list link;
 };
 
 static int ipc_server_fd = -1;
+static struct wl_event_source *ipc_server_source = NULL;
+static struct wl_event_loop *ipc_loop = NULL;
 static int ipc_reserve_fd = -1;
-static int ipc_kq = -1;
 static struct wl_list ipc_clients;
 static struct wl_list ipc_pending_commands;
 static bool ipc_initialized = false;
@@ -97,6 +100,7 @@ static bool parse_layout(const char *s, enum Layout *out) {
         *out = (id);                                                           \
         return true;                                                           \
     }
+
     LAYOUTS_TABLE(PARSE)
 #undef PARSE
     return false;
@@ -138,30 +142,26 @@ static bool parse_float(const char *s, float *out) {
     return true;
 }
 
-static void client_arm_write(struct IpcClient *c, bool arm) {
-    if (ipc_kq < 0) return;
-    if (c->write_armed == arm) return;
+static uint32_t client_event_mask(const struct IpcClient *c) {
+    uint32_t mask = WL_EVENT_READABLE;
+    if (c->outlen > 0) mask |= WL_EVENT_WRITABLE;
+    return mask;
+}
 
-    struct kevent ev;
+static void client_update_events(struct IpcClient *c) {
+    if (c->source == NULL) return;
 
-    EV_SET(
-        &ev, (uintptr_t)c->fd, EVFILT_WRITE, arm ? EV_ADD : EV_DELETE, 0, 0,
-        NULL
-    );
+    uint32_t want = client_event_mask(c);
+    bool want_write = (want & WL_EVENT_WRITABLE) != 0;
 
-    if (kevent(ipc_kq, &ev, 1, NULL, 0, NULL) < 0) {
-        if (errno != ENOENT) c->dead = true;
+    if (want_write == c->write_armed) return;
+
+    if (wl_event_source_fd_update(c->source, want) < 0) {
+        c->dead = true;
         return;
     }
 
-    c->write_armed = arm;
-}
-
-static void client_disarm_read(struct IpcClient *c) {
-    if (ipc_kq < 0) return;
-    struct kevent ev;
-    EV_SET(&ev, (uintptr_t)c->fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
-    kevent(ipc_kq, &ev, 1, NULL, 0, NULL);
+    c->write_armed = want_write;
 }
 
 static void client_flush(struct IpcClient *c) {
@@ -169,37 +169,26 @@ static void client_flush(struct IpcClient *c) {
         ssize_t n = send(c->fd, c->outbuf, c->outlen, 0);
         if (n < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                client_arm_write(c, true);
+                client_update_events(c);
                 return;
             }
 
             if (errno == EINTR) continue;
-
             c->dead = true;
             return;
         }
 
         if (n == 0) return;
+
         memmove(c->outbuf, c->outbuf + n, c->outlen - (size_t)n);
         c->outlen -= (size_t)n;
     }
 
     if (c->dead) return;
-    client_arm_write(c, false);
+
+    client_update_events(c);
+
     if (c->read_closed && c->outlen == 0) c->dead = true;
-}
-
-static void client_begin_close(struct IpcClient *c) {
-    if (c->dead || c->read_closed) return;
-    c->read_closed = true;
-    client_disarm_read(c);
-
-    if (c->outlen == 0) {
-        c->dead = true;
-        return;
-    }
-
-    client_flush(c);
 }
 
 static bool outbuf_reserve(struct IpcClient *c, size_t extra) {
@@ -227,6 +216,7 @@ static void outbuf_append(struct IpcClient *c, const char *data, size_t len) {
 
     memcpy(c->outbuf + c->outlen, data, len);
     c->outlen += len;
+    client_update_events(c);
 }
 
 static void outbuf_printf(struct IpcClient *c, const char *fmt, ...) {
@@ -275,15 +265,9 @@ static void outbuf_quoted(struct IpcClient *c, const char *s) {
 }
 
 static void client_destroy(struct IpcClient *c) {
-    if (ipc_kq >= 0) {
-        struct kevent ev;
-        EV_SET(&ev, (uintptr_t)c->fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
-        kevent(ipc_kq, &ev, 1, NULL, 0, NULL);
-
-        if (c->write_armed) {
-            EV_SET(&ev, (uintptr_t)c->fd, EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
-            kevent(ipc_kq, &ev, 1, NULL, 0, NULL);
-        }
+    if (c->source != NULL) {
+        wl_event_source_remove(c->source);
+        c->source = NULL;
     }
 
     wl_list_remove(&c->link);
@@ -341,127 +325,6 @@ static void resp_err(struct IpcClient *c, const char *msg) {
     outbuf_printf(c, "ERR %s\n", msg);
 }
 
-static void emit_int(struct IpcClient *c, const char *key, long v) {
-    outbuf_printf(c, "EVT %s %ld\n", key, v);
-}
-
-static void emit_float(struct IpcClient *c, const char *key, float v) {
-    outbuf_printf(c, "EVT %s %g\n", key, (double)v);
-}
-
-static void emit_bool(struct IpcClient *c, const char *key, bool v) {
-    outbuf_printf(c, "EVT %s %s\n", key, v ? "true" : "false");
-}
-
-static void emit_str(struct IpcClient *c, const char *key, const char *s) {
-    outbuf_printf(c, "EVT %s ", key);
-    outbuf_quoted(c, s);
-    outbuf_append(c, "\n", 1);
-}
-
-static uint64_t window_id(const struct Window *w) {
-    return (uint64_t)(uintptr_t)w;
-}
-
-static struct Window *focused_window(void) {
-    struct Window *w;
-    wl_list_for_each_reverse(w, &wm.focus_stack, focus_link) {
-        if (w->closed || w->space_hidden) continue;
-        return w;
-    }
-
-    return NULL;
-}
-
-static void emit_config(struct IpcClient *c) {
-    emit_str(c, "layout", layout_name(wm.layout));
-    emit_int(c, "current_space", wm.current_space);
-    emit_int(c, "space_count", SPACE_COUNT);
-    emit_float(c, "mfact", wm.mfact);
-#ifdef WALLPAPER
-    emit_str(c, "wallpaper_path", wm.wallpaper.path ? wm.wallpaper.path : "");
-#endif
-
-#define IPC_KEY_INT(name, access, after, desc, field, min, max)                \
-    emit_int(c, name, (long)(field));
-#define IPC_KEY_FLOAT(name, access, after, desc, field, min, max)              \
-    emit_float(c, name, (float)(field));
-#define IPC_KEY_BOOL(name, access, after, range, desc, field)                  \
-    emit_bool(c, name, (field));
-#define IPC_KEY_STR(name, access, after, range, desc, field)                   \
-    emit_str(c, name, (field) != NULL ? (field) : "");
-#define IPC_KEY_SPECIAL(name, access, range, desc)
-
-    KEYS_TABLE(
-        IPC_KEY_INT, IPC_KEY_FLOAT, IPC_KEY_BOOL, IPC_KEY_STR, IPC_KEY_SPECIAL
-    )
-
-    KEYS_TABLE_WALLPAPER(
-        IPC_KEY_INT, IPC_KEY_FLOAT, IPC_KEY_BOOL, IPC_KEY_STR, IPC_KEY_SPECIAL
-    )
-
-#undef IPC_KEY_INT
-#undef IPC_KEY_FLOAT
-#undef IPC_KEY_BOOL
-#undef IPC_KEY_STR
-#undef IPC_KEY_SPECIAL
-}
-
-static void emit_spaces(struct IpcClient *c) {
-    for (int s = 0; s < SPACE_COUNT; s++) {
-        int n = 0;
-        struct Window *w;
-        wl_list_for_each(w, &wm.windows, link) {
-            if (w->closed || w->space != s) continue;
-            n++;
-        }
-
-        outbuf_printf(c, "EVT space_window_count %d %d\n", s, n);
-    }
-}
-
-static void emit_focus(struct IpcClient *c) {
-    struct Window *w = focused_window();
-    if (w) {
-        outbuf_printf(
-            c, "EVT focused %llu\n", (unsigned long long)window_id(w)
-        );
-
-        emit_str(c, "focused_title", w->title ? w->title : "");
-        emit_str(c, "focused_app_id", w->app_id ? w->app_id : "");
-    } else {
-        outbuf_printf(c, "EVT focused 0\n");
-        emit_str(c, "focused_title", "");
-        emit_str(c, "focused_app_id", "");
-    }
-}
-
-static void emit_window(struct IpcClient *c, const struct Window *w) {
-    outbuf_printf(
-        c, "EVT window %llu space %d title ", (unsigned long long)window_id(w),
-        w->space
-    );
-
-    outbuf_quoted(c, w->title ? w->title : "");
-    outbuf_append(c, " app_id ", 8);
-    outbuf_quoted(c, w->app_id ? w->app_id : "");
-    outbuf_append(c, "\n", 1);
-}
-
-static void emit_all_state(struct IpcClient *c) {
-    emit_config(c);
-    emit_spaces(c);
-    emit_focus(c);
-
-    struct Window *w;
-    wl_list_for_each(w, &wm.windows, link) {
-        if (w->closed) continue;
-        emit_window(c, w);
-    }
-
-    outbuf_append(c, "EVT ready\n", 10);
-}
-
 static void broadcast(const char *line, size_t len) {
     struct IpcClient *c;
     wl_list_for_each(c, &ipc_clients, link) {
@@ -493,12 +356,102 @@ static void broadcast_printf(const char *fmt, ...) {
     free(big);
 }
 
-static void broadcast_emit_str(const char *key, const char *s) {
-    struct IpcClient *c;
-    wl_list_for_each(c, &ipc_clients, link) {
-        if (!c->subscribed || c->dead) continue;
-        emit_str(c, key, s);
+static uint64_t window_id(const struct Window *w) {
+    return (uint64_t)(uintptr_t)w;
+}
+
+static void emit_str(struct IpcClient *c, const char *key, const char *s) {
+    outbuf_printf(c, "EVT %s ", key);
+    outbuf_quoted(c, s);
+    outbuf_append(c, "\n", 1);
+}
+
+static void emit_config(struct IpcClient *c) {
+    emit_str(c, "layout", layout_name(wm.layout));
+
+    outbuf_printf(c, "EVT current_space %d\n", wm.current_space);
+    outbuf_printf(c, "EVT space_count %d\n", SPACE_COUNT);
+    outbuf_printf(c, "EVT mfact %g\n", (double)wm.mfact);
+
+#ifdef WALLPAPER
+    emit_str(c, "wallpaper_path", wm.wallpaper.path ? wm.wallpaper.path : "");
+#endif
+
+#define IPC_KEY_INT(name, access, after, desc, field, min, max)                \
+    outbuf_printf(c, "EVT %s %ld\n", name, (long)(field));
+#define IPC_KEY_FLOAT(name, access, after, desc, field, min, max)              \
+    outbuf_printf(c, "EVT %s %g\n", name, (double)(field));
+#define IPC_KEY_BOOL(name, access, after, range, desc, field)                  \
+    outbuf_printf(c, "EVT %s %s\n", name, (field) ? "true" : "false");
+#define IPC_KEY_STR(name, access, after, range, desc, field)                   \
+    emit_str(c, name, (field) != NULL ? (field) : "");
+#define IPC_KEY_SPECIAL(name, access, range, desc)
+
+    KEYS_TABLE(
+        IPC_KEY_INT, IPC_KEY_FLOAT, IPC_KEY_BOOL, IPC_KEY_STR, IPC_KEY_SPECIAL
+    )
+    KEYS_TABLE_WALLPAPER(
+        IPC_KEY_INT, IPC_KEY_FLOAT, IPC_KEY_BOOL, IPC_KEY_STR, IPC_KEY_SPECIAL
+    )
+
+#undef IPC_KEY_INT
+#undef IPC_KEY_FLOAT
+#undef IPC_KEY_BOOL
+#undef IPC_KEY_STR
+#undef IPC_KEY_SPECIAL
+}
+
+static void emit_spaces(struct IpcClient *c) {
+    for (int s = 0; s < SPACE_COUNT; s++) {
+        int n = 0;
+        struct Window *w;
+        wl_list_for_each(w, &wm.windows, link) {
+            if (w->closed || w->space != s) continue;
+            n++;
+        }
+        outbuf_printf(c, "EVT space_window_count %d %d\n", s, n);
     }
+}
+
+static void emit_focus(struct IpcClient *c) {
+    struct Window *w = view_focused();
+    if (w) {
+        outbuf_printf(
+            c, "EVT focused %llu\n", (unsigned long long)window_id(w)
+        );
+
+        emit_str(c, "focused_title", w->title ? w->title : "");
+        emit_str(c, "focused_app_id", w->app_id ? w->app_id : "");
+    } else {
+        outbuf_printf(c, "EVT focused 0\n");
+        emit_str(c, "focused_title", "");
+        emit_str(c, "focused_app_id", "");
+    }
+}
+
+static void emit_window(struct IpcClient *c, const struct Window *w) {
+    outbuf_printf(
+        c, "EVT window %llu space %d title ", (unsigned long long)window_id(w),
+        w->space
+    );
+    outbuf_quoted(c, w->title ? w->title : "");
+    outbuf_append(c, " app_id ", 8);
+    outbuf_quoted(c, w->app_id ? w->app_id : "");
+    outbuf_append(c, "\n", 1);
+}
+
+static void emit_all_state(struct IpcClient *c) {
+    emit_config(c);
+    emit_spaces(c);
+    emit_focus(c);
+
+    struct Window *w;
+    wl_list_for_each(w, &wm.windows, link) {
+        if (w->closed) continue;
+        emit_window(c, w);
+    }
+
+    outbuf_append(c, "EVT ready\n", 10);
 }
 
 static void ipc_queue_command(enum IpcCommandKind kind, int arg) {
@@ -520,16 +473,9 @@ void ipc_process_pending_commands(void) {
 
         switch (cmd->kind) {
             case IPC_CMD_SWITCH_SPACE: wm_switch_space(cmd->arg); break;
-
             case IPC_CMD_MOVE_TO_SPACE:
-                {
-                    struct Seat *seat;
-                    wl_list_for_each(seat, &wm.seats, link) {
-                        wm_move_window_to_space(seat, cmd->arg);
-                    }
-
-                    break;
-                }
+                wm_move_window_to_space(view_focused(), cmd->arg);
+                break;
             case IPC_CMD_SET_LAYOUT:
                 wm_set_layout((enum Layout)cmd->arg);
                 break;
@@ -541,8 +487,8 @@ void ipc_process_pending_commands(void) {
                 break;
             case IPC_CMD_CLOSE:
                 {
-                    struct Window *w = focused_window();
-                    if (w != NULL) river_window_v1_close(w->obj);
+                    struct Window *w = view_focused();
+                    if (w != NULL) view_close(w);
                     break;
                 }
         }
@@ -579,14 +525,14 @@ void ipc_notify_space(void) {
             if (w->closed || w->space != s) continue;
             n++;
         }
-
         broadcast_printf("EVT space_window_count %d %d\n", s, n);
     }
 }
 
 void ipc_notify_focus(void) {
     if (!ipc_initialized) return;
-    struct Window *w = focused_window();
+
+    struct Window *w = view_focused();
     struct IpcClient *c;
 
     wl_list_for_each(c, &ipc_clients, link) {
@@ -609,11 +555,17 @@ void ipc_notify_focus(void) {
 
 void ipc_notify_kb_layout(void) {
     if (!ipc_initialized) return;
-    broadcast_emit_str("kb_layout", wm.kb_layout ? wm.kb_layout : "");
+
+    struct IpcClient *c;
+    wl_list_for_each(c, &ipc_clients, link) {
+        if (!c->subscribed || c->dead) continue;
+        emit_str(c, "kb_layout", wm.kb_layout ? wm.kb_layout : "");
+    }
 }
 
 void ipc_notify_window_opened(struct Window *w) {
     if (!ipc_initialized || !w) return;
+
     broadcast_printf(
         "EVT window_opened %llu\n", (unsigned long long)window_id(w)
     );
@@ -630,6 +582,7 @@ void ipc_notify_window_opened(struct Window *w) {
 
 void ipc_notify_window_closed(struct Window *w) {
     if (!ipc_initialized || !w) return;
+
     broadcast_printf(
         "EVT window_closed %llu\n", (unsigned long long)window_id(w)
     );
@@ -640,17 +593,19 @@ void ipc_notify_window_closed(struct Window *w) {
 
 void ipc_notify_window_meta(struct Window *w) {
     if (!ipc_initialized || !w) return;
+
     struct IpcClient *c;
     wl_list_for_each(c, &ipc_clients, link) {
         if (!c->subscribed || c->dead) continue;
         emit_window(c, w);
     }
 
-    if (w == focused_window()) ipc_notify_focus();
+    if (w == view_focused()) ipc_notify_focus();
 }
 
 void ipc_notify_all_state(void) {
     if (!ipc_initialized) return;
+
     struct IpcClient *c;
     wl_list_for_each(c, &ipc_clients, link) {
         if (!c->subscribed || c->dead) continue;
@@ -661,7 +616,7 @@ void ipc_notify_all_state(void) {
 static void after_set(enum IpcAfter a) {
     switch (a) {
         case IPC_AFTER_NONE: break;
-        case IPC_AFTER_MANAGE: wm_request_manage(); break;
+        case IPC_AFTER_MANAGE: break;
         case IPC_AFTER_LIBINPUT: libinput_reconfigure(); break;
         case IPC_AFTER_WALLPAPER:
 #ifdef WALLPAPER
@@ -779,13 +734,13 @@ static void handle_get(struct IpcClient *c, const char *key, const char *arg) {
     }
 
     if (!strcmp(key, "focused_title")) {
-        struct Window *w = focused_window();
+        struct Window *w = view_focused();
         resp_ok_str(c, w && w->title ? w->title : "");
         return;
     }
 
     if (!strcmp(key, "focused_app_id")) {
-        struct Window *w = focused_window();
+        struct Window *w = view_focused();
         resp_ok_str(c, w && w->app_id ? w->app_id : "");
         return;
     }
@@ -800,7 +755,7 @@ static void handle_get(struct IpcClient *c, const char *key, const char *arg) {
         int n = 0;
         struct Window *w;
         wl_list_for_each(w, &wm.windows, link) {
-            if (w->closed || w->space != (int)s) { continue; }
+            if (w->closed || w->space != (int)s) continue;
             n++;
         }
 
@@ -892,7 +847,7 @@ handle_set(struct IpcClient *c, const char *key, const char *value) {
         }
 
         ipc_queue_command(IPC_CMD_SET_LAYOUT, (int)l);
-        wm_request_manage();
+
         resp_ok(c);
         return;
     }
@@ -905,7 +860,7 @@ handle_set(struct IpcClient *c, const char *key, const char *value) {
         }
 
         ipc_queue_command(IPC_CMD_SWITCH_SPACE, (int)v);
-        wm_request_manage();
+
         resp_ok(c);
         return;
     }
@@ -919,7 +874,7 @@ handle_set(struct IpcClient *c, const char *key, const char *value) {
 
         wm.mfact = v;
         broadcast_printf("EVT mfact %g\n", (double)wm.mfact);
-        wm_request_manage();
+
         resp_ok(c);
         return;
     }
@@ -936,9 +891,13 @@ handle_set(struct IpcClient *c, const char *key, const char *value) {
             return;
         }
 
-        broadcast_emit_str(
-            "wallpaper_path", wm.wallpaper.path ? wm.wallpaper.path : ""
-        );
+        struct IpcClient *it;
+        wl_list_for_each(it, &ipc_clients, link) {
+            if (!it->subscribed || it->dead) continue;
+            emit_str(
+                it, "wallpaper_path", wm.wallpaper.path ? wm.wallpaper.path : ""
+            );
+        }
 
         resp_ok(c);
         return;
@@ -1038,7 +997,7 @@ static void dispatch_line(struct IpcClient *c, char *line) {
         }
 
         ipc_queue_command(IPC_CMD_SWITCH_SPACE, (int)v);
-        wm_request_manage();
+
         resp_ok(c);
         return;
     }
@@ -1052,21 +1011,21 @@ static void dispatch_line(struct IpcClient *c, char *line) {
         }
 
         ipc_queue_command(IPC_CMD_MOVE_TO_SPACE, (int)v);
-        wm_request_manage();
+
         resp_ok(c);
         return;
     }
 
     if (!strcmp(cmd, "CYCLE_LAYOUT")) {
         ipc_queue_command(IPC_CMD_CYCLE_LAYOUT, 0);
-        wm_request_manage();
+
         resp_ok(c);
         return;
     }
 
     if (!strcmp(cmd, "CLOSE")) {
         ipc_queue_command(IPC_CMD_CLOSE, 0);
-        wm_request_manage();
+
         resp_ok(c);
         return;
     }
@@ -1094,7 +1053,8 @@ static void client_read(struct IpcClient *c) {
         }
 
         if (n == 0) {
-            client_begin_close(c);
+            c->read_closed = true;
+            if (c->outlen == 0) c->dead = true;
             return;
         }
 
@@ -1124,6 +1084,36 @@ static void client_read(struct IpcClient *c) {
     }
 }
 
+static int client_event_handler(int fd, uint32_t mask, void *data) {
+    (void)fd;
+
+    struct IpcClient *c = data;
+
+    if (c->dead) {
+        reap_dead_clients();
+        return 0;
+    }
+
+    if (mask & WL_EVENT_ERROR) {
+        c->dead = true;
+        reap_dead_clients();
+        return 0;
+    }
+
+    if (mask & WL_EVENT_HANGUP) { c->read_closed = true; }
+    if (mask & WL_EVENT_READABLE) { client_read(c); }
+
+    if (c->dead) {
+        reap_dead_clients();
+        return 0;
+    }
+
+    if (mask & WL_EVENT_WRITABLE) { client_flush(c); }
+    if (c->dead) reap_dead_clients();
+
+    return 0;
+}
+
 static void accept_client(void) {
     reap_dead_clients();
 
@@ -1136,7 +1126,7 @@ static void accept_client(void) {
 
             if (errno == EMFILE || errno == ENFILE) {
                 log_warn(
-                    "out of file descriptors (%s) (shedding connection)",
+                    "Out of file descriptors (%s) (shedding connection)",
                     errno == EMFILE ? "EMFILE" : "ENFILE"
                 );
 
@@ -1153,7 +1143,6 @@ static void accept_client(void) {
 
                     ipc_reserve_fd = open("/dev/null", O_RDONLY | O_CLOEXEC);
                 }
-
                 return;
             }
 
@@ -1174,75 +1163,27 @@ static void accept_client(void) {
         c->fd = fd;
         wl_list_insert(ipc_clients.prev, &c->link);
 
-        if (ipc_kq >= 0) {
-            struct kevent ev;
-            EV_SET(&ev, (uintptr_t)fd, EVFILT_READ, EV_ADD, 0, 0, NULL);
-            if (kevent(ipc_kq, &ev, 1, NULL, 0, NULL) < 0) { c->dead = true; }
+        if (ipc_loop != NULL) {
+            c->source = wl_event_loop_add_fd(
+                ipc_loop, fd, WL_EVENT_READABLE, client_event_handler, c
+            );
+
+            if (c->source == NULL) c->dead = true;
         }
     }
 }
 
-static void register_server_in_kq(void) {
-    if (ipc_kq < 0 || ipc_server_fd < 0) return;
+static int server_event_handler(int fd, uint32_t mask, void *data) {
+    (void)fd;
+    (void)data;
 
-    struct kevent ev;
-    EV_SET(&ev, (uintptr_t)ipc_server_fd, EVFILT_READ, EV_ADD, 0, 0, NULL);
-
-    if (kevent(ipc_kq, &ev, 1, NULL, 0, NULL) < 0) {
-        log_warn("kevent(server) failed: %s", strerror(errno));
-    }
-}
-
-void ipc_kqueue_register(int kq) {
-    ipc_kq = kq;
-    register_server_in_kq();
-}
-
-void ipc_kqueue_handle(const struct kevent *ev) {
-    int fd = (int)ev->ident;
-
-    if (ev->filter == EVFILT_READ) {
-        if (fd == ipc_server_fd) {
-            accept_client();
-            reap_dead_clients();
-            return;
-        }
-
-        struct IpcClient *c = NULL, *it;
-        wl_list_for_each(it, &ipc_clients, link) {
-            if (it->fd == fd) {
-                c = it;
-                break;
-            }
-        }
-
-        if (c == NULL) return;
-
-        client_read(c);
-
-        if (!c->dead && !c->read_closed && (ev->flags & EV_EOF)) {
-            client_begin_close(c);
-        }
-
-        reap_dead_clients();
-        return;
+    if (mask & (WL_EVENT_ERROR | WL_EVENT_HANGUP)) {
+        log_warn("IPC server socket error/hangup");
+        return 0;
     }
 
-    if (ev->filter == EVFILT_WRITE) {
-        struct IpcClient *c = NULL, *it;
-        wl_list_for_each(it, &ipc_clients, link) {
-            if (it->fd == fd) {
-                c = it;
-                break;
-            }
-        }
-
-        if (c == NULL) return;
-
-        client_flush(c);
-        reap_dead_clients();
-        return;
-    }
+    if (mask & WL_EVENT_READABLE) accept_client();
+    return 0;
 }
 
 static int make_socket(void) {
@@ -1255,7 +1196,6 @@ static int make_socket(void) {
                 ipc_path, sizeof(ipc_path), "%s/nullspace-%s.sock", runtime,
                 display
             );
-
         } else {
             snprintf(ipc_path, sizeof(ipc_path), "%s/nullspace.sock", runtime);
         }
@@ -1271,7 +1211,7 @@ static int make_socket(void) {
     addr.sun_family = AF_UNIX;
 
     if (strlen(ipc_path) >= sizeof(addr.sun_path)) {
-        log_warn("socket path too long: %s", ipc_path);
+        log_warn("Socket path too long: %s", ipc_path);
         return -1;
     }
 
@@ -1281,7 +1221,7 @@ static int make_socket(void) {
 
     ipc_reserve_fd = open("/dev/null", O_RDONLY | O_CLOEXEC);
     if (ipc_reserve_fd < 0) {
-        log_warn("reserve open(/dev/null) failed: %s", strerror(errno));
+        log_warn("Reserve open(/dev/null) failed: %s", strerror(errno));
     }
 
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -1310,7 +1250,7 @@ static int make_socket(void) {
                 ipc_reserve_fd = -1;
             }
 
-            log_warn("another instance is already listening on %s", ipc_path);
+            log_warn("Another instance is already listening on %s", ipc_path);
             return -1;
         }
 
@@ -1351,28 +1291,60 @@ static int make_socket(void) {
     return fd;
 }
 
+void ipc_attach_event_loop(struct wl_event_loop *loop) {
+    ipc_loop = loop;
+
+    if (ipc_server_fd >= 0 && ipc_server_source == NULL) {
+        ipc_server_source = wl_event_loop_add_fd(
+            loop, ipc_server_fd, WL_EVENT_READABLE, server_event_handler, NULL
+        );
+
+        if (ipc_server_source == NULL) {
+            log_warn("Failed to register socket");
+        }
+    }
+
+    struct IpcClient *c;
+    wl_list_for_each(c, &ipc_clients, link) {
+        if (c->source != NULL) continue;
+        c->source = wl_event_loop_add_fd(
+            loop, c->fd, WL_EVENT_READABLE, client_event_handler, c
+        );
+
+        if (c->source == NULL) c->dead = true;
+    }
+
+    reap_dead_clients();
+}
+
 void ipc_init(void) {
     if (ipc_initialized) return;
+
     wl_list_init(&ipc_clients);
     wl_list_init(&ipc_pending_commands);
 
     ipc_server_fd = make_socket();
     if (ipc_server_fd < 0) {
-        log_warn("socket unavailable");
+        log_warn("Socket unavailable");
         ipc_server_fd = -1;
         return;
     }
 
     ipc_initialized = true;
-    register_server_in_kq();
-    log_info("listening on '%s'", ipc_path);
+    log_info("Listening on '%s'", ipc_path);
+
+    if (ipc_loop != NULL) {
+        ipc_server_source = wl_event_loop_add_fd(
+            ipc_loop, ipc_server_fd, WL_EVENT_READABLE, server_event_handler,
+            NULL
+        );
+    }
 }
 
 void ipc_destroy(void) {
     if (!ipc_initialized) return;
 
     unsetenv("NULLSPACE_INSTANCE_SIGNATURE");
-    ipc_kq = -1;
 
     struct IpcClient *c, *tmp;
     wl_list_for_each_safe(c, tmp, &ipc_clients, link) { client_destroy(c); }
@@ -1381,6 +1353,11 @@ void ipc_destroy(void) {
     wl_list_for_each_safe(cmd, cmdtmp, &ipc_pending_commands, link) {
         wl_list_remove(&cmd->link);
         free(cmd);
+    }
+
+    if (ipc_server_source != NULL) {
+        wl_event_source_remove(ipc_server_source);
+        ipc_server_source = NULL;
     }
 
     if (ipc_reserve_fd >= 0) {
@@ -1394,4 +1371,5 @@ void ipc_destroy(void) {
     if (ipc_path[0]) unlink(ipc_path);
     ipc_path[0] = '\0';
     ipc_initialized = false;
+    ipc_loop = NULL;
 }

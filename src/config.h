@@ -1,6 +1,11 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include <dev/evdev/input-event-codes.h>
+#include <stddef.h>
+#include <wlr/types/wlr_keyboard.h>
+#include <xkbcommon/xkbcommon-keysyms.h>
+
 #define CFG_DEFAULT_LAYOUT           LAYOUT_VERTICAL_TILE
 
 #define CFG_GAP_OUTER_H              8
@@ -16,10 +21,10 @@
 
 #define CFG_CMD_TERMINAL             "foot", NULL
 #define CFG_CMD_BROWSER              "firefox", NULL
-#define CFG_CMD_IDE                  "emacs", NULL
+#define CFG_CMD_IDE                  "gram", NULL
 
-#define CFG_MOD_SUPER                RIVER_SEAT_V1_MODIFIERS_MOD4  // Super key
-#define CFG_MOD_SHIFT                RIVER_SEAT_V1_MODIFIERS_SHIFT // Shift key
+#define CFG_MOD_SUPER                WLR_MODIFIER_LOGO  // Super key
+#define CFG_MOD_SHIFT                WLR_MODIFIER_SHIFT // Shift key
 
 #define CFG_BIND(MODS, KEY, ACTION)  {MODS, KEY, ACTION, NULL},
 
@@ -58,30 +63,31 @@
 
 // grp:alt_shift_toggle | grp:alt_space_toggle | grp:ctrl_shift_toggle |
 // grp:win_space_toggle | grp:alt_caps_toggle
-#define CFG_KB_LAYOUTS                 "us,no" // comma-separated layouts
 #define CFG_KB_OPTIONS                 "grp:alt_space_toggle" // XKB options
+#define CFG_KB_LAYOUTS                 "us,no" // comma-separated layouts
 
-// -1 current | 0 disabled | 1 enabled
+#define CFG_KB_RATE_HZ                 26 // repeats/sec
+#define CFG_KB_DELAY_MS                600
+
 #define CFG_LIBINPUT_TAP_STATE         1
 #define CFG_LIBINPUT_NATURAL_SCROLL    1
 #define CFG_LIBINPUT_LEFT_HANDED       -1
 #define CFG_LIBINPUT_MIDDLE_EMULATION  -1
 #define CFG_LIBINPUT_DWT               -1 // disable-while-typing
 #define CFG_LIBINPUT_DRAG              -1
-#define CFG_LIBINPUT_DRAG_LOCK         -1 // -1, 0 = disabled, 1 = timeout, 2 = sticky
-#define CFG_LIBINPUT_THREE_FINGER_DRAG -1 // -1, 0 = disabled, 1 = 3fg, 2 = 4fg
-
+// -1/0 disabled | 1 timeout | 2 sticky
+#define CFG_LIBINPUT_DRAG_LOCK         -1
+// -1/0 disabled | 1 3fg | 2 4fg
+#define CFG_LIBINPUT_THREE_FINGER_DRAG -1
 // 0 none | 1 flat | 2 adaptive | 4 custom
 #define CFG_LIBINPUT_ACCEL_PROFILE     1
-// Valid range is -1, 1; -2.0f to "skip"
-#define CFG_LIBINPUT_ACCEL_SPEED       (-2.0f)
-
+// Valid range is (-1,1), (-2.0f) to skip
+#define CFG_LIBINPUT_ACCEL_SPD         (-2.0f)
 // 0 none | 1 button_areas | 2 clickfinger
 #define CFG_LIBINPUT_CLICK_METHOD      -1
 // 0 no_scroll | 1 two_finger | 2 edge | 4 on_button_down
 #define CFG_LIBINPUT_SCROLL_METHOD     -1
 
-// 0 disabled | 1 enabled
 #define CFG_ANIMATIONS                 true
 
 #define CFG_ANIM_DURATION_MOVE         160
@@ -89,8 +95,8 @@
 #define CFG_ANIM_DURATION_CLOSE        140
 #define CFG_ANIM_DURATION_SPACE        220
 
-// New window's vertical direction (set `true` to slide new windows from above
-// the screen).
+// New window's vertical direction
+// (`true` slides new windows from above the screen).
 #define CFG_ANIM_OPEN_FROM_TOP         false
 
 // Cubic bezier control points (x1, y1, x2, y2).
@@ -101,7 +107,6 @@
 
 #ifdef WALLPAPER
 #define CFG_WALLPAPER_PATH                 ".local/share/nullspace/wallpaper.ppm"
-#define CFG_WALLPAPER_TOPBAR_FADE_H        42
 
 #define CFG_WALLPAPER_PATTERN_BG_R         0x12
 #define CFG_WALLPAPER_PATTERN_BG_G         0x12
@@ -114,7 +119,6 @@
 
 #define CFG_WALLPAPER_BLUR_RADIUS          12
 #define CFG_WALLPAPER_BLUR_PASSES          2
-#define CFG_WALLPAPER_BLUR_TOP_INSET       8
 #endif
 
 #endif // CONFIG_H

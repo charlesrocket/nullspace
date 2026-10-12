@@ -1,651 +1,220 @@
 #include "input.h"
 
-#include "actions.h"
 #include "config.h"
-#include "log.h"
 #include "manager.h"
+#include "seat.h"
+#include "server.h"
 
 #include <dev/evdev/input-event-codes.h>
-#include <river-libinput-config-v1-client-protocol.h>
-#include <river-window-management-v1-client-protocol.h>
-#include <river-xkb-bindings-v1-client-protocol.h>
-#include <stdbool.h>
+#include <libinput.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <wayland-client-core.h>
-#include <wayland-client-protocol.h>
-#include <wayland-util.h>
-#include <xkbcommon/xkbcommon-keysyms.h>
+#include <wlr/backend/libinput.h>
+#include <wlr/types/wlr_input_device.h>
 
 #define LOG_TOPIC "input"
 
 const struct KeyDef cfg_keybinds[] = {CFG_KEYBINDS};
 const size_t cfg_keybinds_len = sizeof(cfg_keybinds) / sizeof(cfg_keybinds[0]);
-const struct PointerDef cfg_pointer_binds[] = {
-    {CFG_MOD_SUPER,  BTN_LEFT,   ACTION_MOVE, NULL},
-    {CFG_MOD_SUPER, BTN_RIGHT, ACTION_RESIZE, NULL},
-};
 
+const struct PointerDef cfg_pointer_binds[] = {CFG_POINTER_BINDS};
 const size_t cfg_pointer_binds_len =
     sizeof(cfg_pointer_binds) / sizeof(cfg_pointer_binds[0]);
 
-extern struct river_xkb_bindings_v1 *xkb_bindings_v1;
-
-static void
-xkb_binding_handle_pressed(void *data, struct river_xkb_binding_v1 *obj) {
-    (void)obj;
-
-    struct XkbBinding *binding = data;
-    binding->seat->pending_action = binding->action;
-    binding->seat->pending_arg = binding->arg;
+static struct libinput_device *libinput_of(struct wlr_input_device *device) {
+    if (!wlr_input_device_is_libinput(device)) return NULL;
+    return wlr_libinput_get_device_handle(device);
 }
 
-static void
-xkb_binding_handle_released(void *data, struct river_xkb_binding_v1 *obj) {
-    (void)data;
-    (void)obj;
+static void apply_tap(struct libinput_device *dev) {
+    if (wm.libinput.tap_state < 0) return;
+    if (libinput_device_config_tap_get_finger_count(dev) < 1) return;
+
+    libinput_device_config_tap_set_enabled(
+        dev, wm.libinput.tap_state ? LIBINPUT_CONFIG_TAP_ENABLED
+                                   : LIBINPUT_CONFIG_TAP_DISABLED
+    );
 }
 
-static const struct river_xkb_binding_v1_listener xkb_binding_listener = {
-    .pressed = xkb_binding_handle_pressed,
-    .released = xkb_binding_handle_released,
-};
+static void apply_natural_scroll(struct libinput_device *dev) {
+    if (wm.libinput.natural_scroll < 0) return;
+    if (!libinput_device_config_scroll_has_natural_scroll(dev)) return;
 
-static void libinput_result_handle_success(
-    void *data, struct river_libinput_result_v1 *obj
-) {
-    (void)data;
-
-    wl_proxy_destroy((struct wl_proxy *)obj);
+    libinput_device_config_scroll_set_natural_scroll_enabled(
+        dev, wm.libinput.natural_scroll ? 1 : 0
+    );
 }
 
-static void libinput_result_handle_unsupported(
-    void *data, struct river_libinput_result_v1 *obj
-) {
-    (void)data;
+static void apply_left_handed(struct libinput_device *dev) {
+    if (wm.libinput.left_handed < 0) return;
+    if (!libinput_device_config_left_handed_is_available(dev)) return;
 
-    log_warn("setting is unsupported by device (ignored)");
-    wl_proxy_destroy((struct wl_proxy *)obj);
+    libinput_device_config_left_handed_set(
+        dev, wm.libinput.left_handed ? 1 : 0
+    );
 }
 
-static void libinput_result_handle_invalid(
-    void *data, struct river_libinput_result_v1 *obj
-) {
-    (void)data;
+static void apply_middle_emulation(struct libinput_device *dev) {
+    if (wm.libinput.middle_emulation < 0) return;
+    if (!libinput_device_config_middle_emulation_is_available(dev)) return;
 
-    log_warn("invalid setting (ignored)");
-    wl_proxy_destroy((struct wl_proxy *)obj);
+    libinput_device_config_middle_emulation_set_enabled(
+        dev, wm.libinput.middle_emulation
+                 ? LIBINPUT_CONFIG_MIDDLE_EMULATION_ENABLED
+                 : LIBINPUT_CONFIG_MIDDLE_EMULATION_DISABLED
+    );
 }
 
-static const struct river_libinput_result_v1_listener libinput_result_listener =
-    {
-        .success = libinput_result_handle_success,
-        .unsupported = libinput_result_handle_unsupported,
-        .invalid = libinput_result_handle_invalid,
-};
+static void apply_dwt(struct libinput_device *dev) {
+    if (wm.libinput.dwt < 0) return;
+    if (!libinput_device_config_dwt_is_available(dev)) return;
 
-static void libinput_result_track(struct river_libinput_result_v1 *result) {
-    if (result != NULL) {
-        river_libinput_result_v1_add_listener(
-            result, &libinput_result_listener, NULL
+    libinput_device_config_dwt_set_enabled(
+        dev, wm.libinput.dwt ? LIBINPUT_CONFIG_DWT_ENABLED
+                             : LIBINPUT_CONFIG_DWT_DISABLED
+    );
+}
+
+static void apply_drag(struct libinput_device *dev) {
+    if (wm.libinput.drag < 0) return;
+    if (libinput_device_config_tap_get_finger_count(dev) < 1) return;
+
+    libinput_device_config_tap_set_drag_enabled(
+        dev, wm.libinput.drag ? LIBINPUT_CONFIG_DRAG_ENABLED
+                              : LIBINPUT_CONFIG_DRAG_DISABLED
+    );
+}
+
+static void apply_drag_lock(struct libinput_device *dev) {
+    if (wm.libinput.drag_lock < 0) return;
+    if (libinput_device_config_tap_get_finger_count(dev) < 1) return;
+
+    enum libinput_config_drag_lock_state state =
+        LIBINPUT_CONFIG_DRAG_LOCK_DISABLED;
+
+    if (wm.libinput.drag_lock == 1) {
+        state = LIBINPUT_CONFIG_DRAG_LOCK_ENABLED_TIMEOUT;
+    } else if (wm.libinput.drag_lock == 2) {
+        state = LIBINPUT_CONFIG_DRAG_LOCK_ENABLED_STICKY;
+    }
+
+    libinput_device_config_tap_set_drag_lock_enabled(dev, state);
+}
+
+static void apply_three_finger_drag(struct libinput_device *dev) {
+    if (wm.libinput.three_finger_drag < 0) return;
+    if (libinput_device_config_tap_get_finger_count(dev) < 3) return;
+
+    libinput_device_config_3fg_drag_set_enabled(
+        dev, wm.libinput.three_finger_drag
+                 ? LIBINPUT_CONFIG_3FG_DRAG_ENABLED_3FG
+                 : LIBINPUT_CONFIG_3FG_DRAG_DISABLED
+    );
+}
+
+static void apply_accel(struct libinput_device *dev) {
+    if (!libinput_device_config_accel_is_available(dev)) return;
+
+    if (wm.libinput.accel_profile >= 0) {
+        uint32_t supported = libinput_device_config_accel_get_profiles(dev);
+        uint32_t want = (uint32_t)wm.libinput.accel_profile;
+
+        enum libinput_config_accel_profile prof =
+            LIBINPUT_CONFIG_ACCEL_PROFILE_NONE;
+
+        if (want == 1) {
+            prof = LIBINPUT_CONFIG_ACCEL_PROFILE_FLAT;
+        } else if (want == 2) {
+            prof = LIBINPUT_CONFIG_ACCEL_PROFILE_ADAPTIVE;
+        } else if (want == 4) {
+            prof = LIBINPUT_CONFIG_ACCEL_PROFILE_CUSTOM;
+        }
+
+        if (want == 0 || (supported & want) != 0) {
+            libinput_device_config_accel_set_profile(dev, prof);
+        }
+    }
+
+    if (wm.libinput.accel_speed > -2.0f) {
+        libinput_device_config_accel_set_speed(
+            dev, (double)wm.libinput.accel_speed
         );
     }
 }
 
-static void xkb_binding_destroy(struct XkbBinding *binding) {
-    river_xkb_binding_v1_destroy(binding->obj);
-    wl_list_remove(&binding->link);
-    free(binding);
-}
+static void apply_click_method(struct libinput_device *dev) {
+    if (wm.libinput.click_method < 0) return;
 
-static void xkb_binding_create(struct Seat *seat, const struct KeyDef *def) {
-    struct XkbBinding *binding = calloc(1, sizeof(struct XkbBinding));
-    if (binding == NULL) { return; }
+    uint32_t methods = libinput_device_config_click_get_methods(dev);
+    if (methods == 0) return;
 
-    binding->obj = river_xkb_bindings_v1_get_xkb_binding(
-        xkb_bindings_v1, seat->obj, def->key, def->mods
-    );
+    enum libinput_config_click_method m = LIBINPUT_CONFIG_CLICK_METHOD_NONE;
 
-    if (binding->obj == NULL) {
-        free(binding);
-        return;
+    if (wm.libinput.click_method == 1) {
+        m = LIBINPUT_CONFIG_CLICK_METHOD_BUTTON_AREAS;
+    } else if (wm.libinput.click_method == 2) {
+        m = LIBINPUT_CONFIG_CLICK_METHOD_CLICKFINGER;
     }
 
-    binding->seat = seat;
-    binding->action = def->action;
-    binding->arg = def->arg;
-
-    river_xkb_binding_v1_add_listener(
-        binding->obj, &xkb_binding_listener, binding
-    );
-
-    river_xkb_binding_v1_enable(binding->obj);
-
-    wl_list_insert(seat->xkb_bindings.prev, &binding->link);
-}
-
-static void pointer_binding_handle_pressed(
-    void *data, struct river_pointer_binding_v1 *obj
-) {
-    ;
-    (void)obj;
-    struct PointerBinding *binding = data;
-    binding->seat->pending_action = binding->action;
-    binding->seat->pending_arg = binding->arg;
-}
-
-static void pointer_binding_handle_released(
-    void *data, struct river_pointer_binding_v1 *obj
-) {
-    (void)data;
-    (void)obj;
-}
-
-static const struct river_pointer_binding_v1_listener pointer_binding_listener =
-    {
-        .pressed = pointer_binding_handle_pressed,
-        .released = pointer_binding_handle_released,
-};
-
-static void pointer_binding_destroy(struct PointerBinding *binding) {
-    river_pointer_binding_v1_destroy(binding->obj);
-    wl_list_remove(&binding->link);
-    free(binding);
-}
-
-static void
-pointer_binding_create(struct Seat *seat, const struct PointerDef *def) {
-    struct PointerBinding *binding = calloc(1, sizeof(struct PointerBinding));
-    if (binding == NULL) { return; }
-
-    binding->obj =
-        river_seat_v1_get_pointer_binding(seat->obj, def->button, def->mods);
-
-    if (binding->obj == NULL) {
-        free(binding);
-        return;
+    if (m != LIBINPUT_CONFIG_CLICK_METHOD_NONE
+        && (methods & (uint32_t)m) == 0) {
+        m = LIBINPUT_CONFIG_CLICK_METHOD_NONE;
     }
 
-    binding->seat = seat;
-    binding->action = def->action;
-    binding->arg = def->arg;
-
-    river_pointer_binding_v1_add_listener(
-        binding->obj, &pointer_binding_listener, binding
-    );
-
-    river_pointer_binding_v1_enable(binding->obj);
-
-    wl_list_insert(seat->pointer_bindings.prev, &binding->link);
+    libinput_device_config_click_set_method(dev, m);
 }
 
-void input_seat_bind_all(struct Seat *seat) {
-    for (size_t i = 0; i < cfg_keybinds_len; i++) {
-        xkb_binding_create(seat, &cfg_keybinds[i]);
+static void apply_scroll_method(struct libinput_device *dev) {
+    if (wm.libinput.scroll_method < 0) return;
+
+    uint32_t methods = libinput_device_config_scroll_get_methods(dev);
+    if (methods == 0) return;
+
+    enum libinput_config_scroll_method m = LIBINPUT_CONFIG_SCROLL_NO_SCROLL;
+
+    if (wm.libinput.scroll_method == 1) {
+        m = LIBINPUT_CONFIG_SCROLL_2FG;
+    } else if (wm.libinput.scroll_method == 2) {
+        m = LIBINPUT_CONFIG_SCROLL_EDGE;
+    } else if (wm.libinput.scroll_method == 4) {
+        m = LIBINPUT_CONFIG_SCROLL_ON_BUTTON_DOWN;
     }
 
-    for (size_t i = 0; i < cfg_pointer_binds_len; i++) {
-        pointer_binding_create(seat, &cfg_pointer_binds[i]);
-    }
-}
-
-void input_seat_unbind_all(struct Seat *seat) {
-    struct XkbBinding *xkb, *xkb_tmp;
-    wl_list_for_each_safe(xkb, xkb_tmp, &seat->xkb_bindings, link) {
-        xkb_binding_destroy(xkb);
+    if (m != LIBINPUT_CONFIG_SCROLL_NO_SCROLL && (methods & (uint32_t)m) == 0) {
+        m = LIBINPUT_CONFIG_SCROLL_NO_SCROLL;
     }
 
-    struct PointerBinding *ptr, *ptr_tmp;
-    wl_list_for_each_safe(ptr, ptr_tmp, &seat->pointer_bindings, link) {
-        pointer_binding_destroy(ptr);
-    }
+    libinput_device_config_scroll_set_method(dev, m);
 }
 
-struct LibinputDevice {
-    struct river_libinput_device_v1 *obj;
-    struct wl_list link;
-};
+static void apply_all(struct libinput_device *dev) {
+    apply_tap(dev);
+    apply_natural_scroll(dev);
+    apply_left_handed(dev);
+    apply_middle_emulation(dev);
+    apply_dwt(dev);
+    apply_drag(dev);
+    apply_drag_lock(dev);
+    apply_three_finger_drag(dev);
+    apply_accel(dev);
+    apply_click_method(dev);
+    apply_scroll_method(dev);
+}
 
-static struct river_libinput_config_v1 *libinput_config;
-static struct wl_list devices; // LibinputDevice
+void input_apply_pointer_config(struct wlr_input_device *device) {
+    struct libinput_device *dev = libinput_of(device);
+    if (dev == NULL) return;
+    apply_all(dev);
+}
 
-void libinput_init(void) { wl_list_init(&devices); }
-
-static void device_handle_tap_support(
-    void *data, struct river_libinput_device_v1 *obj, int32_t finger_count
-) {
+static void reconfigure_visit(struct wlr_input_device *device, void *data) {
     (void)data;
 
-    if (wm.libinput.tap_state < 0) { return; }
-    if (finger_count < 1) { return; }
-
-    libinput_result_track(
-        river_libinput_device_v1_set_tap(obj, (uint32_t)wm.libinput.tap_state)
-    );
-}
-
-static void device_handle_natural_scroll_support(
-    void *data, struct river_libinput_device_v1 *obj, int32_t supported
-) {
-    (void)data;
-
-    if (wm.libinput.natural_scroll < 0) { return; }
-    if (!supported) { return; }
-
-    libinput_result_track(river_libinput_device_v1_set_natural_scroll(
-        obj, (uint32_t)wm.libinput.natural_scroll
-    ));
-}
-
-static void device_handle_left_handed_support(
-    void *data, struct river_libinput_device_v1 *obj, int32_t supported
-) {
-    (void)data;
-
-    if (wm.libinput.left_handed < 0) { return; }
-    if (!supported) { return; }
-
-    libinput_result_track(river_libinput_device_v1_set_left_handed(
-        obj, (uint32_t)wm.libinput.left_handed
-    ));
-}
-
-static void device_handle_middle_emulation_support(
-    void *data, struct river_libinput_device_v1 *obj, int32_t supported
-) {
-    (void)data;
-
-    if (wm.libinput.middle_emulation < 0) { return; }
-    if (!supported) { return; }
-
-    libinput_result_track(river_libinput_device_v1_set_middle_emulation(
-        obj, (uint32_t)wm.libinput.middle_emulation
-    ));
-}
-
-static void device_handle_dwt_support(
-    void *data, struct river_libinput_device_v1 *obj, int32_t supported
-) {
-    (void)data;
-
-    if (wm.libinput.dwt < 0) { return; }
-    if (!supported) { return; }
-
-    libinput_result_track(
-        river_libinput_device_v1_set_dwt(obj, (uint32_t)wm.libinput.dwt)
-    );
-}
-
-static void device_handle_drag_default(
-    void *data, struct river_libinput_device_v1 *obj, uint32_t state
-) {
-    (void)data;
-    (void)state;
-
-    if (wm.libinput.drag < 0) { return; }
-
-    libinput_result_track(
-        river_libinput_device_v1_set_drag(obj, (uint32_t)wm.libinput.drag)
-    );
-}
-
-static void device_handle_drag_lock_default(
-    void *data, struct river_libinput_device_v1 *obj, uint32_t state
-) {
-    (void)data;
-    (void)state;
-
-    if (wm.libinput.drag_lock < 0) { return; }
-
-    libinput_result_track(river_libinput_device_v1_set_drag_lock(
-        obj, (uint32_t)wm.libinput.drag_lock
-    ));
-}
-
-static void device_handle_three_finger_drag_support(
-    void *data, struct river_libinput_device_v1 *obj, int32_t finger_count
-) {
-    (void)data;
-
-    if (wm.libinput.three_finger_drag < 0) { return; }
-    if (finger_count < 3) { return; }
-
-    libinput_result_track(river_libinput_device_v1_set_three_finger_drag(
-        obj, (uint32_t)wm.libinput.three_finger_drag
-    ));
-}
-
-static void device_handle_accel_profiles_support(
-    void *data, struct river_libinput_device_v1 *obj, uint32_t profiles
-) {
-    (void)data;
-
-    if (wm.libinput.accel_profile < 0) { return; }
-
-    uint32_t profile = (uint32_t)wm.libinput.accel_profile;
-    if (profile != 0 && (profiles & profile) == 0) { return; }
-
-    libinput_result_track(
-        river_libinput_device_v1_set_accel_profile(obj, profile)
-    );
-}
-
-static void device_handle_accel_speed_default(
-    void *data, struct river_libinput_device_v1 *obj, struct wl_array *speed
-) {
-    (void)data;
-    (void)speed;
-
-    if (wm.libinput.accel_speed <= -2.0f) { return; }
-
-    struct wl_array buf;
-    wl_array_init(&buf);
-
-    double *slot = wl_array_add(&buf, sizeof(*slot));
-    if (slot != NULL) {
-        *slot = (double)wm.libinput.accel_speed;
-
-        libinput_result_track(
-            river_libinput_device_v1_set_accel_speed(obj, &buf)
-        );
-    }
-
-    wl_array_release(&buf);
-}
-
-static void device_handle_click_method_support(
-    void *data, struct river_libinput_device_v1 *obj, uint32_t methods
-) {
-    (void)data;
-
-    if (wm.libinput.click_method < 0) { return; }
-
-    uint32_t method = (uint32_t)wm.libinput.click_method;
-    if (method != 0 && (methods & method) == 0) { return; }
-
-    libinput_result_track(river_libinput_device_v1_set_click_method(obj, method)
-    );
-}
-
-static void device_handle_scroll_method_support(
-    void *data, struct river_libinput_device_v1 *obj, uint32_t methods
-) {
-    (void)data;
-
-    if (wm.libinput.scroll_method < 0) { return; }
-
-    uint32_t method = (uint32_t)wm.libinput.scroll_method;
-    if (method != 0 && (methods & method) == 0) { return; }
-
-    libinput_result_track(
-        river_libinput_device_v1_set_scroll_method(obj, method)
-    );
-}
-
-static void
-device_handle_removed(void *data, struct river_libinput_device_v1 *obj) {
-    ;
-    (void)obj;
-
-    struct LibinputDevice *dev = data;
-
-    river_libinput_device_v1_destroy(dev->obj);
-    wl_list_remove(&dev->link);
-    free(dev);
-}
-
-static void device_ignore_i32(
-    void *data, struct river_libinput_device_v1 *obj, int32_t value
-) {
-    (void)data;
-    (void)obj;
-    (void)value;
-}
-
-static void device_ignore_u32(
-    void *data, struct river_libinput_device_v1 *obj, uint32_t value
-) {
-    (void)data;
-    (void)obj;
-    (void)value;
-}
-
-static void device_ignore_array(
-    void *data, struct river_libinput_device_v1 *obj, struct wl_array *value
-) {
-    (void)data;
-    (void)obj;
-    (void)value;
-}
-
-static void device_ignore_object(
-    void *data, struct river_libinput_device_v1 *obj,
-    struct river_input_device_v1 *value
-) {
-    (void)data;
-    (void)obj;
-    (void)value;
-}
-
-static void
-device_handle_done(void *data, struct river_libinput_device_v1 *obj) {
-    (void)data;
-    (void)obj;
-}
-
-static const struct river_libinput_device_v1_listener device_listener = {
-    .removed = device_handle_removed,
-    .input_device = device_ignore_object,
-
-    .send_events_support = device_ignore_u32,
-    .send_events_default = device_ignore_u32,
-    .send_events_current = device_ignore_u32,
-
-    .tap_support = device_handle_tap_support,
-    .tap_default = device_ignore_u32,
-    .tap_current = device_ignore_u32,
-    .tap_button_map_default = device_ignore_u32,
-    .tap_button_map_current = device_ignore_u32,
-
-    .drag_default = device_handle_drag_default,
-    .drag_current = device_ignore_u32,
-    .drag_lock_default = device_handle_drag_lock_default,
-    .drag_lock_current = device_ignore_u32,
-
-    .three_finger_drag_support = device_handle_three_finger_drag_support,
-    .three_finger_drag_default = device_ignore_u32,
-    .three_finger_drag_current = device_ignore_u32,
-
-    .calibration_matrix_support = device_ignore_i32,
-    .calibration_matrix_default = device_ignore_array,
-    .calibration_matrix_current = device_ignore_array,
-
-    .accel_profiles_support = device_handle_accel_profiles_support,
-    .accel_profile_default = device_ignore_u32,
-    .accel_profile_current = device_ignore_u32,
-    .accel_speed_default = device_handle_accel_speed_default,
-    .accel_speed_current = device_ignore_array,
-
-    .natural_scroll_support = device_handle_natural_scroll_support,
-    .natural_scroll_default = device_ignore_u32,
-    .natural_scroll_current = device_ignore_u32,
-
-    .left_handed_support = device_handle_left_handed_support,
-    .left_handed_default = device_ignore_u32,
-    .left_handed_current = device_ignore_u32,
-
-    .click_method_support = device_handle_click_method_support,
-    .click_method_default = device_ignore_u32,
-    .click_method_current = device_ignore_u32,
-    .clickfinger_button_map_default = device_ignore_u32,
-    .clickfinger_button_map_current = device_ignore_u32,
-
-    .middle_emulation_support = device_handle_middle_emulation_support,
-    .middle_emulation_default = device_ignore_u32,
-    .middle_emulation_current = device_ignore_u32,
-
-    .scroll_method_support = device_handle_scroll_method_support,
-    .scroll_method_default = device_ignore_u32,
-    .scroll_method_current = device_ignore_u32,
-    .scroll_button_default = device_ignore_u32,
-    .scroll_button_current = device_ignore_u32,
-    .scroll_button_lock_default = device_ignore_u32,
-    .scroll_button_lock_current = device_ignore_u32,
-
-    .dwt_support = device_handle_dwt_support,
-    .dwt_default = device_ignore_u32,
-    .dwt_current = device_ignore_u32,
-    .dwtp_support = device_ignore_i32,
-    .dwtp_default = device_ignore_u32,
-    .dwtp_current = device_ignore_u32,
-
-    .rotation_support = device_ignore_i32,
-    .rotation_default = device_ignore_u32,
-    .rotation_current = device_ignore_u32,
-
-    .done = device_handle_done,
-};
-
-static void
-config_handle_finished(void *data, struct river_libinput_config_v1 *obj) {
-    (void)data;
-
-    struct LibinputDevice *dev, *tmp;
-    wl_list_for_each_safe(dev, tmp, &devices, link) {
-        wl_list_remove(&dev->link);
-        river_libinput_device_v1_destroy(dev->obj);
-        free(dev);
-    }
-
-    river_libinput_config_v1_destroy(obj);
-    libinput_config = NULL;
-}
-
-static void config_handle_libinput_device(
-    void *data, struct river_libinput_config_v1 *obj,
-    struct river_libinput_device_v1 *id
-) {
-    (void)data;
-    (void)obj;
-
-    struct LibinputDevice *dev = calloc(1, sizeof(struct LibinputDevice));
-    if (dev == NULL) {
-        river_libinput_device_v1_destroy(id);
-        return;
-    }
-
-    dev->obj = id;
-    wl_list_insert(devices.prev, &dev->link);
-
-    river_libinput_device_v1_add_listener(id, &device_listener, dev);
-}
-
-static const struct river_libinput_config_v1_listener config_listener = {
-    .finished = config_handle_finished,
-    .libinput_device = config_handle_libinput_device,
-};
-
-void libinput_bind(struct wl_registry *registry, uint32_t name) {
-    if (libinput_config != NULL) { return; }
-
-    struct river_libinput_config_v1 *config = wl_registry_bind(
-        registry, name, &river_libinput_config_v1_interface, 2
-    );
-
-    if (config == NULL) { return; }
-
-    libinput_config = config;
-    river_libinput_config_v1_add_listener(config, &config_listener, NULL);
+    struct libinput_device *dev = libinput_of(device);
+    if (dev == NULL) return;
+    apply_all(dev);
 }
 
 void libinput_reconfigure(void) {
-    struct LibinputDevice *dev;
-    wl_list_for_each(dev, &devices, link) {
-        struct river_libinput_device_v1 *obj = dev->obj;
-
-        if (wm.libinput.tap_state >= 0) {
-            libinput_result_track(river_libinput_device_v1_set_tap(
-                obj, (uint32_t)wm.libinput.tap_state
-            ));
-        }
-
-        if (wm.libinput.natural_scroll >= 0) {
-            libinput_result_track(river_libinput_device_v1_set_natural_scroll(
-                obj, (uint32_t)wm.libinput.natural_scroll
-            ));
-        }
-
-        if (wm.libinput.left_handed >= 0) {
-            libinput_result_track(river_libinput_device_v1_set_left_handed(
-                obj, (uint32_t)wm.libinput.left_handed
-            ));
-        }
-
-        if (wm.libinput.middle_emulation >= 0) {
-            libinput_result_track(river_libinput_device_v1_set_middle_emulation(
-                obj, (uint32_t)wm.libinput.middle_emulation
-            ));
-        }
-
-        if (wm.libinput.dwt >= 0) {
-            libinput_result_track(
-                river_libinput_device_v1_set_dwt(obj, (uint32_t)wm.libinput.dwt)
-            );
-        }
-
-        if (wm.libinput.drag >= 0) {
-            libinput_result_track(river_libinput_device_v1_set_drag(
-                obj, (uint32_t)wm.libinput.drag
-            ));
-        }
-
-        if (wm.libinput.drag_lock >= 0) {
-            libinput_result_track(river_libinput_device_v1_set_drag_lock(
-                obj, (uint32_t)wm.libinput.drag_lock
-            ));
-        }
-
-        if (wm.libinput.three_finger_drag >= 0) {
-            libinput_result_track(
-                river_libinput_device_v1_set_three_finger_drag(
-                    obj, (uint32_t)wm.libinput.three_finger_drag
-                )
-            );
-        }
-
-        if (wm.libinput.accel_profile >= 0) {
-            libinput_result_track(river_libinput_device_v1_set_accel_profile(
-                obj, (uint32_t)wm.libinput.accel_profile
-            ));
-        }
-
-        if (wm.libinput.accel_speed > -2.0f) {
-            struct wl_array buf;
-            wl_array_init(&buf);
-
-            double *slot = wl_array_add(&buf, sizeof(*slot));
-            if (slot != NULL) {
-                *slot = (double)wm.libinput.accel_speed;
-
-                libinput_result_track(
-                    river_libinput_device_v1_set_accel_speed(obj, &buf)
-                );
-            }
-
-            wl_array_release(&buf);
-        }
-
-        if (wm.libinput.click_method >= 0) {
-            libinput_result_track(river_libinput_device_v1_set_click_method(
-                obj, (uint32_t)wm.libinput.click_method
-            ));
-        }
-
-        if (wm.libinput.scroll_method >= 0) {
-            libinput_result_track(river_libinput_device_v1_set_scroll_method(
-                obj, (uint32_t)wm.libinput.scroll_method
-            ));
-        }
-    }
+    seat_foreach_input_device(reconfigure_visit, NULL);
 }

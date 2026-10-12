@@ -1,29 +1,30 @@
 #ifndef OUTPUT_H
 #define OUTPUT_H
 
-#ifdef WALLPAPER
-#include "wallpaper.h"
-#endif
-
-#include <river-layer-shell-v1-client-protocol.h>
-#include <river-window-management-v1-client-protocol.h>
+#include <scenefx/types/wlr_scene.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <wayland-server-core.h>
 #include <wayland-util.h>
+#include <wlr/types/wlr_output.h>
 
 struct Output {
-    struct river_output_v1 *obj;
-    struct river_layer_shell_output_v1 *layer_shell;
-    struct wl_list link; // WindowManager.outputs
+    struct wlr_output *wlr_output;
+    struct wlr_scene_output *scene_output;
+    struct wl_list link; // NsServer.outputs
+    struct wl_listener frame;
+    struct wl_listener request_state;
+    struct wl_listener destroy;
+
 #ifdef WALLPAPER
     struct WallpaperOutput *wallpaper;
 #endif
 
     int32_t width;
     int32_t height;
-    // Output position in the global coordinate space
     int32_t pos_x;
     int32_t pos_y;
+
     int32_t area_x;
     int32_t area_y;
     int32_t area_width;
@@ -33,23 +34,9 @@ struct Output {
     bool removed;
 };
 
-void output_maybe_destroy(struct Output *output);
+void output_create(struct wlr_output *wlr_output);
+void output_destroy(struct Output *out);
 
 struct Output *output_primary(void);
-
-void output_handle_removed(void *data, struct river_output_v1 *obj);
-
-// Ignored events
-void output_handle_wl_output(
-    void *data, struct river_output_v1 *obj, uint32_t name
-);
-
-void output_handle_position(
-    void *data, struct river_output_v1 *obj, int32_t x, int32_t y
-);
-
-void output_handle_dimensions(
-    void *data, struct river_output_v1 *obj, int32_t width, int32_t height
-);
 
 #endif // OUTPUT_H

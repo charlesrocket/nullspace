@@ -1,6 +1,11 @@
 #ifndef LOG_H
 #define LOG_H
 
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <wlr/util/log.h>
+
 enum LogLevel {
     LOG_TRACE,
     LOG_DEBUG,

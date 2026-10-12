@@ -166,10 +166,6 @@ struct IpcKeyMeta {
 #ifdef WALLPAPER
 #define KEYS_TABLE_WALLPAPER(K_INT, K_FLOAT, K_BOOL, K_STR, K_SPECIAL)         \
     K_INT(                                                                     \
-        "wallpaper_topbar_fade_h", IPC_A_RW, IPC_AFTER_NONE,                   \
-        "wallpaper topbar fade height", wm.wallpaper.topbar_fade_h, 0, 1000    \
-    )                                                                          \
-    K_INT(                                                                     \
         "wallpaper_pattern_bg_r", IPC_A_RW, IPC_AFTER_WALLPAPER,               \
         "pattern background red", wm.wallpaper.pattern_bg_r, 0, 255            \
     )                                                                          \
@@ -208,10 +204,6 @@ struct IpcKeyMeta {
     K_INT(                                                                     \
         "wallpaper_blur_passes", IPC_A_RW, IPC_AFTER_WALLPAPER,                \
         "wallpaper blur passes", wm.wallpaper.blur_passes, 0, 16               \
-    )                                                                          \
-    K_INT(                                                                     \
-        "wallpaper_blur_top_inset", IPC_A_RW, IPC_AFTER_WALLPAPER,             \
-        "wallpaper blur top inset", wm.wallpaper.blur_top_inset, 0, 512        \
     )
 #else
 #define KEYS_TABLE_WALLPAPER(K_INT, K_FLOAT, K_BOOL, K_STR, K_SPECIAL)

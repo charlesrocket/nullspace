@@ -4,7 +4,7 @@ project(
   meson_version: '>= 1.8.0',
   version: '0.2.0',
   default_options: [
-    'c_std=c99',
+    'c_std=c11',
     'warning_level=3',
   ],
 )
@@ -12,7 +12,7 @@ project(
 cc = meson.get_compiler('c')
 add_project_arguments(cc.get_supported_arguments([
   '-DVERSION="@0@"'.format(meson.project_version()),
-  '-D_POSIX_C_SOURCE=200809L',
+  '-DWLR_USE_UNSTABLE',
   '-Wshadow',
   '-Wconversion',
   '-Wnull-dereference',
@@ -37,31 +37,35 @@ if get_option('wallpaper')
   add_project_arguments('-DWALLPAPER', language: 'c')
 endif
 
-wayland_client = dependency('wayland-client')
-xkbcommon = dependency('xkbcommon')
-
-wl_mod = import('wayland')
-generated = wl_mod.scan_xml(
-  'protocol/river-window-management-v1.xml',
-  'protocol/river-xkb-bindings-v1.xml',
-  'protocol/river-xkb-config-v1.xml',
-  'protocol/river-libinput-config-v1.xml',
-  'protocol/river-input-management-v1.xml',
-  'protocol/river-layer-shell-v1.xml',
-)
+wayland_server = dependency('wayland-server')
+wayland_proto = dependency('wayland-protocols')
+wlroots        = dependency('wlroots-0.20')
+scenefx        = dependency('scenefx-0.5')
+xkbcommon      = dependency('xkbcommon')
+libinput       = dependency('libinput')
+pixman         = dependency('pixman-1')
 
 inc_public = include_directories('include')
 
+subdir('protocol')
 subdir('contrib')
 subdir('src')
 
-exe = executable(
+executable(
   'nullspace',
   src_files,
+  proto_sources,
   dependencies: [
-    wayland_client,
+    wayland_server,
+    scenefx,
+    wlroots,
     xkbcommon,
+    libinput,
+    pixman,
   ],
-  include_directories: inc_public,
+  include_directories: [
+    inc_public,
+    proto_inc,
+  ],
   install: true,
 )

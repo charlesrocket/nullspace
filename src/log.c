@@ -1,86 +1,93 @@
-#ifndef __BSD_VISIBLE
-#define __BSD_VISIBLE 1
-#endif
-
 #include "log.h"
 
 #include <stdarg.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include <unistd.h>
+#include <wlr/util/log.h>
 
 static enum LogLevel current_level = LOG_INFO;
-static bool use_color = false;
 
 static const char *const LEVEL_NAMES[] = {
-    "trace", "debug", "info", "warn", "error",
+    [LOG_TRACE] = "trace", [LOG_DEBUG] = "debug", [LOG_INFO] = "info",
+    [LOG_WARN] = "warn",   [LOG_ERROR] = "error",
 };
 
-static const char *const level_colors[] = {
-    "\x1b[90m", "\x1b[36m", NULL, "\x1b[33m", "\x1b[31m",
-};
+static enum wlr_log_importance to_wlr(enum LogLevel lvl) {
+    switch (lvl) {
+        case LOG_TRACE:
+        case LOG_DEBUG: return WLR_DEBUG;
+        case LOG_INFO: return WLR_INFO;
+        case LOG_WARN:
+        case LOG_ERROR: return WLR_ERROR;
+    }
 
-static enum LogLevel parse_level(const char *s) {
-    if (s == NULL || *s == '\0') return LOG_INFO;
-    if (strcasecmp(s, "trace") == 0) return LOG_TRACE;
-    if (strcasecmp(s, "debug") == 0) return LOG_DEBUG;
-    if (strcasecmp(s, "info") == 0) return LOG_INFO;
-    if (strcasecmp(s, "warn") == 0) return LOG_WARN;
-    if (strcasecmp(s, "warning") == 0) return LOG_WARN;
-    if (strcasecmp(s, "error") == 0) return LOG_ERROR;
-    return LOG_INFO;
+    return WLR_INFO;
+}
+
+static bool parse_level(const char *s, enum LogLevel *out) {
+    for (int i = 0; i < LOG_ERROR + 1; i++) {
+        if (strcasecmp(s, LEVEL_NAMES[i]) == 0) {
+            *out = (enum LogLevel)i;
+            return true;
+        }
+    }
+
+    if (strcasecmp(s, "warning") == 0) {
+        *out = LOG_WARN;
+        return true;
+    }
+
+    return false;
 }
 
 void log_init(void) {
-    use_color = isatty(fileno(stderr));
-
     const char *env = getenv("NULLSPACE_LOG_LEVEL");
-    if (env != NULL && *env != '\0') current_level = parse_level(env);
+    if (env && *env && !parse_level(env, &current_level))
+        current_level = LOG_INFO;
+
+    wlr_log_init(to_wlr(current_level), NULL);
 }
 
 void log_set_level(enum LogLevel level) {
-    if (level < LOG_TRACE) level = LOG_TRACE;
-    if (level > LOG_ERROR) level = LOG_ERROR;
     current_level = level;
+    wlr_log_init(to_wlr(current_level), NULL);
 }
 
 enum LogLevel log_get_level(void) { return current_level; }
-
-static const char *basename_of(const char *path) {
-    const char *slash = strrchr(path, '/');
-    return slash ? slash + 1 : path;
-}
 
 void log_msg(
     enum LogLevel level, const char *topic, const char *file, int line,
     const char *fmt, ...
 ) {
-    if (level < LOG_TRACE) level = LOG_TRACE;
-    if (level > LOG_ERROR) level = LOG_ERROR;
     if (level < current_level) return;
 
-    const bool have_topic = topic != NULL && topic[0] != '\0';
-    const char *color = use_color ? level_colors[level] : NULL;
+    char prefix[128] = "";
+    if (topic && *topic) snprintf(prefix, sizeof prefix, "[%s] ", topic);
 
-    if (color != NULL) {
-        fprintf(stderr, "%s%s", color, LEVEL_NAMES[level]);
-        if (have_topic) fprintf(stderr, "(%s)", topic);
-        fprintf(stderr, ":\x1b[0m ");
-    } else {
-        fprintf(stderr, "%s", LEVEL_NAMES[level]);
-        if (have_topic) fprintf(stderr, "(%s)", topic);
-        fprintf(stderr, ": ");
+    const char *base = NULL;
+    if (file) {
+        const char *slash = strrchr(file, '/');
+        base = slash ? slash + 1 : file;
     }
 
-    va_list ap;
-    va_start(ap, fmt);
-    vfprintf(stderr, fmt, ap);
-    va_end(ap);
+    va_list args;
+    va_start(args, fmt);
 
-    if (file != NULL) { fprintf(stderr, " [%s:%d]", basename_of(file), line); }
+    size_t len = strlen(prefix) + strlen(fmt) + 64;
+    char *full = malloc(len);
+    if (full != NULL) {
+        if (base != NULL)
+            snprintf(full, len, "%s%s [%s:%d]", prefix, fmt, base, line);
+        else
+            snprintf(full, len, "%s%s", prefix, fmt);
 
-    fputc('\n', stderr);
+        _wlr_vlog(to_wlr(level), full, args);
+        free(full);
+    } else {
+        _wlr_vlog(to_wlr(level), fmt, args);
+    }
+
+    va_end(args);
 }

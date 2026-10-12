@@ -1,26 +1,37 @@
 # `nullspace`
 
-Tiling window manager for FreeBSD.
+Tiling compositor for FreeBSD.
 
 ## Dependencies
 
 - pkg-config
 - meson
 - ninja
+- clang
 - wayland
+- wlroots
+- scenefx
 - xkbcommon
+- libinput
+- pixman
 
 ## Build
 
 ```sh
 meson setup build
 ninja -C build
+meson install -C build
 ```
 
 ## Usage
 
 ```
-river -c ./build/nullspace
+nullspace
+```
+
+### IPC
+```
+nctl list
 ```
 
 ## Contributing
