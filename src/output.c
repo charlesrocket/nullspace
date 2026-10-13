@@ -122,9 +122,11 @@ static void output_handle_frame(struct wl_listener *l, void *data) {
 
     wm_animation_tick_all();
 
+#ifdef WALLPAPER
     if (wallpaper_blur_wanted()) {
         wlr_damage_ring_add_whole(&out->scene_output->damage_ring);
     }
+#endif
 
     if (!wlr_scene_output_commit(out->scene_output, NULL)) {
         log_warn("Scene commit failed on %s", out->wlr_output->name);

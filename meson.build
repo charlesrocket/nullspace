@@ -33,18 +33,20 @@ if get_option('asan')
   ], language: 'c')
 endif
 
-if get_option('wallpaper')
-  add_project_arguments('-DWALLPAPER', language: 'c')
-endif
-
 wayland_server = dependency('wayland-server')
 wayland_proto = dependency('wayland-protocols')
 wlroots = dependency('wlroots-0.20')
 scenefx = dependency('scenefx-0.5')
-spng = dependency('spng')
 xkbcommon = dependency('xkbcommon')
 libinput = dependency('libinput')
 pixman = dependency('pixman-1')
+
+spng = dependency('spng', required: get_option('wallpaper'))
+build_wallpaper = spng.found()
+
+if build_wallpaper
+  add_project_arguments('-DWALLPAPER', language: 'c')
+endif
 
 inc_public = include_directories('include')
 

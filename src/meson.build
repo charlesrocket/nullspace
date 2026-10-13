@@ -19,6 +19,6 @@ src_files = files(
 
 )
 
-if get_option('wallpaper')
+if build_wallpaper
   src_files += files('wallpaper.c')
 endif

@@ -1,8 +1,8 @@
 option(
   'wallpaper',
-  type: 'boolean',
-  value: true,
-  description: 'Enable wallpaper support',
+  type: 'feature',
+  value: 'auto',
+  description: 'Wallpaper module (requires spng)',
 )
 
 option(
