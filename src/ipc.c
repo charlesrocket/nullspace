@@ -1189,23 +1189,12 @@ static int server_event_handler(int fd, uint32_t mask, void *data) {
 
 static int make_socket(void) {
     const char *runtime = getenv("XDG_RUNTIME_DIR");
-    const char *display = getenv("WAYLAND_DISPLAY");
+    if (!runtime) return -1;
 
-    if (runtime && *runtime) {
-        if (display && *display) {
-            snprintf(
-                ipc_path, sizeof(ipc_path), "%s/nullspace-%s.sock", runtime,
-                display
-            );
-        } else {
-            snprintf(ipc_path, sizeof(ipc_path), "%s/nullspace.sock", runtime);
-        }
-    } else {
-        snprintf(
-            ipc_path, sizeof(ipc_path), "/tmp/nullspace-%u.sock",
-            (unsigned)getuid()
-        );
-    }
+    snprintf(
+        ipc_path, sizeof(ipc_path), "%s/nullspace-%u.sock", runtime,
+        (unsigned)getpid()
+    );
 
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof(addr));
