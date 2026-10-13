@@ -694,7 +694,7 @@ void wallpaper_invalidate_all(void) {
     }
 }
 
-static bool wallpaper_blur_wanted(void) {
+bool wallpaper_blur_wanted(void) {
     if (wm.wallpaper.blur_radius <= 0) return false;
     if (wm.wallpaper.blur_passes <= 0) return false;
 

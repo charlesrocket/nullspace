@@ -32,6 +32,7 @@ static void view_handle_map(struct wl_listener *l, void *data) {
     if (view->mapped) return;
     view->mapped = true;
 
+    wm_mark_layout_dirty();
     wlr_scene_node_set_enabled(&view->scene_tree->node, true);
 
     view_set_tiled(view, layouts_is_tiled(wm.layout));
@@ -48,6 +49,7 @@ static void view_handle_unmap(struct wl_listener *l, void *data) {
     struct Window *view = wl_container_of(l, view, unmap);
 
     view->mapped = false;
+    wm_mark_layout_dirty();
     wlr_scene_node_set_enabled(&view->scene_tree->node, false);
 
     ipc_notify_window_closed(view);
@@ -242,6 +244,7 @@ void view_destroy(struct Window *view) {
 
     ipc_notify_window_closed(view);
     wl_list_remove(&view->link);
+    wm_mark_layout_dirty();
 
     free(view->title);
     free(view->app_id);

@@ -43,6 +43,7 @@ struct WindowManager {
 
     char *kb_layout;
 
+    bool layout_dirty;
     bool smart_gaps;
     bool center_overspread; // let masters fill width when n <= nmasters
     bool center_when_single_stack;
@@ -55,6 +56,7 @@ void wm_set_layout(enum Layout layout);
 void wm_switch_space(int space);
 void wm_move_window_to_space(struct Window *window, int space);
 void wm_set_kb_layout(const char *layout);
+void wm_mark_layout_dirty(void);
 
 bool wm_animation_active(void);
 void wm_animation_tick_all(void);

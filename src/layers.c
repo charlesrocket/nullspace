@@ -1,6 +1,5 @@
 #include "layers.h"
 
-#include "layouts/layout.h"
 #include "manager.h"
 #include "output.h"
 #include "seat.h"
@@ -133,7 +132,7 @@ static void update_output_usable_area(struct Output *o) {
     o->area_height = box.height > 0 ? box.height : 1;
     o->area_set = true;
 
-    layout_apply();
+    wm_mark_layout_dirty();
 }
 
 static void arrange_layer_surface(struct LayerSurface *ls) {

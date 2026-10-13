@@ -42,6 +42,7 @@ struct WallpaperOutput {
 
 bool wallpaper_load_image(const char *path);
 void wallpaper_invalidate_all(void);
+bool wallpaper_blur_wanted(void);
 void wallpaper_finish(void);
 
 struct WallpaperOutput *wallpaper_output_create(struct Output *output);

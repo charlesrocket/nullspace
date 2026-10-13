@@ -101,6 +101,7 @@ void output_create(struct wlr_output *wlr_output) {
         log_err("Failed to commit initial state for %s", wlr_output->name);
     }
 
+    wm_mark_layout_dirty();
     wlr_output_state_finish(&state);
 }
 
@@ -109,13 +110,21 @@ static void output_handle_frame(struct wl_listener *l, void *data) {
 
     struct Output *out = wl_container_of(l, out, frame);
 
-    wlr_output_schedule_frame(out->wlr_output);
-    layout_apply();
-    wm_animation_tick_all();
+    if (wm.layout_dirty) {
+        wm.layout_dirty = false;
+        layout_apply();
 
 #ifdef WALLPAPER
-    wallpaper_update_output(out);
+        // wallpaper_update_output(out);
+        wallpaper_update_all();
 #endif
+    }
+
+    wm_animation_tick_all();
+
+    if (wallpaper_blur_wanted()) {
+        wlr_damage_ring_add_whole(&out->scene_output->damage_ring);
+    }
 
     if (!wlr_scene_output_commit(out->scene_output, NULL)) {
         log_warn("Scene commit failed on %s", out->wlr_output->name);
@@ -124,6 +133,8 @@ static void output_handle_frame(struct wl_listener *l, void *data) {
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
     wlr_scene_output_send_frame_done(out->scene_output, &now);
+
+    if (wm_animation_active()) wlr_output_schedule_frame(out->wlr_output);
 }
 
 static void output_handle_request_state(struct wl_listener *l, void *data) {
@@ -164,6 +175,7 @@ void output_destroy(struct Output *out) {
         wlr_output_layout_remove(server.output_layout, out->wlr_output);
     }
 
+    wm_mark_layout_dirty();
     log_info("Removed %s", out->wlr_output ? out->wlr_output->name : "?");
 
     free(out);

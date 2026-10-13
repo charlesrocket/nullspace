@@ -616,12 +616,13 @@ void ipc_notify_all_state(void) {
 static void after_set(enum IpcAfter a) {
     switch (a) {
         case IPC_AFTER_NONE: break;
-        case IPC_AFTER_MANAGE: break;
+        case IPC_AFTER_MANAGE: wm_mark_layout_dirty(); break;
         case IPC_AFTER_LIBINPUT: libinput_reconfigure(); break;
         case IPC_AFTER_WALLPAPER:
 #ifdef WALLPAPER
             wm_invalidate_wallpaper();
 #endif
+            wm_mark_layout_dirty();
             break;
     }
 }

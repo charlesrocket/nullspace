@@ -308,4 +308,5 @@ void seat_focus(struct Window *window) {
     }
 
     ipc_notify_focus();
+    wm_mark_layout_dirty();
 }

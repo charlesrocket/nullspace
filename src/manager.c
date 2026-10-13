@@ -95,6 +95,13 @@ void window_apply_target(
     view_set_size(w, target.width, target.height);
 }
 
+void wm_mark_layout_dirty(void) {
+    wm.layout_dirty = true;
+    struct Output *o;
+    wl_list_for_each(o, &server.outputs, link)
+        wlr_output_schedule_frame(o->wlr_output);
+}
+
 bool wm_animation_active(void) {
     if (!wm.animations.enabled) return false;
     struct Window *w;
@@ -183,6 +190,7 @@ void wm_set_layout(enum Layout layout) {
     }
 
     ipc_notify_layout();
+    wm_mark_layout_dirty();
 }
 
 static void window_hide_offscreen(struct Window *window, int32_t dir) {
@@ -278,6 +286,7 @@ void wm_switch_space(int space) {
 
     ipc_notify_space();
     ipc_notify_focus();
+    wm_mark_layout_dirty();
 }
 
 void wm_move_window_to_space(struct Window *window, int space) {
@@ -298,6 +307,7 @@ void wm_move_window_to_space(struct Window *window, int space) {
     ipc_notify_space();
     ipc_notify_window_meta(window);
     ipc_notify_focus();
+    wm_mark_layout_dirty();
 }
 
 #ifdef WALLPAPER
@@ -326,6 +336,7 @@ bool wm_set_wallpaper_path(const char *path) {
     free(wm.wallpaper.path);
     wm.wallpaper.path = new_path;
     wallpaper_invalidate_all();
+    wm_mark_layout_dirty();
     return true;
 }
 
