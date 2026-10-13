@@ -197,6 +197,7 @@ static void blur_nodes_update(struct BgEffectSurface *bg) {
             wlr_scene_node_destroy(&blur->node);
             continue;
         }
+
         r->blur = blur;
         r->destroy.notify = handle_rect_destroy;
         wl_signal_add(&blur->node.events.destroy, &r->destroy);

@@ -10,6 +10,9 @@
 #include "output.h"
 #include "seat.h"
 #include "view.h"
+#ifdef WALLPAPER
+#include "wallpaper.h"
+#endif
 
 #include <scenefx/render/fx_renderer/fx_renderer.h>
 #include <stdint.h>
@@ -283,6 +286,9 @@ void server_finish(void) {
     struct Output *out, *tmp;
     wl_list_for_each_safe(out, tmp, &server.outputs, link) output_destroy(out);
 
+#ifdef WALLPAPER
+    wallpaper_finish();
+#endif
     background_effect_finish();
 
     if (server.cursor_mgr) wlr_xcursor_manager_destroy(server.cursor_mgr);

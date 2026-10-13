@@ -74,7 +74,7 @@ void output_create(struct wlr_output *wlr_output) {
 
 #ifdef WALLPAPER
     out->wallpaper = wallpaper_output_create(out);
-    wallpaper_frame(out);
+    wallpaper_update_output(out);
 #endif
 
     wl_list_insert(&server.outputs, &out->link);
@@ -114,7 +114,7 @@ static void output_handle_frame(struct wl_listener *l, void *data) {
     wm_animation_tick_all();
 
 #ifdef WALLPAPER
-    wallpaper_frame(out);
+    wallpaper_update_output(out);
 #endif
 
     if (!wlr_scene_output_commit(out->scene_output, NULL)) {

@@ -40,14 +40,14 @@ struct WallpaperOutput {
     struct wl_list link;
 };
 
-void wallpaper_global_init(void);
-
-bool wallpaper_load_ppm(const char *path);
+bool wallpaper_load_image(const char *path);
 void wallpaper_invalidate_all(void);
+void wallpaper_finish(void);
 
 struct WallpaperOutput *wallpaper_output_create(struct Output *output);
 void wallpaper_output_destroy(struct WallpaperOutput *wpo);
 
-void wallpaper_frame(struct Output *output);
+void wallpaper_update_output(struct Output *output);
+void wallpaper_update_all(void);
 
 #endif // WALLPAPER_H

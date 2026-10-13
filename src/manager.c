@@ -318,7 +318,7 @@ bool wm_set_wallpaper_path(const char *path) {
     char *new_path = strdup(full);
     if (new_path == NULL) return false;
 
-    if (!wallpaper_load_ppm(full)) {
+    if (!wallpaper_load_image(full)) {
         free(new_path);
         return false;
     }

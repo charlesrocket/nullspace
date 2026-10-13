@@ -3,7 +3,6 @@
 #include "log.h"
 #include "manager.h"
 #include "server.h"
-#include "wallpaper.h"
 
 #include <signal.h>
 #include <stdio.h>
@@ -74,9 +73,6 @@ int main(int argc, char *argv[]) {
     wm_init();
     keymap_init();
     keymap_set_layout_callback(wm_set_kb_layout);
-#ifdef WALLPAPER
-    wallpaper_global_init();
-#endif
 
     if (server_init(display) < 0) {
         log_err("Failed server start");

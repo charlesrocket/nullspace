@@ -39,11 +39,12 @@ endif
 
 wayland_server = dependency('wayland-server')
 wayland_proto = dependency('wayland-protocols')
-wlroots        = dependency('wlroots-0.20')
-scenefx        = dependency('scenefx-0.5')
-xkbcommon      = dependency('xkbcommon')
-libinput       = dependency('libinput')
-pixman         = dependency('pixman-1')
+wlroots = dependency('wlroots-0.20')
+scenefx = dependency('scenefx-0.5')
+spng = dependency('spng')
+xkbcommon = dependency('xkbcommon')
+libinput = dependency('libinput')
+pixman = dependency('pixman-1')
 
 inc_public = include_directories('include')
 
@@ -62,6 +63,7 @@ executable(
     xkbcommon,
     libinput,
     pixman,
+    spng,
   ],
   include_directories: [
     inc_public,

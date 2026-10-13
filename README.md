@@ -14,6 +14,7 @@ Tiling compositor for FreeBSD.
 - xkbcommon
 - libinput
 - pixman
+- spng
 
 ## Build
 
