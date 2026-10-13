@@ -19,7 +19,7 @@ Tiling compositor for FreeBSD.
 ## Build
 
 ```sh
-meson setup build
+meson setup build # -Dbuildtype=release
 ninja -C build
 meson install -C build
 ```
