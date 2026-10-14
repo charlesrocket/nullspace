@@ -24,6 +24,7 @@
 #include <wlr/types/wlr_cursor_shape_v1.h>
 #include <wlr/types/wlr_data_control_v1.h>
 #include <wlr/types/wlr_ext_foreign_toplevel_list_v1.h>
+#include <wlr/types/wlr_foreign_toplevel_management_v1.h>
 #include <wlr/types/wlr_pointer_constraints_v1.h>
 #include <wlr/types/wlr_relative_pointer_v1.h>
 #include <wlr/types/wlr_screencopy_v1.h>
@@ -168,6 +169,12 @@ int server_init(struct wl_display *display) {
         log_err("failed to create xdg-shell");
         return -1;
     }
+
+    server.foreign_toplevel_manager =
+        wlr_foreign_toplevel_manager_v1_create(display);
+
+    server.foreign_toplevel_list =
+        wlr_ext_foreign_toplevel_list_v1_create(display, 1);
 
     server.new_xdg_toplevel.notify = handle_new_xdg_toplevel;
     wl_signal_add(

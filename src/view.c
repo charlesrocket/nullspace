@@ -5,6 +5,7 @@
 #include "ipc.h"
 #include "layouts/layout.h"
 #include "manager.h"
+#include "output.h"
 #include "seat.h"
 #include "server.h"
 
@@ -13,6 +14,8 @@
 #include <string.h>
 #include <wayland-server-core.h>
 #include <wayland-util.h>
+#include <wlr/types/wlr_ext_foreign_toplevel_list_v1.h>
+#include <wlr/types/wlr_foreign_toplevel_management_v1.h>
 #include <wlr/types/wlr_output.h>
 #include <wlr/util/edges.h>
 #include <wlr/util/log.h>
@@ -23,8 +26,115 @@ static struct wlr_scene_tree *layer_for_layout(enum Layout layout) {
     return layouts_is_tiled(layout) ? server.tile_tree : server.float_tree;
 }
 
+static void wlr_handle_request_activate(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Window *view = wl_container_of(l, view, wlr_request_activate);
+    if (view->closed) return;
+    if (view->space_hidden) wm_switch_space(view->space);
+
+    seat_focus(view);
+}
+
+static void wlr_handle_request_close(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Window *view = wl_container_of(l, view, wlr_request_close);
+    view_close(view);
+}
+
+static void wlr_handle_create(struct Window *view) {
+    if (view->wlr_handle != NULL || server.foreign_toplevel_manager == NULL)
+        return;
+
+    view->wlr_handle =
+        wlr_foreign_toplevel_handle_v1_create(server.foreign_toplevel_manager);
+
+    if (view->wlr_handle == NULL) return;
+
+    wlr_foreign_toplevel_handle_v1_set_title(
+        view->wlr_handle,
+        view->xdg_toplevel->title ? view->xdg_toplevel->title : ""
+    );
+
+    wlr_foreign_toplevel_handle_v1_set_app_id(
+        view->wlr_handle,
+        view->xdg_toplevel->app_id ? view->xdg_toplevel->app_id : ""
+    );
+
+    struct Output *o = output_primary();
+    if (o != NULL) {
+        wlr_foreign_toplevel_handle_v1_output_enter(
+            view->wlr_handle, o->wlr_output
+        );
+    }
+
+    view->wlr_request_activate.notify = wlr_handle_request_activate;
+    wl_signal_add(
+        &view->wlr_handle->events.request_activate, &view->wlr_request_activate
+    );
+
+    view->wlr_request_close.notify = wlr_handle_request_close;
+    wl_signal_add(
+        &view->wlr_handle->events.request_close, &view->wlr_request_close
+    );
+}
+
+static void wlr_handle_destroy(struct Window *view) {
+    if (view->wlr_handle == NULL) return;
+
+    wl_list_remove(&view->wlr_request_activate.link);
+    wl_list_remove(&view->wlr_request_close.link);
+    wlr_foreign_toplevel_handle_v1_destroy(view->wlr_handle);
+
+    view->wlr_handle = NULL;
+}
+
+void view_set_activated(struct Window *view, bool activated) {
+    wlr_xdg_toplevel_set_activated(view->xdg_toplevel, activated);
+    if (view->wlr_handle != NULL) {
+        wlr_foreign_toplevel_handle_v1_set_activated(
+            view->wlr_handle, activated
+        );
+    }
+}
+
+static void foreign_handle_create(struct Window *view) {
+    if (view->foreign_handle != NULL || server.foreign_toplevel_list == NULL)
+        return;
+
+    const struct wlr_ext_foreign_toplevel_handle_v1_state state = {
+        .title = view->xdg_toplevel->title ? view->xdg_toplevel->title : "",
+        .app_id = view->xdg_toplevel->app_id ? view->xdg_toplevel->app_id : "",
+    };
+
+    view->foreign_handle = wlr_ext_foreign_toplevel_handle_v1_create(
+        server.foreign_toplevel_list, &state
+    );
+}
+
+static void foreign_handle_destroy(struct Window *view) {
+    if (view->foreign_handle == NULL) return;
+    wlr_ext_foreign_toplevel_handle_v1_destroy(view->foreign_handle);
+    view->foreign_handle = NULL;
+}
+
+static void foreign_handle_update(struct Window *view) {
+    if (view->foreign_handle == NULL) return;
+
+    const struct wlr_ext_foreign_toplevel_handle_v1_state state = {
+        .title = view->xdg_toplevel->title ? view->xdg_toplevel->title : "",
+        .app_id = view->xdg_toplevel->app_id ? view->xdg_toplevel->app_id : "",
+    };
+
+    wlr_ext_foreign_toplevel_handle_v1_update_state(
+        view->foreign_handle, &state
+    );
+}
+
 static void view_handle_map(struct wl_listener *l, void *data) {
     (void)data;
+
     struct Window *view = wl_container_of(l, view, map);
 
     // The map signal and `view_handle_commit()` both call us on the same
@@ -32,6 +142,8 @@ static void view_handle_map(struct wl_listener *l, void *data) {
     if (view->mapped) return;
     view->mapped = true;
 
+    wlr_handle_create(view);
+    foreign_handle_create(view);
     wm_mark_layout_dirty();
     wlr_scene_node_set_enabled(&view->scene_tree->node, true);
 
@@ -46,9 +158,13 @@ static void view_handle_map(struct wl_listener *l, void *data) {
 
 static void view_handle_unmap(struct wl_listener *l, void *data) {
     (void)data;
+
     struct Window *view = wl_container_of(l, view, unmap);
 
     view->mapped = false;
+
+    wlr_handle_destroy(view);
+    foreign_handle_destroy(view);
     wm_mark_layout_dirty();
     wlr_scene_node_set_enabled(&view->scene_tree->node, false);
 
@@ -146,6 +262,11 @@ static void view_handle_set_title(struct wl_listener *l, void *data) {
 
     free(view->title);
     view->title = strdup(new_title);
+
+    if (view->wlr_handle)
+        wlr_foreign_toplevel_handle_v1_set_title(view->wlr_handle, new_title);
+
+    foreign_handle_update(view);
     ipc_notify_window_meta(view);
 }
 
@@ -161,6 +282,11 @@ static void view_handle_set_app_id(struct wl_listener *l, void *data) {
 
     free(view->app_id);
     view->app_id = strdup(new_id);
+
+    if (view->wlr_handle)
+        wlr_foreign_toplevel_handle_v1_set_app_id(view->wlr_handle, new_id);
+
+    foreign_handle_update(view);
     ipc_notify_window_meta(view);
 }
 
@@ -242,9 +368,11 @@ void view_destroy(struct Window *view) {
         view->scene_tree = NULL;
     }
 
+    wlr_handle_destroy(view);
     ipc_notify_window_closed(view);
     wl_list_remove(&view->link);
     wm_mark_layout_dirty();
+    foreign_handle_destroy(view);
 
     free(view->title);
     free(view->app_id);

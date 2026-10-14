@@ -18,10 +18,14 @@ struct Window {
 
     struct wl_list link;       // WindowManager.windows
     struct wl_list focus_link; // WindowManager.focus_stack
+    struct wlr_ext_foreign_toplevel_handle_v1 *foreign_handle;
+    struct wlr_foreign_toplevel_handle_v1 *wlr_handle;
 
     struct Animation anim;
     struct AnimationBox target_box;
 
+    struct wl_listener wlr_request_activate;
+    struct wl_listener wlr_request_close;
     struct wl_listener map;
     struct wl_listener unmap;
     struct wl_listener commit;
@@ -69,6 +73,7 @@ void view_set_position(struct Window *view, int32_t x, int32_t y);
 void view_set_size(struct Window *view, int32_t w, int32_t h);
 void view_set_tiled(struct Window *view, bool tiled);
 void view_set_clip(struct Window *view, int32_t w, int32_t h);
+void view_set_activated(struct Window *view, bool activated);
 void view_clear_clip(struct Window *view);
 
 void view_close(struct Window *view);

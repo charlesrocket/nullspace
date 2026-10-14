@@ -59,6 +59,8 @@ struct NsServer {
 
     struct wl_list outputs;
     struct wl_list keyboards;
+    struct wlr_foreign_toplevel_manager_v1 *foreign_toplevel_manager;
+    struct wlr_ext_foreign_toplevel_list_v1 *foreign_toplevel_list;
 
     struct wlr_cursor *cursor;
     struct wlr_xcursor_manager *cursor_mgr;
