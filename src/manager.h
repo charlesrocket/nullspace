@@ -67,6 +67,7 @@ void window_apply_target(
 
 struct Window *focus_stack_top(void);
 struct Window *window_next(struct Window *window);
+struct Window *focus_stack_top_except(struct Window *skip);
 
 #ifdef WALLPAPER
 bool wm_set_wallpaper_path(const char *path);

@@ -86,9 +86,9 @@ static void seat_action(enum Action action, const void *arg) {
             {
                 struct Window *focused = view_focused();
                 if (focused != NULL) {
+                    struct Window *next = focus_stack_top_except(focused);
                     view_close(focused);
 
-                    struct Window *next = window_next(focused);
                     if (next != NULL) seat_focus(next);
                 }
 

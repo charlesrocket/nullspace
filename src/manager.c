@@ -146,6 +146,16 @@ struct Window *focus_stack_top(void) {
     return NULL;
 }
 
+struct Window *focus_stack_top_except(struct Window *skip) {
+    struct Window *w;
+    wl_list_for_each_reverse(w, &wm.focus_stack, focus_link) {
+        if (w == skip || w->closed || w->space_hidden) continue;
+        return w;
+    }
+
+    return NULL;
+}
+
 struct Window *window_next(struct Window *window) {
     struct wl_list *sentinel = &wm.windows;
     struct wl_list *stop = window ? &window->link : sentinel;
