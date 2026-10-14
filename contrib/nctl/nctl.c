@@ -1,7 +1,3 @@
-#ifndef __BSD_VISIBLE
-#define __BSD_VISIBLE 1
-#endif
-
 #include "keys.h"
 #include "layouts.h"
 
@@ -28,17 +24,18 @@ struct CtlCommand {
 };
 
 static const struct CtlCommand COMMANDS[] = {
-    {        "get <key>",              "query a state key"},
-    {"set <key> <value>",     "set a runtime config value"},
-    { "switch-space <n>",              "switch to space n"},
-    {"move-to-space <n>", "move focused window to space n"},
-    {     "cycle-layout",       "cycle to the next layout"},
-    {            "close",       "close the focused window"},
-    {             "ping",    "check the socket connection"},
-    {        "subscribe",           "stream states/events"},
-    {      "unsubscribe",                 "stop streaming"},
-    {     "raw <string>",            "send a raw IPC line"},
-    {    "list <string>", "commands | get | set | layouts"},
+    {           "get <key>",              "query a state key"},
+    {   "set <key> <value>",     "set a runtime config value"},
+    {    "switch-space <n>",              "switch to space n"},
+    {   "move-to-space <n>", "move focused window to space n"},
+    {        "cycle-layout",       "cycle to the next layout"},
+    {               "close",       "close the focused window"},
+    {"dpms <mode> [output]",      "on | off | toggle outputs"},
+    {                "ping",    "check the socket connection"},
+    {           "subscribe",           "stream states/events"},
+    {         "unsubscribe",                 "stop streaming"},
+    {        "raw <string>",            "send a raw IPC line"},
+    {       "list <string>", "commands | get | set | layouts"},
 };
 
 struct LayoutEntry {
@@ -95,7 +92,7 @@ static void usage(FILE *out) {
              "│NULLSPACE│\n"
              "└─────────┘\n"
              "-  -  -\n"
-             "A command line interface for Nullspace WM.\n"
+             "A command line interface for Nullspace compositor.\n"
              "List all available commands with `nctl list`.\n"
     );
 }

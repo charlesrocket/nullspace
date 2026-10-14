@@ -6,6 +6,7 @@
 #include "layouts/layout.h"
 #include "log.h"
 #include "manager.h"
+#include "output.h"
 #include "server.h"
 #include "view.h"
 
@@ -1026,6 +1027,40 @@ static void dispatch_line(struct IpcClient *c, char *line) {
 
     if (!strcmp(cmd, "CLOSE")) {
         ipc_queue_command(IPC_CMD_CLOSE, 0);
+
+        resp_ok(c);
+        return;
+    }
+
+    if (!strcmp(cmd, "DPMS")) {
+        if (!rest) {
+            resp_err(c, "mode is missing");
+            return;
+        }
+
+        char *name = strpbrk(rest, " \t");
+        if (name) {
+            *name++ = '\0';
+            while (*name == ' ' || *name == '\t') name++;
+            if (*name == '\0') name = NULL;
+        }
+
+        int mode;
+        if (!strcmp(rest, "off"))
+            mode = 0;
+        else if (!strcmp(rest, "on"))
+            mode = 1;
+        else if (!strcmp(rest, "toggle"))
+            mode = 2;
+        else {
+            resp_err(c, "bad mode (on|off|toggle)");
+            return;
+        }
+
+        if (output_set_power(name, mode) == 0) {
+            resp_err(c, name ? "no output" : "no outputs");
+            return;
+        }
 
         resp_ok(c);
         return;

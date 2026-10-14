@@ -37,6 +37,9 @@ struct Output {
 void output_create(struct wlr_output *wlr_output);
 void output_destroy(struct Output *out);
 
+bool output_set_enabled(struct wlr_output *wlr_output, bool on);
+int output_set_power(const char *name, int mode);
+
 struct Output *output_primary(void);
 
 #endif // OUTPUT_H

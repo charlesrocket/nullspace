@@ -428,21 +428,11 @@ void server_notify_activity(void) {
 
 static void handle_output_power_set_mode(struct wl_listener *l, void *data) {
     (void)l;
-
     struct wlr_output_power_v1_set_mode_event *ev = data;
-    bool on = ev->mode == ZWLR_OUTPUT_POWER_V1_MODE_ON;
 
-    if (ev->output->enabled == on) return;
-
-    struct wlr_output_state state;
-    wlr_output_state_init(&state);
-    wlr_output_state_set_enabled(&state, on);
-
-    bool ok = wlr_output_commit_state(ev->output, &state);
-    wlr_output_state_finish(&state);
-
-    if (ok && on) {
-        wlr_output_schedule_frame(ev->output);
+    if (output_set_enabled(
+            ev->output, ev->mode == ZWLR_OUTPUT_POWER_V1_MODE_ON
+        )) {
         wm_mark_layout_dirty();
     }
 }

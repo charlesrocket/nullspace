@@ -9,6 +9,7 @@
 #endif
 
 #include <stdlib.h>
+#include <string.h>
 #include <sys/_clock_id.h>
 #include <time.h>
 #include <wayland-server-core.h>
@@ -22,6 +23,37 @@
 static void output_handle_frame(struct wl_listener *l, void *data);
 static void output_handle_request_state(struct wl_listener *l, void *data);
 static void output_handle_destroy(struct wl_listener *l, void *data);
+
+bool output_set_enabled(struct wlr_output *wlr_output, bool on) {
+    if (wlr_output->enabled == on) return true;
+
+    struct wlr_output_state state;
+    wlr_output_state_init(&state);
+    wlr_output_state_set_enabled(&state, on);
+    bool ok = wlr_output_commit_state(wlr_output, &state);
+    wlr_output_state_finish(&state);
+
+    if (ok && on) wlr_output_schedule_frame(wlr_output);
+    return ok;
+}
+
+// mode: 0 off | 1 on | 2 toggle
+// name: NULL means all outputs
+// (returns the number of outputs matched)
+int output_set_power(const char *name, int mode) {
+    int matched = 0;
+    struct Output *o;
+    wl_list_for_each(o, &server.outputs, link) {
+        if (o->removed) continue;
+        if (name != NULL && strcmp(o->wlr_output->name, name) != 0) continue;
+
+        bool on = (mode == 2) ? !o->wlr_output->enabled : (mode == 1);
+        if (output_set_enabled(o->wlr_output, on)) matched++;
+    }
+
+    if (matched > 0) wm_mark_layout_dirty();
+    return matched;
+}
 
 void output_create(struct wlr_output *wlr_output) {
     if (!wlr_output_init_render(
