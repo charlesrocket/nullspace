@@ -68,6 +68,9 @@ struct Window *view_at(
 void view_set_position(struct Window *view, int32_t x, int32_t y);
 void view_set_size(struct Window *view, int32_t w, int32_t h);
 void view_set_tiled(struct Window *view, bool tiled);
+void view_set_clip(struct Window *view, int32_t w, int32_t h);
+void view_clear_clip(struct Window *view);
+
 void view_close(struct Window *view);
 void view_raise(struct Window *view);
 void view_reparent(struct Window *view, bool to_float);

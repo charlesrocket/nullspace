@@ -317,6 +317,16 @@ void view_set_tiled(struct Window *view, bool tiled) {
     }
 }
 
+void view_set_clip(struct Window *view, int32_t w, int32_t h) {
+    struct wlr_box geo = view->xdg_toplevel->base->geometry;
+    struct wlr_box clip = {.x = geo.x, .y = geo.y, .width = w, .height = h};
+    wlr_scene_subsurface_tree_set_clip(&view->scene_tree->node, &clip);
+}
+
+void view_clear_clip(struct Window *view) {
+    wlr_scene_subsurface_tree_set_clip(&view->scene_tree->node, NULL);
+}
+
 void view_close(struct Window *view) {
     wlr_xdg_toplevel_send_close(view->xdg_toplevel);
 }

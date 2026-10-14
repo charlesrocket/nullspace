@@ -46,6 +46,7 @@ void window_apply_target(
         w->anim.current = target;
         view_set_position(w, nx, ny);
         view_set_size(w, nw, nh);
+        view_clear_clip(w);
         return;
     }
 
@@ -93,6 +94,12 @@ void window_apply_target(
     animation_start(&w->anim, kind, &from, &target, duration);
     view_set_position(w, w->anim.current.x, w->anim.current.y);
     view_set_size(w, target.width, target.height);
+
+    if (w->anim.running && kind == ANIM_MOVE) {
+        view_set_clip(w, w->anim.current.width, w->anim.current.height);
+    } else {
+        view_clear_clip(w);
+    }
 }
 
 void wm_mark_layout_dirty(void) {
@@ -125,6 +132,12 @@ void wm_animation_tick_all(void) {
         if (w->anim.running) {
             animation_step(&w->anim, now);
             view_set_position(w, w->anim.current.x, w->anim.current.y);
+
+            if (w->anim.running && w->anim.kind == ANIM_MOVE) {
+                view_set_clip(w, w->anim.current.width, w->anim.current.height);
+            } else {
+                view_clear_clip(w);
+            }
         }
 
         if (w->hide_dir != 0 && !w->anim.running) {
