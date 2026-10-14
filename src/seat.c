@@ -298,8 +298,18 @@ void seat_focus(struct Window *window) {
     struct wlr_surface *want =
         window ? window->xdg_toplevel->base->surface : NULL;
 
-    if (server.seat->keyboard_state.focused_surface == want) return;
+    struct wlr_surface *prev = server.seat->keyboard_state.focused_surface;
+
+    if (prev == want) return;
+    if (prev != NULL) {
+        struct wlr_xdg_toplevel *old =
+            wlr_xdg_toplevel_try_from_wlr_surface(prev);
+
+        if (old != NULL) wlr_xdg_toplevel_set_activated(old, false);
+    }
+
     if (window != NULL) {
+        wlr_xdg_toplevel_set_activated(window->xdg_toplevel, true);
         wlr_seat_keyboard_notify_enter(server.seat, want, NULL, 0, NULL);
         wl_list_remove(&window->focus_link);
         wl_list_insert(wm.focus_stack.prev, &window->focus_link);
