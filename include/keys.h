@@ -44,29 +44,27 @@ struct IpcKeyMeta {
     K_SPECIAL("focused_title", IPC_A_R, NULL, "title of focused window")       \
     K_SPECIAL("focused_app_id", IPC_A_R, NULL, "app_id of focused window")     \
     K_SPECIAL("mfact", IPC_A_RW, "0.0,1", "master area factor")                \
-    K_SPECIAL(                                                                 \
-        "wallpaper_path", IPC_A_RW, NULL, "wallpaper image path"               \
-    )                                                                          \
+    K_SPECIAL("wallpaper_path", IPC_A_RW, NULL, "wallpaper image path")        \
                                                                                \
     K_INT(                                                                     \
-        "nmasters", IPC_A_RW, IPC_AFTER_MANAGE,                                \
-        "master window count", wm.nmasters, 1, 1024                            \
+        "nmasters", IPC_A_RW, IPC_AFTER_MANAGE, "master window count",         \
+        wm.nmasters, 1, 1024                                                   \
     )                                                                          \
     K_INT(                                                                     \
-        "gap_outer_h", IPC_A_RW, IPC_AFTER_MANAGE,                             \
-        "outer horizontal gap", wm.tiled_gap_outer_h, 0, 500                   \
+        "gap_outer_h", IPC_A_RW, IPC_AFTER_MANAGE, "outer horizontal gap",     \
+        wm.tiled_gap_outer_h, 0, 500                                           \
     )                                                                          \
     K_INT(                                                                     \
-        "gap_outer_v", IPC_A_RW, IPC_AFTER_MANAGE,                             \
-        "outer vertical gap", wm.tiled_gap_outer_v, 0, 500                     \
+        "gap_outer_v", IPC_A_RW, IPC_AFTER_MANAGE, "outer vertical gap",       \
+        wm.tiled_gap_outer_v, 0, 500                                           \
     )                                                                          \
     K_INT(                                                                     \
-        "gap_inner_h", IPC_A_RW, IPC_AFTER_MANAGE,                             \
-        "inner horizontal gap", wm.tiled_gap_inner_h, 0, 500                   \
+        "gap_inner_h", IPC_A_RW, IPC_AFTER_MANAGE, "inner horizontal gap",     \
+        wm.tiled_gap_inner_h, 0, 500                                           \
     )                                                                          \
     K_INT(                                                                     \
-        "gap_inner_v", IPC_A_RW, IPC_AFTER_MANAGE,                             \
-        "inner vertical gap", wm.tiled_gap_inner_v, 0, 500                     \
+        "gap_inner_v", IPC_A_RW, IPC_AFTER_MANAGE, "inner vertical gap",       \
+        wm.tiled_gap_inner_v, 0, 500                                           \
     )                                                                          \
     K_BOOL(                                                                    \
         "smart_gaps", IPC_A_RW, IPC_AFTER_MANAGE, "true|false",                \
@@ -113,8 +111,8 @@ struct IpcKeyMeta {
     )                                                                          \
                                                                                \
     K_INT(                                                                     \
-        "libinput_tap_state", IPC_A_RW, IPC_AFTER_LIBINPUT,                    \
-        "tap-to-click", wm.libinput.tap_state, -1, 1                           \
+        "libinput_tap_state", IPC_A_RW, IPC_AFTER_LIBINPUT, "tap-to-click",    \
+        wm.libinput.tap_state, -1, 1                                           \
     )                                                                          \
     K_INT(                                                                     \
         "libinput_natural_scroll", IPC_A_RW, IPC_AFTER_LIBINPUT,               \
@@ -129,16 +127,16 @@ struct IpcKeyMeta {
         "middle button emulation", wm.libinput.middle_emulation, -1, 1         \
     )                                                                          \
     K_INT(                                                                     \
-        "libinput_dwt", IPC_A_RW, IPC_AFTER_LIBINPUT,                          \
-        "disable-while-typing", wm.libinput.dwt, -1, 1                         \
+        "libinput_dwt", IPC_A_RW, IPC_AFTER_LIBINPUT, "disable-while-typing",  \
+        wm.libinput.dwt, -1, 1                                                 \
     )                                                                          \
     K_INT(                                                                     \
-        "libinput_drag", IPC_A_RW, IPC_AFTER_LIBINPUT,                         \
-        "tap-and-drag", wm.libinput.drag, -1, 1                                \
+        "libinput_drag", IPC_A_RW, IPC_AFTER_LIBINPUT, "tap-and-drag",         \
+        wm.libinput.drag, -1, 1                                                \
     )                                                                          \
     K_INT(                                                                     \
-        "libinput_drag_lock", IPC_A_RW, IPC_AFTER_LIBINPUT,                    \
-        "drag lock", wm.libinput.drag_lock, -1, 2                              \
+        "libinput_drag_lock", IPC_A_RW, IPC_AFTER_LIBINPUT, "drag lock",       \
+        wm.libinput.drag_lock, -1, 2                                           \
     )                                                                          \
     K_INT(                                                                     \
         "libinput_three_finger_drag", IPC_A_RW, IPC_AFTER_LIBINPUT,            \
