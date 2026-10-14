@@ -1,6 +1,22 @@
 wayland_scanner = find_program('wayland-scanner')
 wl_mod          = import('wayland')
 
+wlr_output_power_xml = files('wlr-output-power-management-unstable-v1.xml')
+
+wlr_output_power_h = custom_target(
+  'wlr-output-power-management-unstable-v1-protocol.h',
+  input:  wlr_output_power_xml,
+  output: 'wlr-output-power-management-unstable-v1-protocol.h',
+  command: [wayland_scanner, 'server-header', '@INPUT@', '@OUTPUT@'],
+)
+
+wlr_output_power_c = custom_target(
+  'wlr-output-power-management-unstable-v1-protocol.c',
+  input:  wlr_output_power_xml,
+  output: 'wlr-output-power-management-unstable-v1-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 wlr_layer_shell_xml = files('wlr-layer-shell-unstable-v1.xml')
 
 wlr_layer_shell_h = custom_target(
@@ -33,6 +49,22 @@ xdg_shell_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
+ext_idle_notify_xml = files('ext-idle-notify-v1.xml')
+
+ext_idle_notify_h = custom_target(
+  'ext-idle-notify-v1-protocol.h',
+  input:  ext_idle_notify_xml,
+  output: 'ext-idle-notify-v1-protocol.h',
+  command: [wayland_scanner, 'server-header', '@INPUT@', '@OUTPUT@'],
+)
+
+ext_idle_notify_c = custom_target(
+  'ext-idle-notify-v1-protocol.c',
+  input:  ext_idle_notify_xml,
+  output: 'ext-idle-notify-v1-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 ext_bg_effect_xml = files('ext-background-effect-v1.xml')
 
 ext_bg_effect_h = custom_target(
@@ -52,10 +84,14 @@ ext_bg_effect_c = custom_target(
 proto_inc = include_directories('.')
 
 proto_sources = [
+  wlr_output_power_h,
+  wlr_output_power_c,
   wlr_layer_shell_h,
   wlr_layer_shell_c,
   xdg_shell_h,
   xdg_shell_c,
+  ext_idle_notify_h,
+  ext_idle_notify_c,
   ext_bg_effect_h,
   ext_bg_effect_c,
 ]

@@ -15,16 +15,23 @@
 #endif
 
 #include <scenefx/render/fx_renderer/fx_renderer.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wayland-protocols/cursor-shape-v1-enum.h>
 #include <wayland-server-core.h>
 #include <wayland-util.h>
+#include <wlr-output-power-management-unstable-v1-protocol.h>
+#include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_cursor_shape_v1.h>
 #include <wlr/types/wlr_data_control_v1.h>
 #include <wlr/types/wlr_ext_foreign_toplevel_list_v1.h>
 #include <wlr/types/wlr_foreign_toplevel_management_v1.h>
+#include <wlr/types/wlr_idle_inhibit_v1.h>
+#include <wlr/types/wlr_idle_notify_v1.h>
+#include <wlr/types/wlr_output.h>
+#include <wlr/types/wlr_output_power_management_v1.h>
 #include <wlr/types/wlr_pointer_constraints_v1.h>
 #include <wlr/types/wlr_relative_pointer_v1.h>
 #include <wlr/types/wlr_screencopy_v1.h>
@@ -39,6 +46,14 @@
 #define LOG_TOPIC "server"
 
 struct NsServer server = {0};
+
+static struct wl_list inhibitors;
+
+struct Inhibitor {
+    struct wlr_idle_inhibitor_v1 *inhibitor;
+    struct wl_listener destroy;
+    struct wl_list link;
+};
 
 struct Popup {
     struct wlr_xdg_popup *xdg_popup;
@@ -55,6 +70,9 @@ static void handle_new_xdg_decoration(struct wl_listener *l, void *data);
 static void handle_request_set_selection(struct wl_listener *l, void *data);
 static void handle_request_start_drag(struct wl_listener *l, void *data);
 static void handle_request_set_cursor(struct wl_listener *l, void *data);
+
+static void handle_output_power_set_mode(struct wl_listener *l, void *data);
+static void handle_new_idle_inhibitor(struct wl_listener *l, void *data);
 
 static const char *cursor_shape_name(uint32_t shape) {
     switch (shape) {
@@ -113,6 +131,8 @@ int server_init(struct wl_display *display) {
     server.display = display;
     server.event_loop = wl_display_get_event_loop(display);
 
+    wl_list_init(&inhibitors);
+
     server.backend = wlr_backend_autocreate(server.event_loop, &server.session);
     if (server.backend == NULL) {
         log_err("Failed to create wlroots backend");
@@ -147,7 +167,11 @@ int server_init(struct wl_display *display) {
     wlr_pointer_constraints_v1_create(display);
     wlr_server_decoration_manager_create(display);
     wlr_screencopy_manager_v1_create(display);
-    wlr_ext_foreign_toplevel_list_v1_create(display, 1);
+
+    server.foreign_toplevel_list =
+        wlr_ext_foreign_toplevel_list_v1_create(display, 1);
+    server.foreign_toplevel_manager =
+        wlr_foreign_toplevel_manager_v1_create(display);
 
     server.output_layout = wlr_output_layout_create(display);
     wlr_xdg_output_manager_v1_create(display, server.output_layout);
@@ -169,12 +193,6 @@ int server_init(struct wl_display *display) {
         log_err("failed to create xdg-shell");
         return -1;
     }
-
-    server.foreign_toplevel_manager =
-        wlr_foreign_toplevel_manager_v1_create(display);
-
-    server.foreign_toplevel_list =
-        wlr_ext_foreign_toplevel_list_v1_create(display, 1);
 
     server.new_xdg_toplevel.notify = handle_new_xdg_toplevel;
     wl_signal_add(
@@ -265,6 +283,21 @@ int server_init(struct wl_display *display) {
 
     wlr_text_input_manager_v3_create(display);
 
+    server.output_power_manager = wlr_output_power_manager_v1_create(display);
+    server.output_power_set_mode.notify = handle_output_power_set_mode;
+    wl_signal_add(
+        &server.output_power_manager->events.set_mode,
+        &server.output_power_set_mode
+    );
+
+    server.idle_notifier = wlr_idle_notifier_v1_create(display);
+    server.idle_inhibit_manager = wlr_idle_inhibit_v1_create(display);
+    server.new_idle_inhibitor.notify = handle_new_idle_inhibitor;
+    wl_signal_add(
+        &server.idle_inhibit_manager->events.new_inhibitor,
+        &server.new_idle_inhibitor
+    );
+
     seat_init();
 
     if (!wlr_backend_start(server.backend)) {
@@ -293,6 +326,9 @@ void server_detach_listeners(void) {
     wl_list_remove(&server.request_start_drag.link);
     wl_list_remove(&server.request_set_cursor.link);
     wl_list_remove(&server.request_set_cursor_shape.link);
+
+    wl_list_remove(&server.output_power_set_mode.link);
+    wl_list_remove(&server.new_idle_inhibitor.link);
 }
 
 void server_finish(void) {
@@ -329,18 +365,103 @@ struct Output *output_from_wlr_output(struct wlr_output *wlr_output) {
     return NULL;
 }
 
+static bool inhibitor_surface_visible(struct wlr_surface *surface) {
+    struct wlr_surface *root = wlr_surface_get_root_surface(surface);
+
+    struct Window *w;
+    wl_list_for_each(w, &wm.windows, link) {
+        if (w->closed) continue;
+        if (w->xdg_toplevel->base->surface == root) {
+            return w->mapped && !w->space_hidden;
+        }
+    }
+
+    struct LayerSurface *ls = layer_surface_from_wlr_surface(root);
+    return ls != NULL && ls->mapped;
+}
+
+void idle_update_inhibit(void) {
+    if (server.idle_notifier == NULL) return;
+
+    bool inhibited = false;
+    struct Inhibitor *i;
+    wl_list_for_each(i, &inhibitors, link) {
+        if (inhibitor_surface_visible(i->inhibitor->surface)) {
+            inhibited = true;
+            break;
+        }
+    }
+
+    wlr_idle_notifier_v1_set_inhibited(server.idle_notifier, inhibited);
+}
+
+static void inhibitor_handle_destroy(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Inhibitor *i = wl_container_of(l, i, destroy);
+
+    wl_list_remove(&i->destroy.link);
+    wl_list_remove(&i->link);
+    free(i);
+
+    idle_update_inhibit();
+}
+
+static void handle_new_idle_inhibitor(struct wl_listener *l, void *data) {
+    (void)l;
+
+    struct Inhibitor *i = calloc(1, sizeof(*i));
+    if (i == NULL) return;
+
+    i->inhibitor = data;
+    i->destroy.notify = inhibitor_handle_destroy;
+    wl_signal_add(&i->inhibitor->events.destroy, &i->destroy);
+    wl_list_insert(&inhibitors, &i->link);
+
+    idle_update_inhibit();
+}
+
+void server_notify_activity(void) {
+    if (server.idle_notifier == NULL) return;
+    wlr_idle_notifier_v1_notify_activity(server.idle_notifier, server.seat);
+}
+
+static void handle_output_power_set_mode(struct wl_listener *l, void *data) {
+    (void)l;
+
+    struct wlr_output_power_v1_set_mode_event *ev = data;
+    bool on = ev->mode == ZWLR_OUTPUT_POWER_V1_MODE_ON;
+
+    if (ev->output->enabled == on) return;
+
+    struct wlr_output_state state;
+    wlr_output_state_init(&state);
+    wlr_output_state_set_enabled(&state, on);
+
+    bool ok = wlr_output_commit_state(ev->output, &state);
+    wlr_output_state_finish(&state);
+
+    if (ok && on) {
+        wlr_output_schedule_frame(ev->output);
+        wm_mark_layout_dirty();
+    }
+}
+
 static void handle_new_output(struct wl_listener *l, void *data) {
     (void)l;
+
     output_create((struct wlr_output *)data);
 }
 
 static void handle_new_input(struct wl_listener *l, void *data) {
     (void)l;
+
     seat_handle_new_input((struct wlr_input_device *)data);
 }
 
 static void handle_new_xdg_toplevel(struct wl_listener *l, void *data) {
     (void)l;
+
     view_create((struct wlr_xdg_toplevel *)data);
 }
 
@@ -361,7 +482,6 @@ static void popup_handle_commit(struct wl_listener *l, void *data) {
             .width = o->width,
             .height = o->height,
         };
-
         wlr_xdg_popup_unconstrain_from_box(p->xdg_popup, &box);
     }
 
@@ -372,6 +492,7 @@ static void popup_handle_destroy(struct wl_listener *l, void *data) {
     (void)data;
 
     struct Popup *p = wl_container_of(l, p, destroy);
+
     wl_list_remove(&p->commit.link);
     wl_list_remove(&p->destroy.link);
     free(p);
@@ -381,6 +502,7 @@ static void handle_new_xdg_popup(struct wl_listener *l, void *data) {
     (void)l;
 
     struct wlr_xdg_popup *popup = data;
+
     if (popup->parent == NULL) return;
 
     struct wlr_scene_tree *parent_tree = server.top_tree;
@@ -411,6 +533,7 @@ static void handle_new_xdg_popup(struct wl_listener *l, void *data) {
 
 static void handle_new_xdg_decoration(struct wl_listener *l, void *data) {
     (void)l;
+
     struct wlr_xdg_toplevel_decoration_v1 *deco = data;
     struct wlr_xdg_surface *surf = deco->toplevel->base;
 
@@ -426,12 +549,14 @@ static void handle_new_xdg_decoration(struct wl_listener *l, void *data) {
 
 static void handle_request_set_selection(struct wl_listener *l, void *data) {
     (void)l;
+
     struct wlr_seat_request_set_selection_event *ev = data;
     wlr_seat_set_selection(server.seat, ev->source, ev->serial);
 }
 
 static void handle_request_start_drag(struct wl_listener *l, void *data) {
     (void)l;
+
     struct wlr_seat_request_start_drag_event *ev = data;
     if (wlr_seat_validate_pointer_grab_serial(
             server.seat, ev->origin, ev->serial
@@ -444,6 +569,7 @@ static void handle_request_start_drag(struct wl_listener *l, void *data) {
 
 static void handle_request_set_cursor(struct wl_listener *l, void *data) {
     (void)l;
+
     struct wlr_seat_pointer_request_set_cursor_event *ev = data;
     if (server.seat->pointer_state.focused_client == ev->seat_client) {
         wlr_cursor_set_surface(
