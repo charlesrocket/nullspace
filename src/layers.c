@@ -126,10 +126,18 @@ static void update_output_usable_area(struct Output *o) {
         consume_exclusive(ls->layer_surface, &box);
     }
 
+    int32_t w = box.width > 0 ? box.width : 1;
+    int32_t h = box.height > 0 ? box.height : 1;
+
+    if (o->area_set && o->area_x == box.x && o->area_y == box.y
+        && o->area_width == w && o->area_height == h) {
+        return;
+    }
+
     o->area_x = box.x;
     o->area_y = box.y;
-    o->area_width = box.width > 0 ? box.width : 1;
-    o->area_height = box.height > 0 ? box.height : 1;
+    o->area_width = w;
+    o->area_height = h;
     o->area_set = true;
 
     wm_mark_layout_dirty();
