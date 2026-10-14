@@ -88,7 +88,7 @@
 // 0 no_scroll | 1 two_finger | 2 edge | 4 on_button_down
 #define CFG_LIBINPUT_SCROLL_METHOD     -1
 
-#define CFG_ANIMATIONS                 true
+#define CFG_ANIMATIONS_ENABLED         true
 
 #define CFG_ANIM_DURATION_MOVE         160
 #define CFG_ANIM_DURATION_OPEN         200
@@ -117,6 +117,7 @@
 #define CFG_WALLPAPER_PATTERN_GRID_SPACING 24
 #define CFG_WALLPAPER_PATTERN_DOT_RADIUS   1
 
+#define CFG_WALLPAPER_BLUR_ENABLED         true
 #define CFG_WALLPAPER_BLUR_RADIUS          12
 #define CFG_WALLPAPER_BLUR_PASSES          2
 #endif

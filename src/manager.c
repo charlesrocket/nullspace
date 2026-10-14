@@ -362,7 +362,7 @@ void wm_init(void) {
     wm.center_overspread = CFG_CENTER_OVERSPREAD;
     wm.center_when_single_stack = CFG_CENTER_WHEN_SINGLE_STACK;
 
-    wm.animations.enabled = CFG_ANIMATIONS;
+    wm.animations.enabled = CFG_ANIMATIONS_ENABLED;
     wm.animations.open_from_top = CFG_ANIM_OPEN_FROM_TOP;
     wm.animations.duration_move = CFG_ANIM_DURATION_MOVE;
     wm.animations.duration_open = CFG_ANIM_DURATION_OPEN;
@@ -379,6 +379,7 @@ void wm_init(void) {
     wm.wallpaper.pattern_dot_b = CFG_WALLPAPER_PATTERN_DOT_B;
     wm.wallpaper.pattern_grid_spacing = CFG_WALLPAPER_PATTERN_GRID_SPACING;
     wm.wallpaper.pattern_dot_radius = CFG_WALLPAPER_PATTERN_DOT_RADIUS;
+    wm.wallpaper.blur_enabled = CFG_WALLPAPER_BLUR_ENABLED;
     wm.wallpaper.blur_radius = CFG_WALLPAPER_BLUR_RADIUS;
     wm.wallpaper.blur_passes = CFG_WALLPAPER_BLUR_PASSES;
 #endif

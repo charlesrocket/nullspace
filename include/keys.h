@@ -197,6 +197,10 @@ struct IpcKeyMeta {
         "wallpaper_pattern_dot_radius", IPC_A_RW, IPC_AFTER_WALLPAPER,         \
         "pattern dot radius", wm.wallpaper.pattern_dot_radius, 0, 128          \
     )                                                                          \
+    K_BOOL(                                                                    \
+        "wallpaper_blur_enabled", IPC_A_RW, IPC_AFTER_MANAGE, "true|false",    \
+        "enable wallpaper blur", wm.wallpaper.blur_enabled                     \
+    )                                                                          \
     K_INT(                                                                     \
         "wallpaper_blur_radius", IPC_A_RW, IPC_AFTER_WALLPAPER,                \
         "wallpaper blur radius", wm.wallpaper.blur_radius, 0, 256              \

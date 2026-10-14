@@ -695,6 +695,7 @@ void wallpaper_invalidate_all(void) {
 }
 
 bool wallpaper_blur_wanted(void) {
+    if (!wm.wallpaper.blur_enabled) return false; // TODO move earlier?
     if (wm.wallpaper.blur_radius <= 0) return false;
     if (wm.wallpaper.blur_passes <= 0) return false;
 
@@ -711,9 +712,7 @@ bool wallpaper_blur_wanted(void) {
 }
 
 static void wpo_sync_blur(struct WallpaperOutput *wpo, struct Output *output) {
-    bool want_blur = wallpaper_blur_wanted();
-
-    if (!want_blur) {
+    if (!wallpaper_blur_wanted()) {
         if (wpo->blur != NULL) {
             wlr_scene_node_destroy(&wpo->blur->node);
             wpo->blur = NULL;
