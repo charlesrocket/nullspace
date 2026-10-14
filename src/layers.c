@@ -238,6 +238,8 @@ static void handle_map(struct wl_listener *lst, void *data) {
             server.seat, ls->layer_surface->surface, NULL, 0, NULL
         );
     }
+
+    idle_update_inhibit();
 }
 
 static void handle_unmap(struct wl_listener *lst, void *data) {
@@ -248,6 +250,7 @@ static void handle_unmap(struct wl_listener *lst, void *data) {
     ls->mapped = false;
     wlr_scene_node_set_enabled(&ls->scene_tree->node, false);
     update_output_usable_area(ls->output);
+    idle_update_inhibit();
     seat_focus(NULL);
 }
 

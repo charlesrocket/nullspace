@@ -170,6 +170,7 @@ static bool handle_keybinding(xkb_keysym_t sym, uint32_t mods) {
 static void keyboard_handle_modifiers(struct wl_listener *l, void *data) {
     (void)data;
 
+    server_notify_activity();
     struct Keyboard *kb = wl_container_of(l, kb, modifiers);
     wlr_seat_set_keyboard(server.seat, kb->wlr_keyboard);
     wlr_seat_keyboard_notify_modifiers(
@@ -180,6 +181,8 @@ static void keyboard_handle_modifiers(struct wl_listener *l, void *data) {
 }
 
 static void keyboard_handle_key(struct wl_listener *l, void *data) {
+    server_notify_activity();
+
     struct Keyboard *kb = wl_container_of(l, kb, key);
     struct wlr_keyboard_key_event *ev = data;
 

@@ -170,6 +170,8 @@ static uint32_t current_keyboard_modifiers(void) {
 
 void cursor_handle_motion(struct wl_listener *l, void *data) {
     (void)l;
+
+    server_notify_activity();
     struct wlr_pointer_motion_event *ev = data;
 
     wlr_cursor_move(
@@ -186,6 +188,8 @@ void cursor_handle_motion(struct wl_listener *l, void *data) {
 
 void cursor_handle_motion_absolute(struct wl_listener *l, void *data) {
     (void)l;
+
+    server_notify_activity();
     struct wlr_pointer_motion_absolute_event *ev = data;
 
     wlr_cursor_warp_absolute(server.cursor, &ev->pointer->base, ev->x, ev->y);
@@ -200,6 +204,8 @@ void cursor_handle_motion_absolute(struct wl_listener *l, void *data) {
 
 void cursor_handle_button(struct wl_listener *l, void *data) {
     (void)l;
+
+    server_notify_activity();
     struct wlr_pointer_button_event *ev = data;
 
     if (interactive.active) {
@@ -255,6 +261,8 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
 
 void cursor_handle_axis(struct wl_listener *l, void *data) {
     (void)l;
+
+    server_notify_activity();
     if (interactive.active) return;
 
     struct wlr_pointer_axis_event *ev = data;

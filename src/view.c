@@ -154,6 +154,7 @@ static void view_handle_map(struct wl_listener *l, void *data) {
     seat_focus(view);
 
     ipc_notify_window_opened(view);
+    idle_update_inhibit();
 }
 
 static void view_handle_unmap(struct wl_listener *l, void *data) {
@@ -169,6 +170,7 @@ static void view_handle_unmap(struct wl_listener *l, void *data) {
     wlr_scene_node_set_enabled(&view->scene_tree->node, false);
 
     ipc_notify_window_closed(view);
+    idle_update_inhibit();
 }
 
 static void view_handle_commit(struct wl_listener *l, void *data) {
@@ -373,6 +375,7 @@ void view_destroy(struct Window *view) {
     wl_list_remove(&view->link);
     wm_mark_layout_dirty();
     foreign_handle_destroy(view);
+    idle_update_inhibit();
 
     free(view->title);
     free(view->app_id);

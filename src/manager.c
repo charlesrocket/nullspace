@@ -310,6 +310,7 @@ void wm_switch_space(int space) {
     ipc_notify_space();
     ipc_notify_focus();
     wm_mark_layout_dirty();
+    idle_update_inhibit();
 }
 
 void wm_move_window_to_space(struct Window *window, int space) {
@@ -331,6 +332,7 @@ void wm_move_window_to_space(struct Window *window, int space) {
     ipc_notify_window_meta(window);
     ipc_notify_focus();
     wm_mark_layout_dirty();
+    idle_update_inhibit();
 }
 
 #ifdef WALLPAPER
