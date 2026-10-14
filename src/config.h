@@ -90,10 +90,10 @@
 
 #define CFG_ANIMATIONS_ENABLED         true
 
-#define CFG_ANIM_DURATION_MOVE         160
-#define CFG_ANIM_DURATION_OPEN         200
-#define CFG_ANIM_DURATION_CLOSE        140
-#define CFG_ANIM_DURATION_SPACE        220
+#define CFG_ANIM_DURATION_MOVE         250
+#define CFG_ANIM_DURATION_OPEN         250
+#define CFG_ANIM_DURATION_CLOSE        250
+#define CFG_ANIM_DURATION_SPACE        250
 
 // New window's vertical direction
 // (`true` slides new windows from above the screen).
