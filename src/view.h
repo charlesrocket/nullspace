@@ -3,6 +3,7 @@
 
 #include "animation.h"
 #include "include/layouts.h"
+#include "server.h"
 
 #include <scenefx/types/wlr_scene.h>
 #include <stdbool.h>
@@ -20,6 +21,8 @@ struct Window {
     struct wl_list focus_link; // WindowManager.focus_stack
     struct wlr_ext_foreign_toplevel_handle_v1 *foreign_handle;
     struct wlr_foreign_toplevel_handle_v1 *wlr_handle;
+
+    struct NodeTag node_tag;
 
     struct Animation anim;
     struct AnimationBox target_box;

@@ -103,6 +103,14 @@ struct NsServer {
 
 extern struct NsServer server;
 
+enum NodeType { NODE_WINDOW = 1, NODE_LAYER_SURFACE };
+
+struct NodeTag {
+    enum NodeType type;
+};
+
+struct NodeTag *node_tag_find(struct wlr_scene_node *node);
+
 int server_init(struct wl_display *display);
 void server_detach_listeners(void);
 void server_finish(void);
@@ -112,5 +120,7 @@ struct Output *output_from_wlr_output(struct wlr_output *wlr_output);
 
 void server_notify_activity(void);
 void idle_update_inhibit(void);
+
+void popup_track(struct wlr_xdg_popup *, struct wlr_scene_tree *);
 
 #endif // SERVER_H

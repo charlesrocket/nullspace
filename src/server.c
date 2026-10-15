@@ -357,14 +357,20 @@ void server_finish(void) {
     if (server.scene) wlr_scene_node_destroy(&server.scene->tree.node);
 }
 
-struct Window *window_from_scene_node(struct wlr_scene_node *node) {
-    while (node != NULL) {
+struct NodeTag *node_tag_find(struct wlr_scene_node *node) {
+    for (; node != NULL; node = node->parent ? &node->parent->node : NULL) {
         if (node->data != NULL) return node->data;
-        if (node->parent == NULL) return NULL;
-        node = &node->parent->node;
     }
 
     return NULL;
+}
+
+struct Window *window_from_scene_node(struct wlr_scene_node *node) {
+    struct NodeTag *tag = node_tag_find(node);
+    if (tag == NULL || tag->type != NODE_WINDOW) return NULL;
+
+    struct Window *w = wl_container_of(tag, w, node_tag);
+    return w;
 }
 
 struct Output *output_from_wlr_output(struct wlr_output *wlr_output) {
@@ -500,37 +506,51 @@ static void popup_handle_destroy(struct wl_listener *l, void *data) {
     free(p);
 }
 
+void popup_track(
+    struct wlr_xdg_popup *xdg_popup, struct wlr_scene_tree *parent_tree
+) {
+    struct Popup *p = calloc(1, sizeof(*p));
+    if (p == NULL) {
+        wlr_xdg_popup_destroy(xdg_popup);
+        return;
+    }
+
+    struct wlr_scene_tree *tree =
+        wlr_scene_xdg_surface_create(parent_tree, xdg_popup->base);
+    if (tree == NULL) {
+        free(p);
+        wlr_xdg_popup_destroy(xdg_popup);
+        return;
+    }
+
+    xdg_popup->base->data = tree;
+
+    p->xdg_popup = xdg_popup;
+    p->parent_tree = parent_tree;
+
+    p->commit.notify = popup_handle_commit;
+    wl_signal_add(&xdg_popup->base->surface->events.commit, &p->commit);
+
+    p->destroy.notify = popup_handle_destroy;
+    wl_signal_add(&xdg_popup->base->events.destroy, &p->destroy);
+}
+
 static void handle_new_xdg_popup(struct wl_listener *l, void *data) {
     (void)l;
 
     struct wlr_xdg_popup *popup = data;
-
     if (popup->parent == NULL) return;
-
-    struct wlr_scene_tree *parent_tree = server.top_tree;
 
     struct wlr_xdg_surface *parent_xdg =
         wlr_xdg_surface_try_from_wlr_surface(popup->parent);
 
-    if (parent_xdg != NULL) {
-        if (parent_xdg->data != NULL) parent_tree = parent_xdg->data;
-    } else {
-        struct LayerSurface *ls = layer_surface_from_wlr_surface(popup->parent);
-        if (ls != NULL) parent_tree = ls->scene_tree;
+    if (parent_xdg == NULL || parent_xdg->data == NULL) {
+        log_warn("xdg popup has no parent scene tree (dismissing)");
+        wlr_xdg_popup_destroy(popup);
+        return;
     }
 
-    popup->base->data = wlr_scene_xdg_surface_create(parent_tree, popup->base);
-
-    struct Popup *p = calloc(1, sizeof(*p));
-    if (p == NULL) return;
-
-    p->xdg_popup = popup;
-    p->parent_tree = parent_tree;
-    p->commit.notify = popup_handle_commit;
-    wl_signal_add(&popup->base->surface->events.commit, &p->commit);
-
-    p->destroy.notify = popup_handle_destroy;
-    wl_signal_add(&popup->base->events.destroy, &p->destroy);
+    popup_track(popup, parent_xdg->data);
 }
 
 static void handle_new_xdg_decoration(struct wl_listener *l, void *data) {

@@ -271,17 +271,14 @@ static void handle_commit(struct wl_listener *lst, void *data) {
 
 static void handle_destroy(struct wl_listener *lst, void *data) {
     (void)data;
+
     struct LayerSurface *ls = wl_container_of(lst, ls, destroy);
 
     wl_list_remove(&ls->destroy.link);
     wl_list_remove(&ls->new_popup.link);
-
-    if (!ls->surface_dead) {
-        wl_list_remove(&ls->map.link);
-        wl_list_remove(&ls->unmap.link);
-        wl_list_remove(&ls->commit.link);
-        wl_list_remove(&ls->surface_destroy.link);
-    }
+    wl_list_remove(&ls->map.link);
+    wl_list_remove(&ls->unmap.link);
+    wl_list_remove(&ls->commit.link);
 
     if (ls->scene_tree != NULL) {
         wlr_scene_node_destroy(&ls->scene_tree->node);
@@ -298,20 +295,7 @@ static void handle_new_popup(struct wl_listener *lst, void *data) {
     struct wlr_xdg_popup *popup = data;
     struct LayerSurface *ls = wl_container_of(lst, ls, new_popup);
 
-    struct wlr_scene_tree *parent_tree = ls->scene_tree;
-
-    if (popup->parent != NULL && popup->parent != ls->layer_surface->surface) {
-        struct wlr_xdg_surface *parent_xdg =
-            wlr_xdg_surface_try_from_wlr_surface(popup->parent);
-
-        if (parent_xdg != NULL && parent_xdg->data != NULL) {
-            parent_tree = (struct wlr_scene_tree *)parent_xdg->data;
-        }
-    }
-
-    struct wlr_scene_tree *popup_tree =
-        wlr_scene_xdg_surface_create(parent_tree, popup->base);
-    if (popup_tree != NULL) { popup->base->data = popup_tree; }
+    popup_track(popup, ls->scene_tree);
 }
 
 struct LayerSurface *layer_surface_from_wlr_surface(struct wlr_surface *surface
@@ -336,6 +320,8 @@ void layers_handle_new_surface(struct wl_listener *listener, void *data) {
 
     ls->layer_surface = layer;
     ls->output = output_for(layer);
+    ls->node_tag.type = NODE_LAYER_SURFACE;
+    ls->scene_tree->node.data = &ls->node_tag;
 
     struct wlr_scene_tree *parent = layer_tree_for(layer->pending.layer);
 
@@ -357,7 +343,6 @@ void layers_handle_new_surface(struct wl_listener *listener, void *data) {
     wl_signal_add(&layer->surface->events.map, &ls->map);
     wl_signal_add(&layer->surface->events.unmap, &ls->unmap);
     wl_signal_add(&layer->surface->events.commit, &ls->commit);
-    wl_signal_add(&layer->surface->events.destroy, &ls->surface_destroy);
 
     wl_signal_add(&layer->events.destroy, &ls->destroy);
     wl_signal_add(&layer->events.new_popup, &ls->new_popup);
