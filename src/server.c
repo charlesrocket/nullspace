@@ -9,6 +9,7 @@
 #include "manager.h"
 #include "output.h"
 #include "seat.h"
+#include "session.h"
 #include "view.h"
 #ifdef WALLPAPER
 #include "wallpaper.h"
@@ -180,14 +181,20 @@ int server_init(struct wl_display *display) {
     server.scene_layout =
         wlr_scene_attach_output_layout(server.scene, server.output_layout);
 
-    server.background_tree = wlr_scene_tree_create(&server.scene->tree);
-    server.wallpaper_blur_tree = wlr_scene_tree_create(&server.scene->tree);
-    server.bottom_tree = wlr_scene_tree_create(&server.scene->tree);
-    server.tile_tree = wlr_scene_tree_create(&server.scene->tree);
-    server.float_tree = wlr_scene_tree_create(&server.scene->tree);
-    server.top_tree = wlr_scene_tree_create(&server.scene->tree);
-    server.fullscreen_tree = wlr_scene_tree_create(&server.scene->tree);
-    server.overlay_tree = wlr_scene_tree_create(&server.scene->tree);
+    server.content_tree = wlr_scene_tree_create(&server.scene->tree);
+
+    server.background_tree = wlr_scene_tree_create(server.content_tree);
+    server.wallpaper_blur_tree = wlr_scene_tree_create(server.content_tree);
+    server.bottom_tree = wlr_scene_tree_create(server.content_tree);
+    server.tile_tree = wlr_scene_tree_create(server.content_tree);
+    server.float_tree = wlr_scene_tree_create(server.content_tree);
+    server.top_tree = wlr_scene_tree_create(server.content_tree);
+    server.fullscreen_tree = wlr_scene_tree_create(server.content_tree);
+    server.overlay_tree = wlr_scene_tree_create(server.content_tree);
+
+    server.lock_tree = wlr_scene_tree_create(&server.scene->tree);
+
+    wlr_scene_node_set_enabled(&server.lock_tree->node, false);
 
     server.xdg_shell = wlr_xdg_shell_create(display, 6);
     if (server.xdg_shell == NULL) {
@@ -284,6 +291,8 @@ int server_init(struct wl_display *display) {
 
     wlr_text_input_manager_v3_create(display);
 
+    if (!session_lock_init(display)) log_warn("Session lock unavailable");
+
     server.output_power_manager = wlr_output_power_manager_v1_create(display);
     server.output_power_set_mode.notify = handle_output_power_set_mode;
     wl_signal_add(
@@ -330,6 +339,8 @@ void server_detach_listeners(void) {
 
     wl_list_remove(&server.output_power_set_mode.link);
     wl_list_remove(&server.new_idle_inhibitor.link);
+
+    session_lock_detach_listeners();
 }
 
 void server_finish(void) {
@@ -367,6 +378,7 @@ struct Output *output_from_wlr_output(struct wlr_output *wlr_output) {
 }
 
 static bool inhibitor_surface_visible(struct wlr_surface *surface) {
+    if (server.locked) return false;
     struct wlr_surface *root = wlr_surface_get_root_surface(surface);
 
     struct Window *w;

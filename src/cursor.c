@@ -95,8 +95,8 @@ static void interactive_apply(double cx, double cy) {
 void cursor_begin_interactive(
     struct Window *view, enum SeatOp op, uint32_t edges
 ) {
+    if (server.locked || interactive.active) return;
     if (view == NULL || view->closed) return;
-    if (interactive.active) return;
 
     interactive.view = view;
     interactive.op = op;
@@ -151,6 +151,10 @@ static void cursor_update_focus(void) {
     wlr_seat_pointer_notify_motion(
         server.seat, (uint32_t)animation_now_ms(), sx, sy
     );
+}
+
+void cursor_refresh_focus(void) {
+    if (!interactive.active) cursor_update_focus();
 }
 
 static uint32_t current_keyboard_modifiers(void) {
@@ -223,7 +227,7 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
 
     uint32_t mods = current_keyboard_modifiers();
 
-    if (ev->state == WL_POINTER_BUTTON_STATE_PRESSED
+    if (ev->state == WL_POINTER_BUTTON_STATE_PRESSED && !server.locked
         && !layouts_is_tiled(wm.layout)) {
         for (size_t i = 0; i < cfg_pointer_binds_len; i++) {
             const struct PointerDef *pb = &cfg_pointer_binds[i];
@@ -255,6 +259,9 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
     wlr_seat_pointer_notify_button(
         server.seat, ev->time_msec, ev->button, ev->state
     );
+
+    if (ev->state == WL_POINTER_BUTTON_STATE_PRESSED)
+        session_lock_click_focus();
 
     cursor_update_focus();
 }

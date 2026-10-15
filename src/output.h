@@ -32,6 +32,7 @@ struct Output {
 
     bool area_set;
     bool removed;
+    bool lock_blanked;
 };
 
 void output_create(struct wlr_output *wlr_output);

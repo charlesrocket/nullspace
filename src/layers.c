@@ -232,8 +232,9 @@ static void handle_map(struct wl_listener *lst, void *data) {
     arrange_layer_surface(ls);
     update_output_usable_area(ls->output);
 
-    if (ls->layer_surface->current.keyboard_interactive
-        == ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE) {
+    if (!server.locked
+        && ls->layer_surface->current.keyboard_interactive
+               == ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE) {
         wlr_seat_keyboard_notify_enter(
             server.seat, ls->layer_surface->surface, NULL, 0, NULL
         );

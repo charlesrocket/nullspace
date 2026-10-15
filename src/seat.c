@@ -228,7 +228,7 @@ static void keyboard_handle_key(struct wl_listener *l, void *data) {
     // Only match keybinds on PRESS. The key event fires on both press and
     // release, and the keysym + modifiers are identical in both cases, (without
     // this check every binding runs twice per keystroke).
-    if (ev->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+    if (ev->state == WL_KEYBOARD_KEY_STATE_PRESSED && !server.locked) {
         for (int i = 0; i < nsyms; i++) {
             if (handle_keybinding(syms[i], mods)) handled = true;
         }
@@ -306,6 +306,15 @@ void seat_handle_new_input(struct wlr_input_device *device) {
 }
 
 void seat_focus(struct Window *window) {
+    if (server.locked) {
+        if (window != NULL) {
+            wl_list_remove(&window->focus_link);
+            wl_list_insert(wm.focus_stack.prev, &window->focus_link);
+        }
+
+        return;
+    }
+
     if (window == NULL) window = focus_stack_top();
 
     struct wlr_surface *want =

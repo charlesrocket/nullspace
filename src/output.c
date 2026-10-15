@@ -4,6 +4,7 @@
 #include "log.h"
 #include "manager.h"
 #include "server.h"
+#include "session.h"
 #ifdef WALLPAPER
 #include "wallpaper.h"
 #endif
@@ -95,6 +96,8 @@ void output_create(struct wlr_output *wlr_output) {
     out->area_height = out->height;
     out->area_set = true;
 
+    session_lock_update_geometry();
+
     out->frame.notify = output_handle_frame;
     wl_signal_add(&wlr_output->events.frame, &out->frame);
 
@@ -162,6 +165,8 @@ static void output_handle_frame(struct wl_listener *l, void *data) {
 
     if (!wlr_scene_output_commit(out->scene_output, NULL)) {
         log_warn("Scene commit failed on %s", out->wlr_output->name);
+    } else {
+        session_lock_output_committed(out);
     }
 
     struct timespec now;
@@ -176,6 +181,7 @@ static void output_handle_request_state(struct wl_listener *l, void *data) {
 
     struct wlr_output_event_request_state *ev = data;
     wlr_output_commit_state(ev->output, ev->state);
+    session_lock_update_geometry();
 }
 
 static void output_handle_destroy(struct wl_listener *l, void *data) {
@@ -208,6 +214,9 @@ void output_destroy(struct Output *out) {
     if (out->wlr_output != NULL) {
         wlr_output_layout_remove(server.output_layout, out->wlr_output);
     }
+
+    session_lock_update_geometry();
+    session_lock_outputs_changed();
 
     wm_mark_layout_dirty();
     log_info("Removed %s", out->wlr_output ? out->wlr_output->name : "?");

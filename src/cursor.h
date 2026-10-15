@@ -19,6 +19,7 @@ void cursor_begin_interactive(
 
 void cursor_end_interactive(void);
 void cursor_end_interactive_for(struct Window *view);
+void cursor_refresh_focus(void);
 bool cursor_is_interactive(void);
 
 void cursor_handle_motion(struct wl_listener *l, void *data);

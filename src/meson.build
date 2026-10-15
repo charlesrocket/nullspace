@@ -7,6 +7,7 @@ src_files = files(
   'layouts/vertical.c',
   'layouts/horizontal.c',
   'ipc.c',
+  'session.c',
   'seat.c',
   'server.c',
   'input.c',

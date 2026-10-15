@@ -455,14 +455,29 @@ static void emit_all_state(struct IpcClient *c) {
     outbuf_append(c, "EVT ready\n", 10);
 }
 
-static void ipc_queue_command(enum IpcCommandKind kind, int arg) {
+static bool ipc_queue_command(enum IpcCommandKind kind, int arg) {
     struct IpcCommand *cmd = calloc(1, sizeof(*cmd));
-    if (cmd == NULL) return;
+    if (cmd == NULL) return false;
 
     cmd->kind = kind;
     cmd->arg = arg;
-
     wl_list_insert(ipc_pending_commands.prev, &cmd->link);
+    return true;
+}
+
+static bool
+queue_or_err(struct IpcClient *c, enum IpcCommandKind kind, int arg) {
+    if (server.locked) {
+        resp_err(c, "SESSION LOCKED");
+        return false;
+    }
+
+    if (!ipc_queue_command(kind, arg)) {
+        resp_err(c, "OOM");
+        return false;
+    }
+
+    return true;
 }
 
 void ipc_process_pending_commands(void) {
@@ -471,6 +486,11 @@ void ipc_process_pending_commands(void) {
     struct IpcCommand *cmd, *tmp;
     wl_list_for_each_safe(cmd, tmp, &ipc_pending_commands, link) {
         wl_list_remove(&cmd->link);
+
+        if (server.locked) { // drop
+            free(cmd);
+            continue;
+        }
 
         switch (cmd->kind) {
             case IPC_CMD_SWITCH_SPACE: wm_switch_space(cmd->arg); break;
@@ -848,7 +868,7 @@ handle_set(struct IpcClient *c, const char *key, const char *value) {
             return;
         }
 
-        ipc_queue_command(IPC_CMD_SET_LAYOUT, (int)l);
+        if (!queue_or_err(c, IPC_CMD_SET_LAYOUT, (int)l)) return;
 
         resp_ok(c);
         return;
@@ -861,7 +881,7 @@ handle_set(struct IpcClient *c, const char *key, const char *value) {
             return;
         }
 
-        ipc_queue_command(IPC_CMD_SWITCH_SPACE, (int)v);
+        if (!queue_or_err(c, IPC_CMD_SWITCH_SPACE, (int)v)) return;
 
         resp_ok(c);
         return;
@@ -998,7 +1018,7 @@ static void dispatch_line(struct IpcClient *c, char *line) {
             return;
         }
 
-        ipc_queue_command(IPC_CMD_SWITCH_SPACE, (int)v);
+        if (!queue_or_err(c, IPC_CMD_SWITCH_SPACE, (int)v)) return;
 
         resp_ok(c);
         return;
@@ -1012,21 +1032,21 @@ static void dispatch_line(struct IpcClient *c, char *line) {
             return;
         }
 
-        ipc_queue_command(IPC_CMD_MOVE_TO_SPACE, (int)v);
+        if (!queue_or_err(c, IPC_CMD_MOVE_TO_SPACE, (int)v)) return;
 
         resp_ok(c);
         return;
     }
 
     if (!strcmp(cmd, "CYCLE_LAYOUT")) {
-        ipc_queue_command(IPC_CMD_CYCLE_LAYOUT, 0);
+        if (!queue_or_err(c, IPC_CMD_CYCLE_LAYOUT, 0)) return;
 
         resp_ok(c);
         return;
     }
 
     if (!strcmp(cmd, "CLOSE")) {
-        ipc_queue_command(IPC_CMD_CLOSE, 0);
+        if (!queue_or_err(c, IPC_CMD_CLOSE, 0)) return;
 
         resp_ok(c);
         return;

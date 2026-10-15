@@ -52,6 +52,9 @@ struct NsServer {
     struct wlr_scene_tree *top_tree;
     struct wlr_scene_tree *overlay_tree;
     struct wlr_scene_tree *fullscreen_tree;
+    struct wlr_scene_tree *content_tree;
+    struct wlr_scene_tree *lock_tree;
+    struct wlr_scene_rect *lock_bg;
 
     struct wlr_xdg_shell *xdg_shell;
     struct wl_listener new_xdg_toplevel;
@@ -94,6 +97,8 @@ struct NsServer {
     struct wlr_idle_notifier_v1 *idle_notifier;
     struct wlr_idle_inhibit_manager_v1 *idle_inhibit_manager;
     struct wl_listener new_idle_inhibitor;
+
+    bool locked;
 };
 
 extern struct NsServer server;
