@@ -51,7 +51,7 @@ void window_apply_target(
     }
 
     struct AnimationBox from;
-    enum AnimationKind kind;
+    enum AnimationType type;
     int32_t duration;
 
     if (first && (reveal_dir != 0 || !w->pos_valid)) {
@@ -62,7 +62,7 @@ void window_apply_target(
             if (offset < 1) offset = 1;
             from = target;
             from.x = target.x + reveal_dir * offset;
-            kind = ANIM_SPACE;
+            type = ANIM_SPACE;
             duration = wm.animations.duration_space;
         } else {
             // Slide from above/below
@@ -70,7 +70,7 @@ void window_apply_target(
             from.y = wm.animations.open_from_top ? -target.height
                                                  : target.y + target.height;
 
-            kind = ANIM_OPEN;
+            type = ANIM_OPEN;
             duration = wm.animations.duration_open;
         }
 
@@ -87,15 +87,15 @@ void window_apply_target(
             from = target;
         }
 
-        kind = ANIM_MOVE;
+        type = ANIM_MOVE;
         duration = wm.animations.duration_move;
     }
 
-    animation_start(&w->anim, kind, &from, &target, duration);
+    animation_start(&w->anim, type, &from, &target, duration);
     view_set_position(w, w->anim.current.x, w->anim.current.y);
     view_set_size(w, target.width, target.height);
 
-    if (w->anim.running && kind == ANIM_MOVE) {
+    if (w->anim.running && type == ANIM_MOVE) {
         view_set_clip(w, w->anim.current.width, w->anim.current.height);
     } else {
         view_clear_clip(w);
@@ -133,7 +133,7 @@ void wm_animation_tick_all(void) {
             animation_step(&w->anim, now);
             view_set_position(w, w->anim.current.x, w->anim.current.y);
 
-            if (w->anim.running && w->anim.kind == ANIM_MOVE) {
+            if (w->anim.running && w->anim.type == ANIM_MOVE) {
                 view_set_clip(w, w->anim.current.width, w->anim.current.height);
             } else {
                 view_clear_clip(w);

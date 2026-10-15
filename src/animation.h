@@ -4,13 +4,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-enum AnimationKind {
+enum AnimationType {
     ANIM_NONE,
     ANIM_MOVE,
     ANIM_OPEN,
     ANIM_CLOSE,
     ANIM_SPACE,
-    ANIM_KIND_COUNT,
 };
 
 struct AnimationBox {
@@ -19,7 +18,7 @@ struct AnimationBox {
 };
 
 struct Animation {
-    enum AnimationKind kind;
+    enum AnimationType type;
     struct AnimationBox from;
     struct AnimationBox to;
     struct AnimationBox current;
@@ -40,12 +39,12 @@ struct AnimationsConfig {
 
 void animation_init(void);
 
-double animation_ease(double t, enum AnimationKind kind);
+double animation_ease(double t, enum AnimationType type);
 
 int64_t animation_now_ms(void);
 
 void animation_start(
-    struct Animation *a, enum AnimationKind kind,
+    struct Animation *a, enum AnimationType type,
     const struct AnimationBox *from, const struct AnimationBox *to,
     int32_t duration_ms
 );
