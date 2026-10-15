@@ -332,6 +332,7 @@ void view_create(struct wlr_xdg_toplevel *xdg_toplevel) {
         return;
     }
 
+    xdg_toplevel->base->data = view->scene_tree;
     view->popup_tree = view->scene_tree;
     view->scene_tree->node.data = view;
 
