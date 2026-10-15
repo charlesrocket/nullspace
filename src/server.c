@@ -186,6 +186,7 @@ int server_init(struct wl_display *display) {
     server.tile_tree = wlr_scene_tree_create(&server.scene->tree);
     server.float_tree = wlr_scene_tree_create(&server.scene->tree);
     server.top_tree = wlr_scene_tree_create(&server.scene->tree);
+    server.fullscreen_tree = wlr_scene_tree_create(&server.scene->tree);
     server.overlay_tree = wlr_scene_tree_create(&server.scene->tree);
 
     server.xdg_shell = wlr_xdg_shell_create(display, 6);

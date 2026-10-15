@@ -46,6 +46,7 @@ struct Window {
     int32_t width, height;
     int32_t prop_w, prop_h;
     int32_t reveal_dir, hide_dir;
+    int32_t fs_x, fs_y, fs_w, fs_h; // geometry to restore (floating layout)
 
     int space;
 
@@ -58,6 +59,7 @@ struct Window {
     bool pos_valid;
     bool has_target;
     bool closed;
+    bool fullscreen;
     bool space_hidden;
 };
 
@@ -69,6 +71,7 @@ struct Window *view_at(
     double lx, double ly, struct wlr_surface **surface, double *sx, double *sy
 );
 
+void view_set_fullscreen(struct Window *view, bool fullscreen);
 void view_set_position(struct Window *view, int32_t x, int32_t y);
 void view_set_size(struct Window *view, int32_t w, int32_t h);
 void view_set_tiled(struct Window *view, bool tiled);

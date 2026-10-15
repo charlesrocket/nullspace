@@ -104,6 +104,16 @@ static void seat_action(enum Action action, const void *arg) {
 
         case ACTION_MOVE:
         case ACTION_RESIZE: break;
+        case ACTION_FULLSCREEN:
+            {
+                struct Window *focused = view_focused();
+                if (focused != NULL) {
+                    view_set_fullscreen(focused, !focused->fullscreen);
+                }
+
+                break;
+            }
+
         case ACTION_CYCLE_LAYOUT:
             wm_set_layout((enum Layout)((wm.layout + 1) % (LAYOUT_LAST + 1)));
             break;

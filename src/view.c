@@ -26,6 +26,43 @@ static struct wlr_scene_tree *layer_for_layout(enum Layout layout) {
     return layouts_is_tiled(layout) ? server.tile_tree : server.float_tree;
 }
 
+void view_set_activated(struct Window *view, bool activated) {
+    wlr_xdg_toplevel_set_activated(view->xdg_toplevel, activated);
+    if (view->wlr_handle != NULL) {
+        wlr_foreign_toplevel_handle_v1_set_activated(
+            view->wlr_handle, activated
+        );
+    }
+}
+
+void view_set_fullscreen(struct Window *view, bool fullscreen) {
+    if (view->closed || view->fullscreen == fullscreen) return;
+    if (!view->xdg_toplevel->base->initialized) return;
+
+    if (fullscreen) {
+        view->fs_x = view->x;
+        view->fs_y = view->y;
+        view->fs_w = view->width;
+        view->fs_h = view->height;
+    }
+
+    view->fullscreen = fullscreen;
+    wlr_xdg_toplevel_set_fullscreen(view->xdg_toplevel, fullscreen);
+
+    view->has_target = false;
+    view_reparent(view, !layouts_is_tiled(wm.layout));
+
+    if (!fullscreen && !layouts_is_tiled(wm.layout)) { // floating
+        // restore from saved
+        window_apply_target(
+            view, view->fs_x, view->fs_y, view->fs_w, view->fs_h
+        );
+    }
+
+    if (fullscreen) view_raise(view);
+    wm_mark_layout_dirty();
+}
+
 static void wlr_handle_request_activate(struct wl_listener *l, void *data) {
     (void)data;
 
@@ -88,15 +125,6 @@ static void wlr_handle_destroy(struct Window *view) {
     wlr_foreign_toplevel_handle_v1_destroy(view->wlr_handle);
 
     view->wlr_handle = NULL;
-}
-
-void view_set_activated(struct Window *view, bool activated) {
-    wlr_xdg_toplevel_set_activated(view->xdg_toplevel, activated);
-    if (view->wlr_handle != NULL) {
-        wlr_foreign_toplevel_handle_v1_set_activated(
-            view->wlr_handle, activated
-        );
-    }
 }
 
 static void foreign_handle_create(struct Window *view) {
@@ -240,9 +268,7 @@ static void view_handle_request_fullscreen(struct wl_listener *l, void *data) {
     struct Window *view = wl_container_of(l, view, request_fullscreen);
     if (!view->xdg_toplevel->base->initialized) return;
 
-    wlr_xdg_toplevel_set_fullscreen(
-        view->xdg_toplevel, view->xdg_toplevel->requested.fullscreen
-    );
+    view_set_fullscreen(view, view->xdg_toplevel->requested.fullscreen);
 }
 
 static void view_handle_request_minimize(struct wl_listener *l, void *data) {
@@ -468,7 +494,8 @@ void view_raise(struct Window *view) {
 
 void view_reparent(struct Window *view, bool to_float) {
     struct wlr_scene_tree *target =
-        to_float ? server.float_tree : server.tile_tree;
+        view->fullscreen ? server.fullscreen_tree
+                         : (to_float ? server.float_tree : server.tile_tree);
 
     if (view->scene_tree->node.parent == target) return;
     wlr_scene_node_reparent(&view->scene_tree->node, target);

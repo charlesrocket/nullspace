@@ -100,7 +100,14 @@ static void layout_windows_apply(LayoutCompute compute) {
     if (written > n) { written = n; } // TODO
 
     for (size_t j = 0; j < written; j++) {
-        window_apply_target(lw[j].window, lw[j].x, lw[j].y, lw[j].w, lw[j].h);
+        struct Window *fw = lw[j].window;
+        if (fw->fullscreen) {
+            window_apply_target(
+                fw, output->pos_x, output->pos_y, output->width, output->height
+            );
+        } else {
+            window_apply_target(fw, lw[j].x, lw[j].y, lw[j].w, lw[j].h);
+        }
     }
 
     free(lw);
@@ -126,6 +133,14 @@ bool layouts_is_tiled(enum Layout layout) {
 static void floating_layout(struct LayoutWindow *lw, size_t n) {
     for (size_t i = 0; i < n; i++) {
         struct Window *w = lw[i].window;
+
+        if (w->anim.running && w->has_target) {
+            lw[i].x = w->target_box.x;
+            lw[i].y = w->target_box.y;
+            lw[i].w = w->target_box.width;
+            lw[i].h = w->target_box.height;
+            continue;
+        }
 
         if (w->anim.running) {
             lw[i].x = w->saved_x;
