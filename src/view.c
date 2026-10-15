@@ -325,7 +325,6 @@ void view_create(struct wlr_xdg_toplevel *xdg_toplevel) {
     view->xdg_toplevel = xdg_toplevel;
     view->space = wm.current_space;
     view->node_tag.type = NODE_WINDOW;
-    view->scene_tree->node.data = &view->node_tag;
 
     struct wlr_scene_tree *parent = layer_for_layout(wm.layout);
     view->scene_tree = wlr_scene_xdg_surface_create(parent, xdg_toplevel->base);
@@ -335,8 +334,8 @@ void view_create(struct wlr_xdg_toplevel *xdg_toplevel) {
     }
 
     xdg_toplevel->base->data = view->scene_tree;
+    view->scene_tree->node.data = &view->node_tag;
     view->popup_tree = view->scene_tree;
-    view->scene_tree->node.data = view;
 
     wlr_scene_node_set_enabled(&view->scene_tree->node, false);
 

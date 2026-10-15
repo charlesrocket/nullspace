@@ -321,7 +321,6 @@ void layers_handle_new_surface(struct wl_listener *listener, void *data) {
     ls->layer_surface = layer;
     ls->output = output_for(layer);
     ls->node_tag.type = NODE_LAYER_SURFACE;
-    ls->scene_tree->node.data = &ls->node_tag;
 
     struct wlr_scene_tree *parent = layer_tree_for(layer->pending.layer);
 
@@ -331,7 +330,7 @@ void layers_handle_new_surface(struct wl_listener *listener, void *data) {
         return;
     }
 
-    ls->scene_tree->node.data = ls;
+    ls->scene_tree->node.data = &ls->node_tag;
     wlr_scene_node_set_enabled(&ls->scene_tree->node, false);
 
     ls->map.notify = handle_map;
