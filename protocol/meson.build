@@ -49,22 +49,6 @@ xdg_shell_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
-ext_idle_notify_xml = files('ext-idle-notify-v1.xml')
-
-ext_idle_notify_h = custom_target(
-  'ext-idle-notify-v1-protocol.h',
-  input:  ext_idle_notify_xml,
-  output: 'ext-idle-notify-v1-protocol.h',
-  command: [wayland_scanner, 'server-header', '@INPUT@', '@OUTPUT@'],
-)
-
-ext_idle_notify_c = custom_target(
-  'ext-idle-notify-v1-protocol.c',
-  input:  ext_idle_notify_xml,
-  output: 'ext-idle-notify-v1-protocol.c',
-  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
-)
-
 ext_bg_effect_xml = files('ext-background-effect-v1.xml')
 
 ext_bg_effect_h = custom_target(
@@ -90,8 +74,6 @@ proto_sources = [
   wlr_layer_shell_c,
   xdg_shell_h,
   xdg_shell_c,
-  ext_idle_notify_h,
-  ext_idle_notify_c,
   ext_bg_effect_h,
   ext_bg_effect_c,
 ]

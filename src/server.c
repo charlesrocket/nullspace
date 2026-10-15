@@ -23,7 +23,6 @@
 #include <wayland-protocols/cursor-shape-v1-enum.h>
 #include <wayland-server-core.h>
 #include <wayland-util.h>
-#include <wlr-output-power-management-unstable-v1-protocol.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_cursor_shape_v1.h>
 #include <wlr/types/wlr_data_control_v1.h>
