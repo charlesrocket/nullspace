@@ -12,6 +12,7 @@ project(
 cc = meson.get_compiler('c')
 add_project_arguments(cc.get_supported_arguments([
   '-DVERSION="@0@"'.format(meson.project_version()),
+  '_FORTIFY_SOURCE',
   '-DWLR_USE_UNSTABLE',
   '-Wshadow',
   '-Wconversion',
