@@ -3,9 +3,9 @@
 #include "../manager.h"
 #include "../output.h"
 #include "horizontal.h"
-#include "include/layouts.h"
 #include "vertical.h"
 
+#include <nullspace/layouts.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>

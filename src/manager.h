@@ -2,11 +2,12 @@
 #define MANAGER_H
 
 #include "animation.h"
-#include "include/layouts.h"
 #include "input.h"
 #include "layouts/layout.h"
 #include "seat.h"
 #include "view.h"
+
+#include <nullspace/layouts.h>
 #ifdef WALLPAPER
 #include "wallpaper.h"
 #endif

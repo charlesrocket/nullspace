@@ -1,12 +1,11 @@
-#ifndef KEYS_H
-#define KEYS_H
+#pragma once
 
-enum IpcKind {
-    IPC_KIND_INT,
-    IPC_KIND_FLOAT,
-    IPC_KIND_BOOL,
-    IPC_KIND_STR,
-    IPC_KIND_SPECIAL,
+enum IpcType {
+    IPC_TYPE_INT,
+    IPC_TYPE_FLOAT,
+    IPC_TYPE_BOOL,
+    IPC_TYPE_STR,
+    IPC_TYPE_SPECIAL,
 };
 
 enum IpcAccess {
@@ -24,7 +23,7 @@ enum IpcAfter {
 
 struct IpcKeyMeta {
     const char *name;
-    enum IpcKind kind;
+    enum IpcType type;
     enum IpcAccess access;
     const char *range;
     const char *desc;
@@ -210,5 +209,3 @@ struct IpcKeyMeta {
 #else
 #define KEYS_TABLE_WALLPAPER(K_INT, K_FLOAT, K_BOOL, K_STR, K_SPECIAL)
 #endif
-
-#endif // KEYS_H

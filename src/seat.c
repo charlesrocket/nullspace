@@ -1,6 +1,5 @@
 #include "seat.h"
 
-#include "include/layouts.h"
 #include "input.h"
 #include "ipc.h"
 #include "keymap.h"
@@ -12,6 +11,7 @@
 
 #include <dev/evdev/input-event-codes.h>
 #include <fcntl.h>
+#include <nullspace/layouts.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>

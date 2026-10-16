@@ -1,5 +1,4 @@
-#ifndef LAYOUTS_H
-#define LAYOUTS_H
+#pragma once
 
 enum Layout {
     LAYOUT_VERTICAL_TILE,
@@ -26,5 +25,3 @@ enum Layout {
       "focused window centered, previews below")                               \
     X(LAYOUT_HORIZONTAL_GRID, "hgrid", "horizontal grid")                      \
     X(LAYOUT_FLOATING, "float", "floating windows")
-
-#endif // LAYOUTS_H

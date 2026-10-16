@@ -1,8 +1,7 @@
 #ifndef LAYOUT_H
 #define LAYOUT_H
 
-#include "include/layouts.h"
-
+#include <nullspace/layouts.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>

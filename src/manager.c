@@ -3,12 +3,13 @@
 #include "animation.h"
 #include "config.h"
 #include "ipc.h"
-#include "layouts.h"
 #include "layouts/layout.h"
 #include "output.h"
 #include "seat.h"
 #include "server.h"
 #include "view.h"
+
+#include <nullspace/layouts.h>
 #ifdef WALLPAPER
 #include "wallpaper.h"
 #endif

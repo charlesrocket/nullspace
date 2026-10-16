@@ -1,10 +1,9 @@
-#ifndef VIEW_H
-#define VIEW_H
+#pragma once
 
 #include "animation.h"
-#include "include/layouts.h"
 #include "server.h"
 
+#include <nullspace/layouts.h>
 #include <scenefx/types/wlr_scene.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -85,5 +84,3 @@ void view_clear_clip(struct Window *view);
 void view_close(struct Window *view);
 void view_raise(struct Window *view);
 void view_reparent(struct Window *view, bool to_float);
-
-#endif // VIEW_H

@@ -1,7 +1,6 @@
 #include "view.h"
 
 #include "cursor.h"
-#include "include/layouts.h"
 #include "ipc.h"
 #include "layouts/layout.h"
 #include "manager.h"
@@ -9,6 +8,7 @@
 #include "seat.h"
 #include "server.h"
 
+#include <nullspace/layouts.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>

@@ -1,8 +1,6 @@
 #include "ipc.h"
 
-#include "include/layouts.h"
 #include "input.h"
-#include "keys.h"
 #include "layouts/layout.h"
 #include "log.h"
 #include "manager.h"
@@ -13,6 +11,9 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <math.h>
+#include <ns-util.h>
+#include <nullspace/keys.h>
+#include <nullspace/layouts.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -77,11 +78,6 @@ static struct wl_event_source *ipc_server_source;
 static struct wl_event_loop *ipc_loop;
 static bool ipc_initialized;
 static char ipc_path[256];
-
-static bool set_nosigpipe(int fd) {
-    int val = 1;
-    return setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &val, sizeof(val)) == 0;
-}
 
 static bool parse_bool(const char *s, bool *out) {
     static const char *const yes[] = {"1", "true", "on", "yes"};
