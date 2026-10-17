@@ -1,5 +1,4 @@
-#ifndef LAYOUT_H
-#define LAYOUT_H
+#pragma once
 
 #include <nullspace/layouts.h>
 #include <stdbool.h>
@@ -36,5 +35,3 @@ size_t layouts_compute(
 typedef size_t (*LayoutCompute)(enum Layout, struct LayoutWindow *, size_t, const struct LayoutParams *);
 
 void layout_apply(void);
-
-#endif // LAYOUT_H

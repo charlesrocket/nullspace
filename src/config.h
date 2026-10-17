@@ -1,5 +1,4 @@
-#ifndef CONFIG_H
-#define CONFIG_H
+#pragma once
 
 #include <dev/evdev/input-event-codes.h>
 #include <stddef.h>
@@ -122,5 +121,3 @@
 #define CFG_WALLPAPER_BLUR_RADIUS          12
 #define CFG_WALLPAPER_BLUR_PASSES          2
 #endif
-
-#endif // CONFIG_H

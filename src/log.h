@@ -1,5 +1,4 @@
-#ifndef LOG_H
-#define LOG_H
+#pragma once
 
 #include <stdarg.h>
 #include <stdbool.h>
@@ -30,5 +29,3 @@ void log_msg( // internal
 #define log_info(...)  log_msg(LOG_INFO, LOG_TOPIC, NULL, 0, __VA_ARGS__)
 #define log_warn(...)  log_msg(LOG_WARN, LOG_TOPIC, NULL, 0, __VA_ARGS__)
 #define log_err(...)   log_msg(LOG_ERROR, LOG_TOPIC, NULL, 0, __VA_ARGS__)
-
-#endif // LOG_H

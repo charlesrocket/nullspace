@@ -1,5 +1,4 @@
-#ifndef CURSOR_H
-#define CURSOR_H
+#pragma once
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -27,5 +26,3 @@ void cursor_handle_motion_absolute(struct wl_listener *l, void *data);
 void cursor_handle_button(struct wl_listener *l, void *data);
 void cursor_handle_axis(struct wl_listener *l, void *data);
 void cursor_handle_frame(struct wl_listener *l, void *data);
-
-#endif // CURSOR_H

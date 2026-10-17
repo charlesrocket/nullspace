@@ -1,5 +1,4 @@
-#ifndef LAYOUTS_HORIZONTAL_H
-#define LAYOUTS_HORIZONTAL_H
+#pragma once
 
 #include "layout.h"
 
@@ -20,5 +19,3 @@ void horizontal_monocle(
 void horizontal_grid(
     struct LayoutWindow *lw, size_t n, const struct LayoutParams *p
 );
-
-#endif // LAYOUTS_HORIZONTAL_H

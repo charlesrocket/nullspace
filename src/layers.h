@@ -1,5 +1,4 @@
-#ifndef LAYERS_H
-#define LAYERS_H
+#pragma once
 
 #include "server.h"
 #include "wayland-server-core.h"
@@ -35,5 +34,3 @@ struct LayerSurface {
 void layers_handle_new_surface(struct wl_listener *listener, void *data);
 struct LayerSurface *layer_surface_from_wlr_surface(struct wlr_surface *surface
 );
-
-#endif // LAYERS_H

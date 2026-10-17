@@ -1,5 +1,4 @@
-#ifndef OUTPUT_H
-#define OUTPUT_H
+#pragma once
 
 #include <scenefx/types/wlr_scene.h>
 #include <stdbool.h>
@@ -42,5 +41,3 @@ bool output_set_enabled(struct wlr_output *wlr_output, bool on);
 int output_set_power(const char *name, int mode);
 
 struct Output *output_primary(void);
-
-#endif // OUTPUT_H

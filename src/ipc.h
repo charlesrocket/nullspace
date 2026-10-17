@@ -1,5 +1,4 @@
-#ifndef IPC_H
-#define IPC_H
+#pragma once
 
 #include <stdbool.h>
 #include <wayland-server-core.h>
@@ -20,5 +19,3 @@ void ipc_notify_window_opened(struct Window *w);
 void ipc_notify_window_closed(struct Window *w);
 void ipc_notify_window_meta(struct Window *w);
 void ipc_notify_all_state(void);
-
-#endif // IPC_H

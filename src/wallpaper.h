@@ -1,5 +1,4 @@
-#ifndef WALLPAPER_H
-#define WALLPAPER_H
+#pragma once
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -50,5 +49,3 @@ void wallpaper_output_destroy(struct WallpaperOutput *wpo);
 
 void wallpaper_update_output(struct Output *output);
 void wallpaper_update_all(void);
-
-#endif // WALLPAPER_H

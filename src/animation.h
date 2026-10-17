@@ -1,5 +1,4 @@
-#ifndef ANIMATION_H
-#define ANIMATION_H
+#pragma once
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -62,5 +61,3 @@ animation_box(int32_t x, int32_t y, int32_t w, int32_t h) {
     struct AnimationBox b = {x, y, w, h};
     return b;
 }
-
-#endif // ANIMATION_H

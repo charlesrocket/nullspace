@@ -1,5 +1,4 @@
-#ifndef KEYMAP_H
-#define KEYMAP_H
+#pragma once
 
 #include <stdint.h>
 
@@ -13,5 +12,3 @@ void keymap_init(void);
 void keymap_destroy(void);
 void keymap_apply(struct wlr_keyboard *keyboard);
 void keymap_notify_layout(struct wlr_keyboard *keyboard);
-
-#endif // KEYMAP_H

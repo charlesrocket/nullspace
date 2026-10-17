@@ -1,5 +1,4 @@
-#ifndef LAYOUTS_VERTICAL_H
-#define LAYOUTS_VERTICAL_H
+#pragma once
 
 #include "layout.h"
 
@@ -11,5 +10,3 @@ void vertical_tile(
 void vertical_grid(
     struct LayoutWindow *lw, size_t n, const struct LayoutParams *p
 );
-
-#endif // LAYOUTS_VERTICAL_H

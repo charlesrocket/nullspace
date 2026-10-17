@@ -1,5 +1,4 @@
-#ifndef SEAT_H
-#define SEAT_H
+#pragma once
 
 #include "input.h"
 
@@ -27,5 +26,3 @@ void seat_foreach_input_device(
 );
 
 void seat_focus(struct Window *window);
-
-#endif // SEAT_H

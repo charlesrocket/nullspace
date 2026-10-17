@@ -1,5 +1,4 @@
-#ifndef SERVER_H
-#define SERVER_H
+#pragma once
 
 #include <scenefx/types/wlr_scene.h>
 #include <stdbool.h>
@@ -122,5 +121,3 @@ void server_notify_activity(void);
 void idle_update_inhibit(void);
 
 void popup_track(struct wlr_xdg_popup *, struct wlr_scene_tree *);
-
-#endif // SERVER_H

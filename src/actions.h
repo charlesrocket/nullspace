@@ -1,5 +1,4 @@
-#ifndef ACTIONS_H
-#define ACTIONS_H
+#pragma once
 
 enum Action {
     ACTION_NONE,
@@ -32,5 +31,3 @@ enum Action {
     ACTION_MOVE_TO_SPACE_8,
     ACTION_MOVE_TO_SPACE_9,
 };
-
-#endif // ACTIONS_H

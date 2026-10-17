@@ -1,5 +1,4 @@
-#ifndef INPUT_H
-#define INPUT_H
+#pragma once
 
 #include "actions.h"
 
@@ -46,5 +45,3 @@ struct wlr_input_device;
 
 void input_apply_pointer_config(struct wlr_input_device *device);
 void libinput_reconfigure(void);
-
-#endif // INPUT_H

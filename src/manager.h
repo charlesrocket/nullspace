@@ -1,5 +1,4 @@
-#ifndef MANAGER_H
-#define MANAGER_H
+#pragma once
 
 #include "animation.h"
 #include "input.h"
@@ -74,5 +73,3 @@ struct Window *focus_stack_top_except(struct Window *skip);
 bool wm_set_wallpaper_path(const char *path);
 void wm_invalidate_wallpaper(void);
 #endif
-
-#endif // MANAGER_H
