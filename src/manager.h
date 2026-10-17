@@ -32,21 +32,19 @@ struct WindowManager {
 
     enum Layout layout;
 
-    int32_t tiled_gap_outer_h;
-    int32_t tiled_gap_outer_v;
-    int32_t tiled_gap_inner_h;
-    int32_t tiled_gap_inner_v;
+    int32_t tiled_gap_outer_h, tiled_gap_outer_v, tiled_gap_inner_h,
+        tiled_gap_inner_v;
 
     int32_t nmasters;
-    int current_space;
+
     float mfact;
+
+    int current_space, rounded_corners_radius;
 
     char *kb_layout;
 
-    bool layout_dirty;
-    bool smart_gaps;
-    bool center_overspread; // let masters fill width when n <= nmasters
-    bool center_when_single_stack;
+    bool layout_dirty, rounded_corners, smart_gaps, center_overspread,
+        center_when_single_stack;
 };
 
 extern struct WindowManager wm;

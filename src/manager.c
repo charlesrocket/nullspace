@@ -388,6 +388,9 @@ void wm_init(void) {
     wm.center_overspread = CFG_CENTER_OVERSPREAD;
     wm.center_when_single_stack = CFG_CENTER_WHEN_SINGLE_STACK;
 
+    wm.rounded_corners = CFG_ROUNDED_CORNERS_ENABLED;
+    wm.rounded_corners_radius = CFG_ROUNDED_CORNERS_RADIUS;
+
     wm.animations.enabled = CFG_ANIMATIONS_ENABLED;
     wm.animations.open_from_top = CFG_ANIM_OPEN_FROM_TOP;
     wm.animations.duration_move = CFG_ANIM_DURATION_MOVE;

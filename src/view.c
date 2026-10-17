@@ -1,5 +1,6 @@
 #include "view.h"
 
+#include "config.h"
 #include "cursor.h"
 #include "ipc.h"
 #include "layouts/layout.h"
@@ -9,6 +10,7 @@
 #include "server.h"
 
 #include <nullspace/layouts.h>
+#include <scenefx/types/wlr_scene.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,6 +19,7 @@
 #include <wlr/types/wlr_ext_foreign_toplevel_list_v1.h>
 #include <wlr/types/wlr_foreign_toplevel_management_v1.h>
 #include <wlr/types/wlr_output.h>
+#include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/util/edges.h>
 #include <wlr/util/log.h>
 
@@ -24,6 +27,52 @@
 
 static struct wlr_scene_tree *layer_for_layout(enum Layout layout) {
     return layouts_is_tiled(layout) ? server.tile_tree : server.float_tree;
+}
+
+static struct wlr_scene_buffer *find_surface_buffer(
+    struct wlr_scene_node *node, const struct wlr_surface *surface
+) {
+    if (node == NULL || surface == NULL) return NULL;
+
+    if (node->type == WLR_SCENE_NODE_BUFFER) {
+        struct wlr_scene_buffer *buf = wlr_scene_buffer_from_node(node);
+        struct wlr_scene_surface *ssurf =
+            wlr_scene_surface_try_from_buffer(buf);
+
+        return (ssurf != NULL && ssurf->surface == surface) ? buf : NULL;
+    }
+
+    if (node->type == WLR_SCENE_NODE_TREE) {
+        struct wlr_scene_node *child;
+        wl_list_for_each(
+            child, &wlr_scene_tree_from_node(node)->children, link
+        ) {
+            struct wlr_scene_buffer *found =
+                find_surface_buffer(child, surface);
+
+            if (found != NULL) return found;
+        }
+    }
+
+    return NULL;
+}
+
+// TODO rewire to allow state changes (via IPC)
+static void view_update_corners(struct Window *view) {
+    if (view == NULL || view->closed || view->scene_tree == NULL) return;
+
+    struct wlr_surface *surface = view->xdg_toplevel->base->surface;
+    struct wlr_scene_buffer *buf =
+        find_surface_buffer(&view->scene_tree->node, surface);
+
+    if (buf == NULL) return;
+
+    int radius = CFG_ROUNDED_CORNERS_RADIUS;
+    // lets cap the range for now
+    if (radius <= 0) radius = 2;
+
+    bool round = CFG_ROUNDED_CORNERS_ENABLED && !view->fullscreen;
+    wlr_scene_buffer_set_corner_radius(buf, round ? radius : 0);
 }
 
 void view_set_activated(struct Window *view, bool activated) {
@@ -48,6 +97,7 @@ void view_set_fullscreen(struct Window *view, bool fullscreen) {
 
     view->fullscreen = fullscreen;
     wlr_xdg_toplevel_set_fullscreen(view->xdg_toplevel, fullscreen);
+    view_update_corners(view);
 
     view->has_target = false;
     view_reparent(view, !layouts_is_tiled(wm.layout));
@@ -173,6 +223,7 @@ static void view_handle_map(struct wl_listener *l, void *data) {
     wlr_handle_create(view);
     foreign_handle_create(view);
     wm_mark_layout_dirty();
+    view_update_corners(view);
     wlr_scene_node_set_enabled(&view->scene_tree->node, true);
 
     view_set_tiled(view, layouts_is_tiled(wm.layout));
@@ -337,6 +388,7 @@ void view_create(struct wlr_xdg_toplevel *xdg_toplevel) {
     view->scene_tree->node.data = &view->node_tag;
     view->popup_tree = view->scene_tree;
 
+    view_update_corners(view);
     wlr_scene_node_set_enabled(&view->scene_tree->node, false);
 
     view->map.notify = view_handle_map;

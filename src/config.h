@@ -15,6 +15,7 @@
 
 #define CFG_NMASTERS                 2
 #define CFG_MFACT                    0.5f
+
 #define CFG_CENTER_OVERSPREAD        false
 #define CFG_CENTER_WHEN_SINGLE_STACK true
 
@@ -87,6 +88,9 @@
 #define CFG_LIBINPUT_CLICK_METHOD      -1
 // 0 no_scroll | 1 two_finger | 2 edge | 4 on_button_down
 #define CFG_LIBINPUT_SCROLL_METHOD     -1
+
+#define CFG_ROUNDED_CORNERS_ENABLED    true
+#define CFG_ROUNDED_CORNERS_RADIUS     8 // min 2
 
 #define CFG_ANIMATIONS_ENABLED         true
 

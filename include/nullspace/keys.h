@@ -79,6 +79,14 @@ struct IpcKeyMeta {
     )                                                                          \
                                                                                \
     K_BOOL(                                                                    \
+        "rounded_corners_enabled", IPC_A_RW, IPC_AFTER_MANAGE, "true|false",   \
+        "enable rounded corners", wm.rounded_corners                           \
+    )                                                                          \
+    K_INT(                                                                     \
+        "rounded_corners_radius", IPC_A_RW, IPC_AFTER_MANAGE, "corner radius", \
+        wm.rounded_corners_radius, 2, 40                                       \
+    )                                                                          \
+    K_BOOL(                                                                    \
         "animations_enabled", IPC_A_RW, IPC_AFTER_MANAGE, "true|false",        \
         "enable animations", wm.animations.enabled                             \
     )                                                                          \
