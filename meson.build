@@ -12,8 +12,7 @@ project(
 cc = meson.get_compiler('c')
 add_project_arguments(cc.get_supported_arguments([
   '-DVERSION="@0@"'.format(meson.project_version()),
-  '_FORTIFY_SOURCE',
-  '-DWLR_USE_UNSTABLE',
+  '-U_FORTIFY_SOURCE',
   '-Wshadow',
   '-Wconversion',
   '-Wnull-dereference',
@@ -25,6 +24,7 @@ add_project_arguments(cc.get_supported_arguments([
   '-Wunreachable-code',
   '-Wextra-semi',
   '-Wunused',
+  '-DWLR_USE_UNSTABLE',
 ]), language: 'c')
 
 if get_option('asan')
