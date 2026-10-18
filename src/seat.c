@@ -335,7 +335,13 @@ void seat_focus(struct Window *window) {
 
     if (window != NULL) {
         window_set_activated(window, true);
-        wlr_seat_keyboard_notify_enter(server.seat, want, NULL, 0, NULL);
+
+        struct wlr_keyboard *kb = wlr_seat_get_keyboard(server.seat);
+        wlr_seat_keyboard_notify_enter(
+            server.seat, want, kb ? kb->keycodes : NULL,
+            kb ? kb->num_keycodes : 0, kb ? &kb->modifiers : NULL
+        );
+
         wl_list_remove(&window->focus_link);
         wl_list_insert(wm.focus_stack.prev, &window->focus_link);
     } else {

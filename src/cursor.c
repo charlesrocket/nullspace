@@ -45,6 +45,8 @@ struct InteractiveOp {
 };
 
 static struct InteractiveOp interactive;
+static struct Window *hovered_window;
+static unsigned buttons_down;
 
 static void interactive_apply(double cx, double cy) {
     struct InteractiveOp *g = &interactive;
@@ -134,13 +136,45 @@ void cursor_end_interactive_for(struct Window *window) {
     if (interactive.window == window) cursor_end_interactive();
 }
 
+// Handles window's mid-drag destroy.
+void cursor_window_destroyed(struct Window *window) {
+    if (hovered_window == window) hovered_window = NULL;
+    cursor_end_interactive_for(window);
+}
+
 bool cursor_is_interactive(void) { return interactive.active; }
 
-static void cursor_update_focus(void) {
+static void focus_window(struct Window *w) {
+    if (w == NULL || w->closed || w->space_hidden || !w->mapped) return;
+    if (server.locked) return;
+    seat_focus(w); // no-ops if `w` already holds keyboard focus
+}
+
+static void focus_follow_on_motion(struct Window *under) {
+    struct Window *prev = hovered_window;
+    hovered_window = under; // always track, even when not activating
+
+    if (!CFG_FOCUS_FOLLOW || under == NULL) return;
+    if (server.locked || !layouts_is_tiled(wm.layout)) return;
+    if (buttons_down > 0) return; // never switch focus mid-drag
+
+    bool crossed = under != prev;
+    bool no_keyboard_focus =
+        server.seat->keyboard_state.focused_surface == NULL;
+
+    if (!crossed && !no_keyboard_focus) return;
+
+    focus_window(under);
+}
+
+static void cursor_manage_focus(bool motion) {
     struct wlr_surface *surface = NULL;
     double sx = 0, sy = 0;
 
-    (void)window_at(server.cursor->x, server.cursor->y, &surface, &sx, &sy);
+    struct Window *under =
+        window_at(server.cursor->x, server.cursor->y, &surface, &sx, &sy);
+
+    if (motion) focus_follow_on_motion(surface != NULL ? under : NULL);
 
     if (surface == NULL) {
         wlr_seat_pointer_clear_focus(server.seat);
@@ -153,6 +187,8 @@ static void cursor_update_focus(void) {
         server.seat, (uint32_t)animation_now_ms(), sx, sy
     );
 }
+
+static void cursor_update_focus(void) { cursor_manage_focus(false); }
 
 void cursor_refresh_focus(void) {
     if (!interactive.active) cursor_update_focus();
@@ -188,7 +224,7 @@ void cursor_handle_motion(struct wl_listener *l, void *data) {
         return;
     }
 
-    cursor_update_focus();
+    cursor_manage_focus(true);
 }
 
 void cursor_handle_motion_absolute(struct wl_listener *l, void *data) {
@@ -204,7 +240,7 @@ void cursor_handle_motion_absolute(struct wl_listener *l, void *data) {
         return;
     }
 
-    cursor_update_focus();
+    cursor_manage_focus(true);
 }
 
 void cursor_handle_button(struct wl_listener *l, void *data) {
@@ -218,6 +254,7 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
             if (interactive.trigger_button == 0
                 || ev->button == interactive.trigger_button) {
                 cursor_end_interactive();
+                buttons_down = 0;
                 // Re-acquire focus at the current cursor position.
                 cursor_update_focus();
             }
@@ -242,6 +279,8 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
                 window_at(server.cursor->x, server.cursor->y, &surf, &sx, &sy);
             if (under == NULL || under->closed || under->space_hidden) break;
 
+            focus_window(under);
+
             if (pb->action == ACTION_MOVE) {
                 cursor_begin_interactive(under, SEAT_OP_MOVE, 0);
                 interactive.trigger_button = ev->button;
@@ -257,12 +296,25 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
         }
     }
 
+    if (ev->state == WL_POINTER_BUTTON_STATE_PRESSED && !server.locked) {
+        struct wlr_surface *surf = NULL;
+        double sx = 0, sy = 0;
+        struct Window *under =
+            window_at(server.cursor->x, server.cursor->y, &surf, &sx, &sy);
+
+        focus_window(under);
+    }
+
     wlr_seat_pointer_notify_button(
         server.seat, ev->time_msec, ev->button, ev->state
     );
 
-    if (ev->state == WL_POINTER_BUTTON_STATE_PRESSED)
+    if (ev->state == WL_POINTER_BUTTON_STATE_PRESSED) {
+        buttons_down++;
         session_lock_click_focus();
+    } else if (buttons_down > 0) {
+        buttons_down--;
+    }
 
     cursor_update_focus();
 }

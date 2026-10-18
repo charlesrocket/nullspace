@@ -519,6 +519,7 @@ void window_create(struct wlr_xdg_toplevel *xdg_toplevel) {
 void window_destroy(struct Window *window) {
     if (window->closed) return;
     window->closed = true;
+    cursor_window_destroyed(window);
 
     wl_list_remove(&window->focus_link);
 

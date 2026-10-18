@@ -18,6 +18,7 @@ void cursor_begin_interactive(
 
 void cursor_end_interactive(void);
 void cursor_end_interactive_for(struct Window *window);
+void cursor_window_destroyed(struct Window *window);
 void cursor_refresh_focus(void);
 bool cursor_is_interactive(void);
 

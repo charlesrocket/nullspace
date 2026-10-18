@@ -26,6 +26,8 @@
 #define CFG_MOD_SUPER                WLR_MODIFIER_LOGO  // Super key
 #define CFG_MOD_SHIFT                WLR_MODIFIER_SHIFT // Shift key
 
+#define CFG_FOCUS_FOLLOW             true // focus follows the cursor
+
 #define CFG_BIND(MODS, KEY, ACTION)  {MODS, KEY, ACTION, NULL},
 
 #define CFG_SPAWN_BIND(MODS, KEY, CMD)                                         \
