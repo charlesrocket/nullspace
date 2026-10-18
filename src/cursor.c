@@ -8,6 +8,7 @@
 #include "manager.h"
 #include "seat.h"
 #include "server.h"
+#include "session.h"
 #include "view.h"
 
 #include <dev/evdev/input-event-codes.h>
