@@ -68,7 +68,13 @@ int main(int argc, char *argv[]) {
     }
 
     setenv("XDG_SESSION_TYPE", "wayland", 1);
-    setenv("XDG_CURRENT_DESKTOP", "nullspace", 1);
+    setenv("XDG_SESSION_DESKTOP", "Nullspace", 1);
+    setenv("XDG_CURRENT_DESKTOP", "Nullspace", 1);
+
+    setenv("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1", 1);
+    setenv("QT_QPA_PLATFORMTHEME", "qt6ct", 0);
+    setenv("QT_QPA_PLATFORM", "wayland;xcb", 0);
+    setenv("GDK_BACKEND", "wayland,x11,*", 0);
 
     wm_init();
     keymap_init();
