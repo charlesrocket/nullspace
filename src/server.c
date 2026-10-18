@@ -23,6 +23,7 @@
 #include <wayland-protocols/cursor-shape-v1-enum.h>
 #include <wayland-server-core.h>
 #include <wayland-util.h>
+#include <wlr-output-power-management-unstable-v1-protocol.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_cursor_shape_v1.h>
 #include <wlr/types/wlr_data_control_v1.h>
@@ -363,14 +364,6 @@ struct NodeTag *node_tag_find(struct wlr_scene_node *node) {
     }
 
     return NULL;
-}
-
-struct Window *window_from_scene_node(struct wlr_scene_node *node) {
-    struct NodeTag *tag = node_tag_find(node);
-    if (tag == NULL || tag->type != NODE_WINDOW) return NULL;
-
-    struct Window *w = wl_container_of(tag, w, node_tag);
-    return w;
 }
 
 struct Output *output_from_wlr_output(struct wlr_output *wlr_output) {

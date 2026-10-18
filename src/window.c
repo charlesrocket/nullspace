@@ -453,6 +453,14 @@ static void window_handle_set_app_id(struct wl_listener *l, void *data) {
     ipc_notify_window_meta(window);
 }
 
+struct Window *window_from_scene_node(struct wlr_scene_node *node) {
+    struct NodeTag *tag = node_tag_find(node);
+    if (tag == NULL || tag->type != NODE_WINDOW) return NULL;
+
+    struct Window *w = wl_container_of(tag, w, node_tag);
+    return w;
+}
+
 void window_create(struct wlr_xdg_toplevel *xdg_toplevel) {
     struct Window *window = calloc(1, sizeof(*window));
     if (window == NULL) return;

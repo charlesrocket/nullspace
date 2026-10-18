@@ -114,7 +114,6 @@ int server_init(struct wl_display *display);
 void server_detach_listeners(void);
 void server_finish(void);
 
-struct Window *window_from_scene_node(struct wlr_scene_node *node);
 struct Output *output_from_wlr_output(struct wlr_output *wlr_output);
 
 void server_notify_activity(void);

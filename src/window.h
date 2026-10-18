@@ -68,6 +68,7 @@ struct Window {
 void window_create(struct wlr_xdg_toplevel *xdg_toplevel);
 void window_destroy(struct Window *window);
 
+struct Window *window_from_scene_node(struct wlr_scene_node *node);
 struct Window *window_focused(void);
 struct Window *window_at(
     double lx, double ly, struct wlr_surface **surface, double *sx, double *sy
