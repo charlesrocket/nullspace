@@ -366,15 +366,6 @@ struct NodeTag *node_tag_find(struct wlr_scene_node *node) {
     return NULL;
 }
 
-struct Output *output_from_wlr_output(struct wlr_output *wlr_output) {
-    struct Output *out;
-    wl_list_for_each(out, &server.outputs, link) {
-        if (out->wlr_output == wlr_output) return out;
-    }
-
-    return NULL;
-}
-
 static bool inhibitor_surface_visible(struct wlr_surface *surface) {
     if (server.locked) return false;
     struct wlr_surface *root = wlr_surface_get_root_surface(surface);

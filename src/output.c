@@ -224,6 +224,15 @@ void output_destroy(struct Output *out) {
     free(out);
 }
 
+struct Output *output_from_wlr_output(struct wlr_output *wlr_output) {
+    struct Output *out;
+    wl_list_for_each(out, &server.outputs, link) {
+        if (out->wlr_output == wlr_output) return out;
+    }
+
+    return NULL;
+}
+
 struct Output *output_primary(void) {
     struct Output *out;
     wl_list_for_each(out, &server.outputs, link) {
