@@ -35,7 +35,6 @@ struct IpcKeyMeta {
         "current layout"                                                       \
     )                                                                          \
     K_SPECIAL("current_space", IPC_A_RW, "0,9", "active space index")          \
-    K_SPECIAL("space_count", IPC_A_R, NULL, "number of spaces")                \
     K_SPECIAL(                                                                 \
         "space_window_count", IPC_A_R, NULL,                                   \
         "window count on a space (arg: index)"                                 \

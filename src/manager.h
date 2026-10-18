@@ -15,7 +15,7 @@
 #include <stdint.h>
 #include <wayland-util.h>
 
-#define SPACE_COUNT  10
+#define SPACE_COUNT  10 // TODO aux spaces
 #define HIDDEN_POS_X (-1000000)
 #define HIDDEN_POS_Y (-1000000)
 

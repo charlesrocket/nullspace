@@ -519,12 +519,6 @@ static const char *get_current_space(const char *arg, struct Value *out) {
     return NULL;
 }
 
-static const char *get_space_count(const char *arg, struct Value *out) {
-    (void)arg;
-    *out = v_int(SPACE_COUNT);
-    return NULL;
-}
-
 static const char *get_space_window_count(const char *arg, struct Value *out) {
     int s;
     if (!parse_space(arg, &s)) return "bad space";
@@ -595,7 +589,6 @@ static const struct SpecialOps {
 } special_ops[] = {
     {            "layout",  true,             get_layout,        set_layout},
     {     "current_space",  true,      get_current_space, set_current_space},
-    {       "space_count",  true,        get_space_count,              NULL},
     {"space_window_count", false, get_space_window_count,              NULL},
     {     "focused_title", false,      get_focused_title,              NULL},
     {    "focused_app_id", false,     get_focused_app_id,              NULL},
