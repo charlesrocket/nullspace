@@ -30,17 +30,18 @@ struct CtlCommand {
 };
 
 static const struct CtlCommand COMMANDS[] = {
-    {          "get",            "get <key>",          "query a state key"},
-    {          "set",    "set <key> <value>", "set a runtime config value"},
-    { "switch-space",     "switch-space <n>",              "switch spaces"},
-    {"move-to-space",    "move-to-space <n>",       "move focused windows"},
-    { "cycle-layout",         "cycle-layout",   "cycle to the next layout"},
-    {        "close",                "close",   "close the focused window"},
-    {         "dpms", "dpms <mode> [output]",            "control outputs"},
-    {         "ping",                 "ping",    "check socket connection"},
-    {    "subscribe",            "subscribe",       "stream states/events"},
-    {          "raw",         "raw <string>",         "send raw IPC lines"},
-    {         "list",        "list <string>",    "show available commands"},
+    {          "get",                     "get <key>",          "query state keys"},
+    {          "set",             "set <key> <value>", "set runtime config values"},
+    {       "config",                        "config",                "dump state"},
+    { "switch-space",              "switch-space <n>",             "switch spaces"},
+    {"move-to-space",             "move-to-space <n>",      "move focused windows"},
+    { "cycle-layout",                  "cycle-layout",  "cycle to the next layout"},
+    {        "close",                         "close",  "close the focused window"},
+    {         "dpms", "dpms <on|off|toggle> [output]",       "change output state"},
+    {         "ping",                          "ping",   "check socket connection"},
+    {    "subscribe",                     "subscribe",      "stream states/events"},
+    {          "raw",                  "raw <string>",        "send raw IPC lines"},
+    {         "list",                 "list <string>",   "show available commands"},
 };
 
 struct LayoutEntry {
