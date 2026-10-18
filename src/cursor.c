@@ -9,7 +9,7 @@
 #include "seat.h"
 #include "server.h"
 #include "session.h"
-#include "view.h"
+#include "window.h"
 
 #include <dev/evdev/input-event-codes.h>
 #include <stdbool.h>
@@ -27,7 +27,7 @@
 #define LOG_TOPIC "cursor"
 
 struct InteractiveOp {
-    struct Window *view;
+    struct Window *window;
     enum SeatOp op;
 
     uint32_t edges;
@@ -36,10 +36,10 @@ struct InteractiveOp {
     double cursor_start_x;
     double cursor_start_y;
 
-    int32_t view_start_x;
-    int32_t view_start_y;
-    int32_t view_start_w;
-    int32_t view_start_h;
+    int32_t window_start_x;
+    int32_t window_start_y;
+    int32_t window_start_w;
+    int32_t window_start_h;
 
     bool active;
 };
@@ -48,17 +48,17 @@ static struct InteractiveOp interactive;
 
 static void interactive_apply(double cx, double cy) {
     struct InteractiveOp *g = &interactive;
-    if (!g->active || g->view == NULL || g->view->closed) return;
+    if (!g->active || g->window == NULL || g->window->closed) return;
 
-    struct Window *v = g->view;
+    struct Window *v = g->window;
 
     int32_t dcx = (int32_t)(cx - g->cursor_start_x);
     int32_t dcy = (int32_t)(cy - g->cursor_start_y);
 
     if (g->op == SEAT_OP_MOVE) {
-        int32_t nx = g->view_start_x + dcx;
-        int32_t ny = g->view_start_y + dcy;
-        view_set_position(v, nx, ny);
+        int32_t nx = g->window_start_x + dcx;
+        int32_t ny = g->window_start_y + dcy;
+        window_set_position(v, nx, ny);
 
         v->saved_x = nx;
         v->saved_y = ny;
@@ -66,10 +66,10 @@ static void interactive_apply(double cx, double cy) {
     }
 
     if (g->op == SEAT_OP_RESIZE) {
-        int32_t nx = g->view_start_x;
-        int32_t ny = g->view_start_y;
-        int32_t nw = g->view_start_w;
-        int32_t nh = g->view_start_h;
+        int32_t nx = g->window_start_x;
+        int32_t ny = g->window_start_y;
+        int32_t nw = g->window_start_w;
+        int32_t nh = g->window_start_h;
 
         if (g->edges & WLR_EDGE_RIGHT) nw += dcx;
         if (g->edges & WLR_EDGE_BOTTOM) nh += dcy;
@@ -86,20 +86,20 @@ static void interactive_apply(double cx, double cy) {
         if (nw < 1) nw = 1;
         if (nh < 1) nh = 1;
 
-        view_set_size(v, nw, nh);
-        view_set_position(v, nx, ny);
+        window_set_size(v, nw, nh);
+        window_set_position(v, nx, ny);
         v->saved_x = nx;
         v->saved_y = ny;
     }
 }
 
 void cursor_begin_interactive(
-    struct Window *view, enum SeatOp op, uint32_t edges
+    struct Window *window, enum SeatOp op, uint32_t edges
 ) {
     if (server.locked || interactive.active) return;
-    if (view == NULL || view->closed) return;
+    if (window == NULL || window->closed) return;
 
-    interactive.view = view;
+    interactive.window = window;
     interactive.op = op;
     interactive.edges = edges;
     interactive.trigger_button = 0;
@@ -107,15 +107,15 @@ void cursor_begin_interactive(
     interactive.cursor_start_x = server.cursor->x;
     interactive.cursor_start_y = server.cursor->y;
 
-    interactive.view_start_x = view->x;
-    interactive.view_start_y = view->y;
-    interactive.view_start_w = view->width > 0 ? view->width : 100;
-    interactive.view_start_h = view->height > 0 ? view->height : 100;
+    interactive.window_start_x = window->x;
+    interactive.window_start_y = window->y;
+    interactive.window_start_w = window->width > 0 ? window->width : 100;
+    interactive.window_start_h = window->height > 0 ? window->height : 100;
 
     interactive.active = true;
 
-    view_reparent(view, true);
-    view_raise(view);
+    window_reparent(window, true);
+    window_raise(window);
 
     wlr_seat_pointer_clear_focus(server.seat);
 }
@@ -124,14 +124,14 @@ void cursor_end_interactive(void) {
     if (!interactive.active) return;
 
     interactive.active = false;
-    interactive.view = NULL;
+    interactive.window = NULL;
     interactive.op = SEAT_OP_NONE;
     interactive.edges = 0;
 }
 
-void cursor_end_interactive_for(struct Window *view) {
+void cursor_end_interactive_for(struct Window *window) {
     if (!interactive.active) return;
-    if (interactive.view == view) cursor_end_interactive();
+    if (interactive.window == window) cursor_end_interactive();
 }
 
 bool cursor_is_interactive(void) { return interactive.active; }
@@ -140,7 +140,7 @@ static void cursor_update_focus(void) {
     struct wlr_surface *surface = NULL;
     double sx = 0, sy = 0;
 
-    (void)view_at(server.cursor->x, server.cursor->y, &surface, &sx, &sy);
+    (void)window_at(server.cursor->x, server.cursor->y, &surface, &sx, &sy);
 
     if (surface == NULL) {
         wlr_seat_pointer_clear_focus(server.seat);
@@ -239,7 +239,7 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
             struct wlr_surface *surf = NULL;
             double sx = 0, sy = 0;
             struct Window *under =
-                view_at(server.cursor->x, server.cursor->y, &surf, &sx, &sy);
+                window_at(server.cursor->x, server.cursor->y, &surf, &sx, &sy);
             if (under == NULL || under->closed || under->space_hidden) break;
 
             if (pb->action == ACTION_MOVE) {

@@ -7,7 +7,7 @@
 #include "output.h"
 #include "seat.h"
 #include "server.h"
-#include "view.h"
+#include "window.h"
 
 #include <nullspace/layouts.h>
 #ifdef WALLPAPER
@@ -23,85 +23,6 @@
 #define LOG_TOPIC "wm"
 
 struct WindowManager wm;
-
-void window_apply_target(
-    struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh
-) {
-    if (w->space_hidden) return;
-    if (nw < 1) nw = 1;
-    if (nh < 1) nh = 1;
-
-    // Consume the reveal flag unconditionally
-    int32_t reveal_dir = w->reveal_dir;
-    w->reveal_dir = 0;
-
-    struct AnimationBox target = animation_box(nx, ny, nw, nh);
-    if (w->has_target && animation_box_eq(&w->target_box, &target)) return;
-
-    bool first = !w->has_target;
-    w->target_box = target;
-    w->has_target = true;
-
-    if (!wm.animations.enabled) {
-        w->anim.running = false;
-        w->anim.current = target;
-        view_set_position(w, nx, ny);
-        view_set_size(w, nw, nh);
-        view_clear_clip(w);
-        return;
-    }
-
-    struct AnimationBox from;
-    enum AnimationType type;
-    int32_t duration;
-
-    if (first && (reveal_dir != 0 || !w->pos_valid)) {
-        if (reveal_dir != 0) {
-            // Horizontal space slide across the whole output.
-            struct Output *out = output_primary();
-            int32_t offset = (out != NULL && out->width > 0) ? out->width : nw;
-            if (offset < 1) offset = 1;
-            from = target;
-            from.x = target.x + reveal_dir * offset;
-            type = ANIM_SPACE;
-            duration = wm.animations.duration_space;
-        } else {
-            // Slide from above/below
-            from = target;
-            from.y = wm.animations.open_from_top ? -target.height
-                                                 : target.y + target.height;
-
-            type = ANIM_OPEN;
-            duration = wm.animations.duration_open;
-        }
-
-        view_set_position(w, from.x, from.y);
-        view_set_size(w, target.width, target.height);
-    } else {
-        if (w->anim.running) {
-            from = w->anim.current;
-        } else if (w->pos_valid && w->width > 0 && w->height > 0) {
-            from = animation_box(w->x, w->y, w->width, w->height);
-        } else if (w->pos_valid && w->prop_valid) {
-            from = animation_box(w->x, w->y, w->prop_w, w->prop_h);
-        } else {
-            from = target;
-        }
-
-        type = ANIM_MOVE;
-        duration = wm.animations.duration_move;
-    }
-
-    animation_start(&w->anim, type, &from, &target, duration);
-    view_set_position(w, w->anim.current.x, w->anim.current.y);
-    view_set_size(w, target.width, target.height);
-
-    if (w->anim.running && type == ANIM_MOVE) {
-        view_set_clip(w, w->anim.current.width, w->anim.current.height);
-    } else {
-        view_clear_clip(w);
-    }
-}
 
 void wm_mark_layout_dirty(void) {
     wm.layout_dirty = true;
@@ -132,23 +53,25 @@ void wm_animation_tick_all(void) {
 
         if (w->anim.running) {
             animation_step(&w->anim, now);
-            view_set_position(w, w->anim.current.x, w->anim.current.y);
+            window_set_position(w, w->anim.current.x, w->anim.current.y);
 
             if (w->anim.running && w->anim.type == ANIM_MOVE) {
-                view_set_clip(w, w->anim.current.width, w->anim.current.height);
+                window_set_clip(
+                    w, w->anim.current.width, w->anim.current.height
+                );
             } else {
-                view_clear_clip(w);
+                window_clear_clip(w);
             }
         }
 
         if (w->hide_dir != 0 && !w->anim.running) {
-            view_set_position(w, HIDDEN_POS_X, w->y);
+            window_set_position(w, HIDDEN_POS_X, w->y);
             w->hide_dir = 0;
         }
     }
 }
 
-struct Window *focus_stack_top(void) {
+struct Window *wm_focus_stack_top(void) {
     if (wl_list_empty(&wm.focus_stack)) return NULL;
     struct wl_list *cur = wm.focus_stack.prev;
     while (cur != &wm.focus_stack) {
@@ -160,7 +83,7 @@ struct Window *focus_stack_top(void) {
     return NULL;
 }
 
-struct Window *focus_stack_top_except(struct Window *skip) {
+struct Window *wm_focus_stack_top_except(struct Window *skip) {
     struct Window *w;
     wl_list_for_each_reverse(w, &wm.focus_stack, focus_link) {
         if (w == skip || w->closed || w->space_hidden) continue;
@@ -170,7 +93,7 @@ struct Window *focus_stack_top_except(struct Window *skip) {
     return NULL;
 }
 
-struct Window *window_next(struct Window *window) {
+struct Window *wm_next_window(struct Window *window) {
     struct wl_list *sentinel = &wm.windows;
     struct wl_list *stop = window ? &window->link : sentinel;
     struct wl_list *cur = stop->next;
@@ -203,12 +126,12 @@ void wm_set_layout(enum Layout layout) {
     if (wm.layout == layout) return;
     wm.layout = layout;
 
-    // Reparent views to the correct scene tree.
+    // Reparent windows to the correct scene tree.
     struct Window *w;
     wl_list_for_each(w, &wm.windows, link) {
         if (w->closed) continue;
-        view_reparent(w, !layouts_is_tiled(layout));
-        view_set_tiled(w, layouts_is_tiled(layout));
+        window_reparent(w, !layouts_is_tiled(layout));
+        window_set_tiled(w, layouts_is_tiled(layout));
         w->prop_valid = false;
         w->has_target = false;
     }
@@ -235,7 +158,7 @@ static void window_hide_offscreen(struct Window *window, int32_t dir) {
     if (!wm.animations.enabled || dir == 0) {
         window->anim.running = false;
         window->hide_dir = 0;
-        view_set_position(window, HIDDEN_POS_X, window->y);
+        window_set_position(window, HIDDEN_POS_X, window->y);
         return;
     }
 
@@ -296,7 +219,7 @@ void wm_switch_space(int space) {
                 window->anim.running = false;
                 window->has_target = false;
                 window->reveal_dir = dir;
-                view_set_position(window, window->saved_x, window->saved_y);
+                window_set_position(window, window->saved_x, window->saved_y);
             }
         } else { // hide
             window_hide_offscreen(window, -dir);
@@ -305,7 +228,7 @@ void wm_switch_space(int space) {
 
     wm.current_space = space;
 
-    struct Window *top = focus_stack_top();
+    struct Window *top = wm_focus_stack_top();
     seat_focus(top);
 
     ipc_notify_space();
@@ -326,7 +249,7 @@ void wm_move_window_to_space(struct Window *window, int space) {
     window->space = space;
     window_hide_offscreen(window, dir);
 
-    struct Window *top = focus_stack_top();
+    struct Window *top = wm_focus_stack_top();
     seat_focus(top);
 
     ipc_notify_space();

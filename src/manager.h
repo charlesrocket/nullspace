@@ -4,7 +4,7 @@
 #include "input.h"
 #include "layouts/layout.h"
 #include "seat.h"
-#include "view.h"
+#include "window.h"
 
 #include <nullspace/layouts.h>
 #ifdef WALLPAPER
@@ -59,13 +59,9 @@ void wm_mark_layout_dirty(void);
 bool wm_animation_active(void);
 void wm_animation_tick_all(void);
 
-void window_apply_target(
-    struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh
-);
-
-struct Window *focus_stack_top(void);
-struct Window *window_next(struct Window *window);
-struct Window *focus_stack_top_except(struct Window *skip);
+struct Window *wm_focus_stack_top(void);
+struct Window *wm_next_window(struct Window *window);
+struct Window *wm_focus_stack_top_except(struct Window *skip);
 
 #ifdef WALLPAPER
 bool wm_set_wallpaper_path(const char *path);

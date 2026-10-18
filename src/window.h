@@ -65,22 +65,26 @@ struct Window {
     bool space_hidden;
 };
 
-void view_create(struct wlr_xdg_toplevel *xdg_toplevel);
-void view_destroy(struct Window *view);
+void window_create(struct wlr_xdg_toplevel *xdg_toplevel);
+void window_destroy(struct Window *window);
 
-struct Window *view_focused(void);
-struct Window *view_at(
+struct Window *window_focused(void);
+struct Window *window_at(
     double lx, double ly, struct wlr_surface **surface, double *sx, double *sy
 );
 
-void view_set_fullscreen(struct Window *view, bool fullscreen);
-void view_set_position(struct Window *view, int32_t x, int32_t y);
-void view_set_size(struct Window *view, int32_t w, int32_t h);
-void view_set_tiled(struct Window *view, bool tiled);
-void view_set_clip(struct Window *view, int32_t w, int32_t h);
-void view_set_activated(struct Window *view, bool activated);
-void view_clear_clip(struct Window *view);
+void window_apply_target(
+    struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh
+);
 
-void view_close(struct Window *view);
-void view_raise(struct Window *view);
-void view_reparent(struct Window *view, bool to_float);
+void window_set_fullscreen(struct Window *window, bool fullscreen);
+void window_set_position(struct Window *window, int32_t x, int32_t y);
+void window_set_size(struct Window *window, int32_t w, int32_t h);
+void window_set_tiled(struct Window *window, bool tiled);
+void window_set_clip(struct Window *window, int32_t w, int32_t h);
+void window_set_activated(struct Window *window, bool activated);
+void window_clear_clip(struct Window *window);
+
+void window_close(struct Window *window);
+void window_raise(struct Window *window);
+void window_reparent(struct Window *window, bool to_float);

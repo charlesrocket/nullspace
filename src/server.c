@@ -10,7 +10,7 @@
 #include "output.h"
 #include "seat.h"
 #include "session.h"
-#include "view.h"
+#include "window.h"
 #ifdef WALLPAPER
 #include "wallpaper.h"
 #endif
@@ -470,7 +470,7 @@ static void handle_new_input(struct wl_listener *l, void *data) {
 static void handle_new_xdg_toplevel(struct wl_listener *l, void *data) {
     (void)l;
 
-    view_create((struct wlr_xdg_toplevel *)data);
+    window_create((struct wlr_xdg_toplevel *)data);
 }
 
 static void popup_handle_commit(struct wl_listener *l, void *data) {

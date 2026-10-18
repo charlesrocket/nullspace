@@ -7,7 +7,7 @@
 #include "manager.h"
 #include "server.h"
 #include "src/actions.h"
-#include "view.h"
+#include "window.h"
 
 #include <dev/evdev/input-event-codes.h>
 #include <fcntl.h>
@@ -84,10 +84,10 @@ static void seat_action(enum Action action, const void *arg) {
 
         case ACTION_CLOSE:
             {
-                struct Window *focused = view_focused();
+                struct Window *focused = window_focused();
                 if (focused != NULL) {
-                    struct Window *next = focus_stack_top_except(focused);
-                    view_close(focused);
+                    struct Window *next = wm_focus_stack_top_except(focused);
+                    window_close(focused);
 
                     if (next != NULL) seat_focus(next);
                 }
@@ -97,7 +97,7 @@ static void seat_action(enum Action action, const void *arg) {
 
         case ACTION_FOCUS_NEXT:
             {
-                struct Window *next = window_next(view_focused());
+                struct Window *next = wm_next_window(window_focused());
                 if (next != NULL) seat_focus(next);
                 break;
             }
@@ -106,9 +106,9 @@ static void seat_action(enum Action action, const void *arg) {
         case ACTION_RESIZE: break;
         case ACTION_FULLSCREEN:
             {
-                struct Window *focused = view_focused();
+                struct Window *focused = window_focused();
                 if (focused != NULL) {
-                    view_set_fullscreen(focused, !focused->fullscreen);
+                    window_set_fullscreen(focused, !focused->fullscreen);
                 }
 
                 break;
@@ -132,34 +132,34 @@ static void seat_action(enum Action action, const void *arg) {
         case ACTION_SPACE_9: wm_switch_space(9); break;
 
         case ACTION_MOVE_TO_SPACE_0:
-            wm_move_window_to_space(view_focused(), 0);
+            wm_move_window_to_space(window_focused(), 0);
             break;
         case ACTION_MOVE_TO_SPACE_1:
-            wm_move_window_to_space(view_focused(), 1);
+            wm_move_window_to_space(window_focused(), 1);
             break;
         case ACTION_MOVE_TO_SPACE_2:
-            wm_move_window_to_space(view_focused(), 2);
+            wm_move_window_to_space(window_focused(), 2);
             break;
         case ACTION_MOVE_TO_SPACE_3:
-            wm_move_window_to_space(view_focused(), 3);
+            wm_move_window_to_space(window_focused(), 3);
             break;
         case ACTION_MOVE_TO_SPACE_4:
-            wm_move_window_to_space(view_focused(), 4);
+            wm_move_window_to_space(window_focused(), 4);
             break;
         case ACTION_MOVE_TO_SPACE_5:
-            wm_move_window_to_space(view_focused(), 5);
+            wm_move_window_to_space(window_focused(), 5);
             break;
         case ACTION_MOVE_TO_SPACE_6:
-            wm_move_window_to_space(view_focused(), 6);
+            wm_move_window_to_space(window_focused(), 6);
             break;
         case ACTION_MOVE_TO_SPACE_7:
-            wm_move_window_to_space(view_focused(), 7);
+            wm_move_window_to_space(window_focused(), 7);
             break;
         case ACTION_MOVE_TO_SPACE_8:
-            wm_move_window_to_space(view_focused(), 8);
+            wm_move_window_to_space(window_focused(), 8);
             break;
         case ACTION_MOVE_TO_SPACE_9:
-            wm_move_window_to_space(view_focused(), 9);
+            wm_move_window_to_space(window_focused(), 9);
             break;
     }
 }
@@ -315,7 +315,7 @@ void seat_focus(struct Window *window) {
         return;
     }
 
-    if (window == NULL) window = focus_stack_top();
+    if (window == NULL) window = wm_focus_stack_top();
 
     struct wlr_surface *want =
         window ? window->xdg_toplevel->base->surface : NULL;
@@ -327,14 +327,14 @@ void seat_focus(struct Window *window) {
         struct Window *w;
         wl_list_for_each(w, &wm.windows, link) {
             if (!w->closed && w->xdg_toplevel->base->surface == prev) {
-                view_set_activated(w, false);
+                window_set_activated(w, false);
                 break;
             }
         }
     }
 
     if (window != NULL) {
-        view_set_activated(window, true);
+        window_set_activated(window, true);
         wlr_seat_keyboard_notify_enter(server.seat, want, NULL, 0, NULL);
         wl_list_remove(&window->focus_link);
         wl_list_insert(wm.focus_stack.prev, &window->focus_link);

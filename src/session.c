@@ -6,7 +6,7 @@
 #include "output.h"
 #include "seat.h"
 #include "server.h"
-#include "view.h"
+#include "window.h"
 
 #include <scenefx/types/wlr_scene.h>
 #include <stdint.h>
@@ -270,8 +270,8 @@ static void engage_lock(void) {
     wlr_seat_pointer_clear_focus(server.seat);
     wlr_seat_keyboard_clear_focus(server.seat);
 
-    struct Window *focused = view_focused();
-    if (focused != NULL) view_set_activated(focused, false);
+    struct Window *focused = window_focused();
+    if (focused != NULL) window_set_activated(focused, false);
 
     wlr_scene_node_set_enabled(&server.content_tree->node, false);
     wlr_scene_node_set_enabled(&server.lock_tree->node, true);

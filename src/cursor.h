@@ -13,11 +13,11 @@ enum SeatOp {
 };
 
 void cursor_begin_interactive(
-    struct Window *view, enum SeatOp op, uint32_t edges
+    struct Window *window, enum SeatOp op, uint32_t edges
 );
 
 void cursor_end_interactive(void);
-void cursor_end_interactive_for(struct Window *view);
+void cursor_end_interactive_for(struct Window *window);
 void cursor_refresh_focus(void);
 bool cursor_is_interactive(void);
 

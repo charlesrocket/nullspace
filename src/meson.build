@@ -14,7 +14,7 @@ src_files = files(
   'output.c',
   'cursor.c',
   'keymap.c',
-  'view.c',
+  'window.c',
   'animation.c',
   'background.c',
 

@@ -6,7 +6,7 @@
 #include "manager.h"
 #include "output.h"
 #include "server.h"
-#include "view.h"
+#include "window.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -442,7 +442,7 @@ static const char *reply_value(struct IpcClient *c, struct Value v) {
 static void act_switch_space(int s) { wm_switch_space(s); }
 
 static void act_move_to_space(int s) {
-    wm_move_window_to_space(view_focused(), s);
+    wm_move_window_to_space(window_focused(), s);
 }
 
 static void act_set_layout(int l) { wm_set_layout((enum Layout)l); }
@@ -454,8 +454,8 @@ static void act_cycle_layout(int unused) {
 
 static void act_close(int unused) {
     (void)unused;
-    struct Window *w = view_focused();
-    if (w != NULL) view_close(w);
+    struct Window *w = window_focused();
+    if (w != NULL) window_close(w);
 }
 
 // Returns NULL/error text
@@ -528,14 +528,14 @@ static const char *get_space_window_count(const char *arg, struct Value *out) {
 
 static const char *get_focused_title(const char *arg, struct Value *out) {
     (void)arg;
-    struct Window *w = view_focused();
+    struct Window *w = window_focused();
     *out = v_str(w ? w->title : NULL);
     return NULL;
 }
 
 static const char *get_focused_app_id(const char *arg, struct Value *out) {
     (void)arg;
-    struct Window *w = view_focused();
+    struct Window *w = window_focused();
     *out = v_str(w ? w->app_id : NULL);
     return NULL;
 }
@@ -817,7 +817,7 @@ static void emit_space_counts(struct IpcClient *to) {
 }
 
 static void emit_focus(struct IpcClient *to) {
-    struct Window *w = view_focused();
+    struct Window *w = window_focused();
 
     line_printf("EVT focused %llu", (unsigned long long)(w ? window_id(w) : 0));
     line_send(to);
@@ -908,7 +908,7 @@ void ipc_notify_window_closed(struct Window *w) {
 void ipc_notify_window_meta(struct Window *w) {
     if (!ipc_initialized || !w) return;
     emit_window(NULL, w);
-    if (w == view_focused()) ipc_notify_focus();
+    if (w == window_focused()) ipc_notify_focus();
 }
 
 void ipc_notify_all_state(void) {
