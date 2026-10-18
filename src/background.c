@@ -1,5 +1,6 @@
 #include "background.h"
 
+#include "config.h"
 #include "ext-background-effect-v1-protocol.h"
 #include "log.h"
 #include "server.h"
@@ -14,16 +15,7 @@
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_scene.h>
 
-#define LOG_TOPIC          "background-effect"
-
-#define BG_BLUR_PASSES     2
-#define BG_BLUR_RADIUS     10
-#define BG_BLUR_NOISE      0.02f
-#define BG_BLUR_BRIGHTNESS 1.0f
-#define BG_BLUR_CONTRAST   1.0f
-#define BG_BLUR_SATURATION 1.0f
-#define BG_BLUR_STRENGTH   1.0f
-#define BG_BLUR_ALPHA      1.0f
+#define LOG_TOPIC "fx"
 
 struct BgEffectRect {
     struct wl_list link;
@@ -189,8 +181,8 @@ static void blur_nodes_update(struct BgEffectSurface *bg) {
         if (blur == NULL) continue;
 
         wlr_scene_node_set_position(&blur->node, x, y);
-        wlr_scene_blur_set_strength(blur, BG_BLUR_STRENGTH);
-        wlr_scene_blur_set_alpha(blur, BG_BLUR_ALPHA);
+        wlr_scene_blur_set_strength(blur, CFG_BLUR_STRENGTH);
+        wlr_scene_blur_set_alpha(blur, CFG_BLUR_ALPHA);
 
         struct BgEffectRect *r = calloc(1, sizeof(*r));
         if (r == NULL) {
@@ -399,8 +391,8 @@ bool background_effect_init(struct wl_display *display) {
     }
 
     wlr_scene_set_blur_data(
-        server.scene, BG_BLUR_PASSES, BG_BLUR_RADIUS, BG_BLUR_NOISE,
-        BG_BLUR_BRIGHTNESS, BG_BLUR_CONTRAST, BG_BLUR_SATURATION
+        server.scene, CFG_BLUR_PASSES, CFG_BLUR_RADIUS, CFG_BLUR_NOISE,
+        CFG_BLUR_BRIGHTNESS, CFG_BLUR_CONTRAST, CFG_BLUR_SATURATION
     );
 
     return true;

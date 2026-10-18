@@ -111,6 +111,15 @@
 #define CFG_ANIM_CURVE_CLOSE           {0.40, 0.00, 1.00, 1.00}
 #define CFG_ANIM_CURVE_SPACE           {0.25, 0.10, 0.25, 1.00}
 
+#define CFG_BLUR_PASSES                2
+#define CFG_BLUR_RADIUS                5
+#define CFG_BLUR_NOISE                 0.03f
+#define CFG_BLUR_BRIGHTNESS            1.0f
+#define CFG_BLUR_CONTRAST              1.0f
+#define CFG_BLUR_SATURATION            1.0f
+#define CFG_BLUR_STRENGTH              0.9f
+#define CFG_BLUR_ALPHA                 1.0f
+
 #ifdef WALLPAPER
 #define CFG_WALLPAPER_PATH                 ".local/share/nullspace/wallpaper.ppm"
 
@@ -122,8 +131,5 @@
 #define CFG_WALLPAPER_PATTERN_DOT_B        0x5e
 #define CFG_WALLPAPER_PATTERN_GRID_SPACING 24
 #define CFG_WALLPAPER_PATTERN_DOT_RADIUS   1
-
 #define CFG_WALLPAPER_BLUR_ENABLED         true
-#define CFG_WALLPAPER_BLUR_RADIUS          12
-#define CFG_WALLPAPER_BLUR_PASSES          2
 #endif

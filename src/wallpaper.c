@@ -1,5 +1,6 @@
 #include "wallpaper.h"
 
+#include "config.h"
 #include "log.h"
 #include "manager.h"
 #include "output.h"
@@ -696,8 +697,6 @@ void wallpaper_invalidate_all(void) {
 
 bool wallpaper_blur_wanted(void) {
     if (!wm.wallpaper.blur_enabled) return false; // TODO move earlier?
-    if (wm.wallpaper.blur_radius <= 0) return false;
-    if (wm.wallpaper.blur_passes <= 0) return false;
 
     struct Window *w;
     wl_list_for_each(w, &wm.windows, link) {
@@ -730,8 +729,8 @@ static void wpo_sync_blur(struct WallpaperOutput *wpo, struct Output *output) {
 
         if (wpo->blur == NULL) return;
 
-        wlr_scene_blur_set_strength(wpo->blur, 1.0f);
-        wlr_scene_blur_set_alpha(wpo->blur, 1.0f);
+        wlr_scene_blur_set_strength(wpo->blur, CFG_BLUR_STRENGTH);
+        wlr_scene_blur_set_alpha(wpo->blur, CFG_BLUR_ALPHA);
     }
 
     wlr_scene_node_set_position(&wpo->blur->node, output->pos_x, output->pos_y);
