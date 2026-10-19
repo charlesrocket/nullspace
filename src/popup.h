@@ -1,7 +1,7 @@
 #pragma once
 
-#include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wayland-server-core.h>
+#include <wlr/types/wlr_xdg_decoration_v1.h>
 
 struct Popup {
     struct wlr_xdg_popup *xdg_popup;

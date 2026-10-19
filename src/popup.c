@@ -1,9 +1,10 @@
+#include "popup.h"
+
 #include "config.h"
 #include "layers.h"
 #include "output.h"
 #include "server.h"
 #include "session.h"
-#include "popup.h"
 
 #include <stdlib.h>
 #include <wayland-server-core.h>
