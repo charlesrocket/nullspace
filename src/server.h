@@ -117,5 +117,3 @@ void server_finish(void);
 void server_notify_activity(void);
 
 void idle_update_inhibit(void);
-
-void popup_track(struct wlr_xdg_popup *, struct wlr_scene_tree *);

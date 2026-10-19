@@ -2,6 +2,7 @@
 
 #include "manager.h"
 #include "output.h"
+#include "popup.h"
 #include "seat.h"
 #include "server.h"
 

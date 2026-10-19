@@ -7,6 +7,8 @@ src_files = files(
   'layouts/vertical.c',
   'layouts/horizontal.c',
   'ipc.c',
+  'popup.c',
+  'window.c',
   'session.c',
   'seat.c',
   'server.c',
@@ -14,10 +16,8 @@ src_files = files(
   'output.c',
   'cursor.c',
   'keymap.c',
-  'window.c',
   'animation.c',
   'background.c',
-
 )
 
 if build_wallpaper
