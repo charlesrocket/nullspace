@@ -12,6 +12,7 @@ src_files = files(
   'session.c',
   'seat.c',
   'server.c',
+  'rules.c',
   'input.c',
   'output.c',
   'cursor.c',

@@ -5,6 +5,7 @@
 #include "ipc.h"
 #include "layouts/layout.h"
 #include "output.h"
+#include "rules.h"
 #include "seat.h"
 #include "server.h"
 #include "window.h"
@@ -197,6 +198,30 @@ static void window_hide_offscreen(struct Window *window, int32_t dir) {
     );
 }
 
+void wm_assign_new_window_space(struct Window *window, int space) {
+    if (window == NULL || window->closed) return;
+    if (space < 0 || space >= SPACE_COUNT) return;
+
+    window->space = space;
+
+    if (space != wm.current_space) {
+        wm_switch_space(space);
+        return;
+    }
+
+    if (window->space_hidden) {
+        window->anim.running = false;
+        window->hide_dir = 0;
+        window->reveal_dir = 0;
+        window->has_target = false;
+        window->space_hidden = false;
+
+        window_set_position(window, window->saved_x, window->saved_y);
+        wm_mark_layout_dirty();
+        idle_update_inhibit();
+    }
+}
+
 void wm_switch_space(int space) {
     if (space < 0 || space >= SPACE_COUNT) return;
     if (space == wm.current_space) return;
@@ -242,21 +267,10 @@ void wm_move_window_to_space(struct Window *window, int space) {
     if (window == NULL || window->closed || window->space_hidden) return;
     if (window->space == space) return;
 
-    // The focused window sits on the current space, so the direction of
-    // travel is simply target-vs-current.
-    const int32_t dir = (space > wm.current_space) ? +1 : -1;
-
     window->space = space;
-    window_hide_offscreen(window, dir);
 
-    struct Window *top = wm_focus_stack_top();
-    seat_focus(top);
-
-    ipc_notify_space();
+    wm_switch_space(space);
     ipc_notify_window_meta(window);
-    ipc_notify_focus();
-    wm_mark_layout_dirty();
-    idle_update_inhibit();
 }
 
 #ifdef WALLPAPER
@@ -352,4 +366,5 @@ void wm_init(void) {
     wm.kb_layout = NULL;
 
     animation_init();
+    rules_init();
 }

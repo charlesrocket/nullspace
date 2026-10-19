@@ -41,7 +41,6 @@ struct Window {
     struct wl_listener set_app_id;
 
     enum Layout decoration_state;
-    bool decoration_state_set;
 
     int32_t saved_x, saved_y;
     int32_t x, y;
@@ -52,15 +51,13 @@ struct Window {
 
     int space;
 
-    char *title;
-    char *app_id;
+    char *title, *app_id;
 
-    bool initial_configure_sent;
-    bool mapped;
-    bool prop_valid;
-    bool pos_valid;
+    bool initial_configure_sent, rules_applied;
+    bool decoration_state_set;
+    bool prop_valid, pos_valid;
     bool has_target;
-    bool closed;
+    bool closed, mapped;
     bool fullscreen;
     bool space_hidden;
 };

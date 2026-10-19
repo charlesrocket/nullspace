@@ -5,8 +5,10 @@
 #include "cursor.h"
 #include "ipc.h"
 #include "layouts/layout.h"
+#include "log.h"
 #include "manager.h"
 #include "output.h"
+#include "rules.h"
 #include "seat.h"
 #include "server.h"
 
@@ -293,6 +295,20 @@ static void foreign_handle_update(struct Window *window) {
     );
 }
 
+static void window_apply_rules(struct Window *window) {
+    if (window == NULL || window->closed || window->rules_applied) return;
+
+    const char *app_id = window->xdg_toplevel->app_id;
+    const char *title = window->xdg_toplevel->title;
+
+    window->rules_applied = true;
+
+    struct WindowRuleActions act;
+    if (!rules_match(app_id, title, &act)) return;
+
+    if (act.has_space) wm_assign_new_window_space(window, act.space);
+}
+
 static void window_handle_map(struct wl_listener *l, void *data) {
     (void)data;
 
@@ -303,6 +319,7 @@ static void window_handle_map(struct wl_listener *l, void *data) {
     if (window->mapped) return;
     window->mapped = true;
 
+    window_apply_rules(window);
     wlr_handle_create(window);
     foreign_handle_create(window);
     wm_mark_layout_dirty();
@@ -312,9 +329,14 @@ static void window_handle_map(struct wl_listener *l, void *data) {
 
     window_set_tiled(window, layouts_is_tiled(wm.layout));
 
-    // Update the focus stack, grant keyboard focus to the client (sole
-    // `wlr_seat_keyboard_notify_enter` caller).
-    seat_focus(window);
+    if (window->space_hidden) {
+        wl_list_remove(&window->focus_link);
+        wl_list_insert(&wm.focus_stack, &window->focus_link);
+    } else {
+        // Update the focus stack, grant keyboard focus to the client (sole
+        // `wlr_seat_keyboard_notify_enter` caller).
+        seat_focus(window);
+    }
 
     ipc_notify_window_opened(window);
     idle_update_inhibit();
@@ -425,8 +447,14 @@ static void window_handle_set_title(struct wl_listener *l, void *data) {
     const char *old_title = window->title ? window->title : "";
     if (strcmp(new_title, old_title) == 0) return;
 
+    char *title_copy = strdup(new_title);
+    if (title_copy == NULL) {
+        log_err("unable to cache window title: OOM");
+        return;
+    }
+
     free(window->title);
-    window->title = strdup(new_title);
+    window->title = title_copy;
 
     if (window->wlr_handle)
         wlr_foreign_toplevel_handle_v1_set_title(window->wlr_handle, new_title);
@@ -445,8 +473,14 @@ static void window_handle_set_app_id(struct wl_listener *l, void *data) {
     const char *old_id = window->app_id ? window->app_id : "";
     if (strcmp(new_id, old_id) == 0) return;
 
+    char *app_id_copy = strdup(new_id);
+    if (app_id_copy == NULL) {
+        log_err("unable to cache window app_id: OOM");
+        return;
+    }
+
     free(window->app_id);
-    window->app_id = strdup(new_id);
+    window->app_id = app_id_copy;
 
     if (window->wlr_handle)
         wlr_foreign_toplevel_handle_v1_set_app_id(window->wlr_handle, new_id);

@@ -23,12 +23,22 @@
 #define CFG_CMD_BROWSER              "firefox", NULL
 #define CFG_CMD_IDE                  "gram", NULL
 
-#define CFG_MOD_SUPER                WLR_MODIFIER_LOGO  // Super key
-#define CFG_MOD_SHIFT                WLR_MODIFIER_SHIFT // Shift key
+#define CFG_WINDOW_RULES                                                       \
+    "space:1,appid:Signal", "space:2,title:foot", "space:2,appid:Alacritty",   \
+        "space:2,appid:com.mitchellh.ghostty", "space:3,appid:firefox",        \
+        "space:4,appid:emacs", "space:4,appid:app.liten.Gram",                 \
+        "space:4,appid:ev.zed.Zed", "space:5,appid:gedit",                     \
+        "space:6,appid:thunar", "space:7,appid:Claws-mail",                    \
+        "space:7,appid:signal", "space:8,appid:blender",                       \
+        "space:8,appid:smplayer", "space:8,appid:mpv", "space:8,appid:vlc",    \
+        "space:9,appid:org.nicotine_plus.Nicotine"
 
-#define CFG_FOCUS_FOLLOW             true // focus follows the cursor
+#define CFG_MOD_SUPER               WLR_MODIFIER_LOGO  // Super key
+#define CFG_MOD_SHIFT               WLR_MODIFIER_SHIFT // Shift key
 
-#define CFG_BIND(MODS, KEY, ACTION)  {MODS, KEY, ACTION, NULL},
+#define CFG_FOCUS_FOLLOW            true // focus follows the cursor
+
+#define CFG_BIND(MODS, KEY, ACTION) {MODS, KEY, ACTION, NULL},
 
 #define CFG_SPAWN_BIND(MODS, KEY, CMD)                                         \
     {MODS, KEY, ACTION_SPAWN, (const char *const[]){CMD}},

@@ -55,6 +55,7 @@ void wm_switch_space(int space);
 void wm_move_window_to_space(struct Window *window, int space);
 void wm_set_kb_layout(const char *layout);
 void wm_mark_layout_dirty(void);
+void wm_assign_new_window_space(struct Window *window, int space);
 
 bool wm_animation_active(void);
 void wm_animation_tick_all(void);
