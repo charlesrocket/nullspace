@@ -190,8 +190,8 @@ int server_init(struct wl_display *display) {
     server.float_tree = wlr_scene_tree_create(server.content_tree);
     server.top_tree = wlr_scene_tree_create(server.content_tree);
     server.fullscreen_tree = wlr_scene_tree_create(server.content_tree);
+    server.popup_tree = wlr_scene_tree_create(&server.scene->tree);
     server.overlay_tree = wlr_scene_tree_create(server.content_tree);
-
     server.lock_tree = wlr_scene_tree_create(&server.scene->tree);
 
     wlr_scene_node_set_enabled(&server.lock_tree->node, false);
@@ -534,7 +534,20 @@ static void handle_new_xdg_popup(struct wl_listener *l, void *data) {
         return;
     }
 
-    popup_track(popup, parent_xdg->data);
+    struct wlr_scene_tree *parent_tree = parent_xdg->data;
+
+    if (parent_xdg->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL) {
+        struct Window *window = window_from_scene_node(&parent_tree->node);
+        if (window == NULL || window->popup_tree == NULL) {
+            log_warn("xdg popup parent window not found (dismissing)");
+            wlr_xdg_popup_destroy(popup);
+            return;
+        }
+
+        parent_tree = window->popup_tree;
+    }
+
+    popup_track(popup, parent_tree);
 }
 
 static void handle_new_xdg_decoration(struct wl_listener *l, void *data) {

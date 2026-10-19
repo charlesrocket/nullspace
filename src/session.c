@@ -239,6 +239,7 @@ static void release_lock(struct SessionLock *lock, bool unlock) {
 
     server.locked = false;
     wlr_scene_node_set_enabled(&server.lock_tree->node, false);
+    wlr_scene_node_set_enabled(&server.popup_tree->node, true);
     wlr_scene_node_set_enabled(&server.content_tree->node, true);
 
     idle_update_inhibit();
@@ -274,6 +275,7 @@ static void engage_lock(void) {
     if (focused != NULL) window_set_activated(focused, false);
 
     wlr_scene_node_set_enabled(&server.content_tree->node, false);
+    wlr_scene_node_set_enabled(&server.popup_tree->node, false);
     wlr_scene_node_set_enabled(&server.lock_tree->node, true);
     session_lock_update_geometry();
     idle_update_inhibit();

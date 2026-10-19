@@ -308,6 +308,7 @@ static void window_handle_map(struct wl_listener *l, void *data) {
     wm_mark_layout_dirty();
     window_update_corners(window);
     wlr_scene_node_set_enabled(&window->scene_tree->node, true);
+    wlr_scene_node_set_enabled(&window->popup_tree->node, true);
 
     window_set_tiled(window, layouts_is_tiled(wm.layout));
 
@@ -330,6 +331,7 @@ static void window_handle_unmap(struct wl_listener *l, void *data) {
     foreign_handle_destroy(window);
     wm_mark_layout_dirty();
     wlr_scene_node_set_enabled(&window->scene_tree->node, false);
+    wlr_scene_node_set_enabled(&window->popup_tree->node, false);
 
     ipc_notify_window_closed(window);
     idle_update_inhibit();
@@ -480,10 +482,19 @@ void window_create(struct wlr_xdg_toplevel *xdg_toplevel) {
 
     xdg_toplevel->base->data = window->scene_tree;
     window->scene_tree->node.data = &window->node_tag;
-    window->popup_tree = window->scene_tree;
+    window->popup_tree = wlr_scene_tree_create(server.popup_tree);
+
+    if (window->popup_tree == NULL) {
+        wlr_scene_node_destroy(&window->scene_tree->node);
+        free(window);
+        return;
+    }
+
+    window->popup_tree->node.data = &window->node_tag;
 
     window_update_corners(window);
     wlr_scene_node_set_enabled(&window->scene_tree->node, false);
+    wlr_scene_node_set_enabled(&window->popup_tree->node, false);
 
     window->map.notify = window_handle_map;
     wl_signal_add(&xdg_toplevel->base->surface->events.map, &window->map);
@@ -548,6 +559,11 @@ void window_destroy(struct Window *window) {
         window->scene_tree = NULL;
     }
 
+    if (window->popup_tree != NULL) {
+        wlr_scene_node_destroy(&window->popup_tree->node);
+        window->popup_tree = NULL;
+    }
+
     wlr_handle_destroy(window);
     ipc_notify_window_closed(window);
     wl_list_remove(&window->link);
@@ -592,7 +608,10 @@ struct Window *window_at(
 
 void window_set_position(struct Window *window, int32_t x, int32_t y) {
     if (window->pos_valid && window->x == x && window->y == y) return;
+
     wlr_scene_node_set_position(&window->scene_tree->node, x, y);
+    wlr_scene_node_set_position(&window->popup_tree->node, x, y);
+
     window->x = x;
     window->y = y;
     window->pos_valid = true;
@@ -631,6 +650,7 @@ void window_set_tiled(struct Window *window, bool tiled) {
 void window_set_clip(struct Window *window, int32_t w, int32_t h) {
     struct wlr_box geo = window->xdg_toplevel->base->geometry;
     struct wlr_box clip = {.x = geo.x, .y = geo.y, .width = w, .height = h};
+
     wlr_scene_subsurface_tree_set_clip(&window->scene_tree->node, &clip);
 }
 
@@ -644,6 +664,9 @@ void window_close(struct Window *window) {
 
 void window_raise(struct Window *window) {
     wlr_scene_node_raise_to_top(&window->scene_tree->node);
+
+    if (window->popup_tree != NULL)
+        wlr_scene_node_raise_to_top(&window->popup_tree->node);
 }
 
 void window_reparent(struct Window *window, bool to_float) {

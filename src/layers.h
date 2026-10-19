@@ -15,6 +15,7 @@ struct wlr_surface;
 struct LayerSurface {
     struct wlr_layer_surface_v1 *layer_surface;
     struct wlr_scene_tree *scene_tree;
+    struct wlr_scene_tree *popup_tree;
     struct Output *output;
     struct NodeTag node_tag;
 

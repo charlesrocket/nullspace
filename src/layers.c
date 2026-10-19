@@ -210,6 +210,7 @@ static void arrange_layer_surface(struct LayerSurface *ls) {
     if (box.height < 1) box.height = 1;
 
     wlr_scene_node_set_position(&ls->scene_tree->node, box.x, box.y);
+    wlr_scene_node_set_position(&ls->popup_tree->node, box.x, box.y);
 
     uint32_t cw = (uint32_t)box.width;
     uint32_t ch = (uint32_t)box.height;
@@ -228,6 +229,7 @@ static void handle_map(struct wl_listener *lst, void *data) {
 
     ls->mapped = true;
     wlr_scene_node_set_enabled(&ls->scene_tree->node, true);
+    wlr_scene_node_set_enabled(&ls->popup_tree->node, true);
 
     arrange_layer_surface(ls);
     update_output_usable_area(ls->output);
@@ -248,11 +250,22 @@ static void handle_unmap(struct wl_listener *lst, void *data) {
 
     struct LayerSurface *ls = wl_container_of(lst, ls, unmap);
 
+    bool had_focus = server.seat->keyboard_state.focused_surface
+                  == ls->layer_surface->surface;
+
     ls->mapped = false;
     wlr_scene_node_set_enabled(&ls->scene_tree->node, false);
     update_output_usable_area(ls->output);
     idle_update_inhibit();
-    seat_focus(NULL);
+
+    if (!had_focus || server.locked) return;
+
+    struct Window *w = window_focused();
+    if (w != NULL) {
+        seat_focus(w);
+    } else {
+        wlr_seat_keyboard_notify_clear_focus(server.seat);
+    }
 }
 
 static void handle_commit(struct wl_listener *lst, void *data) {
@@ -284,6 +297,10 @@ static void handle_destroy(struct wl_listener *lst, void *data) {
         wlr_scene_node_destroy(&ls->scene_tree->node);
     }
 
+    if (ls->popup_tree != NULL) {
+        wlr_scene_node_destroy(&ls->popup_tree->node);
+    }
+
     struct Output *o = ls->output;
     wl_list_remove(&ls->link);
     free(ls);
@@ -295,7 +312,7 @@ static void handle_new_popup(struct wl_listener *lst, void *data) {
     struct wlr_xdg_popup *popup = data;
     struct LayerSurface *ls = wl_container_of(lst, ls, new_popup);
 
-    popup_track(popup, ls->scene_tree);
+    popup_track(popup, ls->popup_tree);
 }
 
 struct LayerSurface *layer_surface_from_wlr_surface(struct wlr_surface *surface
@@ -331,7 +348,15 @@ void layers_handle_new_surface(struct wl_listener *listener, void *data) {
     }
 
     ls->scene_tree->node.data = &ls->node_tag;
+    ls->popup_tree = wlr_scene_tree_create(server.popup_tree);
+    if (ls->popup_tree == NULL) {
+        wlr_scene_node_destroy(&ls->scene_tree->node);
+        free(ls);
+        return;
+    }
+
     wlr_scene_node_set_enabled(&ls->scene_tree->node, false);
+    wlr_scene_node_set_enabled(&ls->popup_tree->node, false);
 
     ls->map.notify = handle_map;
     ls->unmap.notify = handle_unmap;

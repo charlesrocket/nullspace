@@ -48,6 +48,7 @@ struct NsServer {
     struct wlr_scene_tree *bottom_tree;
     struct wlr_scene_tree *tile_tree;
     struct wlr_scene_tree *float_tree;
+    struct wlr_scene_tree *popup_tree;
     struct wlr_scene_tree *top_tree;
     struct wlr_scene_tree *overlay_tree;
     struct wlr_scene_tree *fullscreen_tree;
