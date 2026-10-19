@@ -120,6 +120,13 @@
 #define CFG_BLUR_STRENGTH              0.9f
 #define CFG_BLUR_ALPHA                 1.0f
 
+#define CFG_POPUP_SHADOW_SIGMA         16.2f
+#define CFG_POPUP_SHADOW_SPREAD        22
+#define CFG_POPUP_SHADOW_OFFSET_X      0
+#define CFG_POPUP_SHADOW_OFFSET_Y      2
+#define CFG_POPUP_SHADOW_RADIUS        CFG_ROUNDED_CORNERS_RADIUS
+#define CFG_POPUP_SHADOW_OPACITY       0.64f
+
 #ifdef WALLPAPER
 #define CFG_WALLPAPER_PATH                 ".local/share/nullspace/wallpaper.ppm"
 
