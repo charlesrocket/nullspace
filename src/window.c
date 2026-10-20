@@ -32,50 +32,25 @@ static struct wlr_scene_tree *layer_for_layout(enum Layout layout) {
     return layouts_is_tiled(layout) ? server.tile_tree : server.float_tree;
 }
 
-static struct wlr_scene_buffer *find_surface_buffer(
-    struct wlr_scene_node *node, const struct wlr_surface *surface
-) {
-    if (node == NULL || surface == NULL) return NULL;
+static void
+apply_radius(struct wlr_scene_buffer *buf, int sx, int sy, void *data) {
+    (void)sx;
+    (void)sy;
 
-    if (node->type == WLR_SCENE_NODE_BUFFER) {
-        struct wlr_scene_buffer *buf = wlr_scene_buffer_from_node(node);
-        struct wlr_scene_surface *ssurf =
-            wlr_scene_surface_try_from_buffer(buf);
-
-        return (ssurf != NULL && ssurf->surface == surface) ? buf : NULL;
-    }
-
-    if (node->type == WLR_SCENE_NODE_TREE) {
-        struct wlr_scene_node *child;
-        wl_list_for_each(
-            child, &wlr_scene_tree_from_node(node)->children, link
-        ) {
-            struct wlr_scene_buffer *found =
-                find_surface_buffer(child, surface);
-
-            if (found != NULL) return found;
-        }
-    }
-
-    return NULL;
+    if (wlr_scene_surface_try_from_buffer(buf) == NULL) return;
+    wlr_scene_buffer_set_corner_radius(buf, *(int *)data);
 }
 
 // TODO rewire to allow state changes (via IPC)
 static void window_update_corners(struct Window *window) {
     if (window == NULL || window->closed || window->scene_tree == NULL) return;
 
-    struct wlr_surface *surface = window->xdg_toplevel->base->surface;
-    struct wlr_scene_buffer *buf =
-        find_surface_buffer(&window->scene_tree->node, surface);
-
-    if (buf == NULL) return;
-
     int radius = CFG_ROUNDED_CORNERS_RADIUS;
     // lets cap the range for now
     if (radius <= 0) radius = 2;
 
-    bool round = CFG_ROUNDED_CORNERS_ENABLED && !window->fullscreen;
-    wlr_scene_buffer_set_corner_radius(buf, round ? radius : 0);
+    int r = (CFG_ROUNDED_CORNERS_ENABLED && !window->fullscreen) ? radius : 0;
+    wlr_scene_node_for_each_buffer(&window->scene_tree->node, apply_radius, &r);
 }
 
 void window_apply_target(
@@ -323,10 +298,11 @@ static void window_handle_map(struct wl_listener *l, void *data) {
     wlr_handle_create(window);
     foreign_handle_create(window);
     wm_mark_layout_dirty();
-    window_update_corners(window);
+
     wlr_scene_node_set_enabled(&window->scene_tree->node, true);
     wlr_scene_node_set_enabled(&window->popup_tree->node, true);
 
+    window_update_corners(window);
     window_set_tiled(window, layouts_is_tiled(wm.layout));
 
     if (window->space_hidden) {
@@ -379,6 +355,8 @@ static void window_handle_commit(struct wl_listener *l, void *data) {
     if (w > 0 && h > 0) {
         window->width = w;
         window->height = h;
+
+        if (!window->anim.running) window_clear_clip(window);
     }
 
     if (!window->mapped && surf->surface->mapped) {
@@ -689,7 +667,13 @@ void window_set_clip(struct Window *window, int32_t w, int32_t h) {
 }
 
 void window_clear_clip(struct Window *window) {
-    wlr_scene_subsurface_tree_set_clip(&window->scene_tree->node, NULL);
+    struct wlr_box geo = window->xdg_toplevel->base->geometry;
+    if (geo.width <= 0 || geo.height <= 0) {
+        wlr_scene_subsurface_tree_set_clip(&window->scene_tree->node, NULL);
+        return;
+    }
+
+    wlr_scene_subsurface_tree_set_clip(&window->scene_tree->node, &geo);
 }
 
 void window_close(struct Window *window) {
