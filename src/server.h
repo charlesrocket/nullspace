@@ -26,6 +26,7 @@ struct wlr_foreign_toplevel_manager_v1;
 struct wlr_idle_inhibit_manager_v1;
 struct wlr_idle_notifier_v1;
 struct wlr_output_power_manager_v1;
+struct wlr_xwayland;
 
 struct Window;
 struct Output;
@@ -38,6 +39,8 @@ struct NsServer {
     struct wlr_session *session;
     struct wlr_renderer *renderer;
     struct wlr_allocator *allocator;
+
+    struct wlr_compositor *compositor;
 
     struct wlr_output_layout *output_layout;
     struct wlr_scene *scene;
@@ -97,6 +100,10 @@ struct NsServer {
     struct wlr_idle_notifier_v1 *idle_notifier;
     struct wlr_idle_inhibit_manager_v1 *idle_inhibit_manager;
     struct wl_listener new_idle_inhibitor;
+
+#ifdef XWAYLAND
+    struct wlr_xwayland *xwayland;
+#endif
 
     bool locked;
 };

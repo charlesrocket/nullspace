@@ -317,16 +317,15 @@ void seat_focus(struct Window *window) {
 
     if (window == NULL) window = wm_focus_stack_top();
 
-    struct wlr_surface *want =
-        window ? window->xdg_toplevel->base->surface : NULL;
-
+    struct wlr_surface *want = window ? window_wlr_surface(window) : NULL;
     struct wlr_surface *prev = server.seat->keyboard_state.focused_surface;
 
     if (prev == want) return;
+
     if (prev != NULL) {
         struct Window *w;
         wl_list_for_each(w, &wm.windows, link) {
-            if (!w->closed && w->xdg_toplevel->base->surface == prev) {
+            if (!w->closed && window_wlr_surface(w) == prev) {
                 window_set_activated(w, false);
                 break;
             }

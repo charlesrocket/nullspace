@@ -150,3 +150,7 @@
 #define CFG_WALLPAPER_PATTERN_DOT_RADIUS   1
 #define CFG_WALLPAPER_BLUR_ENABLED         true
 #endif
+
+#ifdef XWAYLAND
+#define CFG_XWAYLAND true // lazy
+#endif

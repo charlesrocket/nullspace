@@ -39,10 +39,18 @@ wayland_proto = dependency('wayland-protocols')
 wlroots = dependency('wlroots-0.20')
 scenefx = dependency('scenefx-0.5')
 xkbcommon = dependency('xkbcommon')
+xcb = dependency('xcb', required: get_option('xwayland'))
+xcb_randr = dependency('xcb-randr', required: get_option('xwayland'))
 libinput = dependency('libinput')
 pixman = dependency('pixman-1')
-
 spng = dependency('spng', required: get_option('wallpaper'))
+
+build_xwayland = xcb.found() and xcb_randr.found()
+
+if build_xwayland
+  add_project_arguments('-DXWAYLAND', language: 'c')
+endif
+
 build_wallpaper = spng.found()
 
 if build_wallpaper
@@ -64,6 +72,8 @@ executable(
     scenefx,
     wlroots,
     xkbcommon,
+    xcb_randr,
+    xcb,
     libinput,
     pixman,
     spng,

@@ -11,8 +11,15 @@
 #include <wayland-util.h>
 #include <wlr/types/wlr_xdg_shell.h>
 
+struct wlr_xwayland_surface;
+
 struct Window {
     struct wlr_xdg_toplevel *xdg_toplevel;
+
+#ifdef XWAYLAND
+    struct wlr_xwayland_surface *xwayland_surface;
+#endif
+
     struct wlr_scene_tree *scene_tree;
     struct wlr_scene_tree *popup_tree;
 
@@ -28,6 +35,7 @@ struct Window {
 
     struct wl_listener wlr_request_activate;
     struct wl_listener wlr_request_close;
+
     struct wl_listener map;
     struct wl_listener unmap;
     struct wl_listener commit;
@@ -39,6 +47,28 @@ struct Window {
     struct wl_listener request_minimize;
     struct wl_listener set_title;
     struct wl_listener set_app_id;
+
+#ifdef XWAYLAND
+    struct wl_listener xw_map;
+    struct wl_listener xw_unmap;
+    struct wl_listener xw_destroy;
+    struct wl_listener xw_request_configure;
+    struct wl_listener xw_request_move;
+    struct wl_listener xw_request_resize;
+    struct wl_listener xw_request_maximize;
+    struct wl_listener xw_request_fullscreen;
+    struct wl_listener xw_request_minimize;
+    struct wl_listener xw_request_activate;
+    struct wl_listener xw_request_close;
+    struct wl_listener xw_set_title;
+    struct wl_listener xw_set_class;
+    struct wl_listener xw_associate;
+    struct wl_listener xw_dissociate;
+    struct wl_listener xw_tree_destroy;
+    struct wlr_scene_tree *xw_surface_tree;
+
+    bool xw_bound; // `xw_map`/`xw_unmap` registered
+#endif
 
     enum Layout decoration_state;
 
@@ -56,13 +86,19 @@ struct Window {
     bool initial_configure_sent, rules_applied;
     bool decoration_state_set;
     bool prop_valid, pos_valid;
-    bool has_target;
-    bool closed, mapped;
-    bool fullscreen;
-    bool space_hidden;
+    bool has_target, closed, mapped;
+    bool fullscreen, space_hidden;
+#ifdef XWAYLAND
+    bool is_xwayland;
+#endif
 };
 
 void window_create(struct wlr_xdg_toplevel *xdg_toplevel);
+
+#ifdef XWAYLAND
+void window_create_xwayland(struct wlr_xwayland_surface *xw);
+#endif
+
 void window_destroy(struct Window *window);
 
 struct Window *window_from_scene_node(struct wlr_scene_node *node);
@@ -70,6 +106,10 @@ struct Window *window_focused(void);
 struct Window *window_at(
     double lx, double ly, struct wlr_surface **surface, double *sx, double *sy
 );
+
+struct wlr_surface *window_wlr_surface(const struct Window *window);
+const char *window_title(const struct Window *window);
+const char *window_app_id(const struct Window *window);
 
 void window_apply_target(
     struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh

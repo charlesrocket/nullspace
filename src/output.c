@@ -8,6 +8,9 @@
 #ifdef WALLPAPER
 #include "wallpaper.h"
 #endif
+#ifdef XWAYLAND
+#include "xwayland.h"
+#endif
 
 #include <stdlib.h>
 #include <string.h>
@@ -138,6 +141,10 @@ void output_create(struct wlr_output *wlr_output) {
 
     wm_mark_layout_dirty();
     wlr_output_state_finish(&state);
+
+#ifdef XWAYLAND
+    xwayland_primary_update();
+#endif
 }
 
 static void output_handle_frame(struct wl_listener *l, void *data) {
@@ -222,6 +229,10 @@ void output_destroy(struct Output *out) {
     log_info("Removed %s", out->wlr_output ? out->wlr_output->name : "?");
 
     free(out);
+
+#ifdef XWAYLAND
+    xwayland_primary_update();
+#endif
 }
 
 struct Output *output_from_wlr_output(struct wlr_output *wlr_output) {

@@ -24,3 +24,7 @@ src_files = files(
 if build_wallpaper
   src_files += files('wallpaper.c')
 endif
+
+if build_xwayland
+  src_files += files('xwayland.c')
+endif

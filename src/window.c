@@ -25,8 +25,15 @@
 #include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/util/edges.h>
 #include <wlr/util/log.h>
+#ifdef XWAYLAND
+#include <wlr/xwayland.h>
+#endif
 
 #define LOG_TOPIC "window"
+
+#ifdef XWAYLAND
+static void xw_unbind(struct Window *window);
+#endif
 
 static struct wlr_scene_tree *layer_for_layout(enum Layout layout) {
     return layouts_is_tiled(layout) ? server.tile_tree : server.float_tree;
@@ -46,11 +53,26 @@ static void window_update_corners(struct Window *window) {
     if (window == NULL || window->closed || window->scene_tree == NULL) return;
 
     int radius = CFG_ROUNDED_CORNERS_RADIUS;
-    // lets cap the range for now
-    if (radius <= 0) radius = 2;
+    if (radius <= 0) radius = 2; // lets cap the range for now
 
     int r = (CFG_ROUNDED_CORNERS_ENABLED && !window->fullscreen) ? radius : 0;
     wlr_scene_node_for_each_buffer(&window->scene_tree->node, apply_radius, &r);
+}
+
+// May return NULL for X11 windows whose wl_surface is not associated yet.
+struct wlr_surface *window_wlr_surface(const struct Window *window) {
+#ifdef XWAYLAND
+    if (window->is_xwayland) { return window->xwayland_surface->surface; }
+#endif
+    return window->xdg_toplevel->base->surface;
+}
+
+const char *window_title(const struct Window *window) {
+    return window->title ? window->title : "";
+}
+
+const char *window_app_id(const struct Window *window) {
+    return window->app_id ? window->app_id : "";
 }
 
 void window_apply_target(
@@ -111,6 +133,14 @@ void window_apply_target(
             from = w->anim.current;
         } else if (w->pos_valid && w->width > 0 && w->height > 0) {
             from = animation_box(w->x, w->y, w->width, w->height);
+#ifdef XWAYLAND
+        } else if (w->is_xwayland && w->xwayland_surface
+                   && w->xwayland_surface->width > 0) {
+            from = animation_box(
+                w->x, w->y, w->xwayland_surface->width,
+                w->xwayland_surface->height
+            );
+#endif
         } else if (w->pos_valid && w->prop_valid) {
             from = animation_box(w->x, w->y, w->prop_w, w->prop_h);
         } else {
@@ -133,7 +163,15 @@ void window_apply_target(
 }
 
 void window_set_activated(struct Window *window, bool activated) {
-    wlr_xdg_toplevel_set_activated(window->xdg_toplevel, activated);
+#ifdef XWAYLAND
+    if (window->is_xwayland) {
+        wlr_xwayland_surface_activate(window->xwayland_surface, activated);
+    } else
+#endif
+    {
+        wlr_xdg_toplevel_set_activated(window->xdg_toplevel, activated);
+    }
+
     if (window->wlr_handle != NULL) {
         wlr_foreign_toplevel_handle_v1_set_activated(
             window->wlr_handle, activated
@@ -143,7 +181,13 @@ void window_set_activated(struct Window *window, bool activated) {
 
 void window_set_fullscreen(struct Window *window, bool fullscreen) {
     if (window->closed || window->fullscreen == fullscreen) return;
+
+#ifdef XWAYLAND
+    if (!window->is_xwayland && !window->xdg_toplevel->base->initialized)
+        return;
+#else
     if (!window->xdg_toplevel->base->initialized) return;
+#endif
 
     if (fullscreen) {
         window->fs_x = window->x;
@@ -153,15 +197,25 @@ void window_set_fullscreen(struct Window *window, bool fullscreen) {
     }
 
     window->fullscreen = fullscreen;
-    wlr_xdg_toplevel_set_fullscreen(window->xdg_toplevel, fullscreen);
+
+#ifdef XWAYLAND
+    if (window->is_xwayland) {
+        wlr_xwayland_surface_set_fullscreen(
+            window->xwayland_surface, fullscreen
+        );
+    } else
+#endif
+    {
+        wlr_xdg_toplevel_set_fullscreen(window->xdg_toplevel, fullscreen);
+    }
+
     window_update_corners(window);
 
     window->has_target = false;
     window_reparent(window, !layouts_is_tiled(wm.layout));
 
     if (!fullscreen && !layouts_is_tiled(wm.layout)) { // floating
-        // restore from saved
-        window_apply_target(
+        window_apply_target(                           // restore from saved
             window, window->fs_x, window->fs_y, window->fs_w, window->fs_h
         );
     }
@@ -197,13 +251,11 @@ static void wlr_handle_create(struct Window *window) {
     if (window->wlr_handle == NULL) return;
 
     wlr_foreign_toplevel_handle_v1_set_title(
-        window->wlr_handle,
-        window->xdg_toplevel->title ? window->xdg_toplevel->title : ""
+        window->wlr_handle, window_title(window)
     );
 
     wlr_foreign_toplevel_handle_v1_set_app_id(
-        window->wlr_handle,
-        window->xdg_toplevel->app_id ? window->xdg_toplevel->app_id : ""
+        window->wlr_handle, window_app_id(window)
     );
 
     struct Output *o = output_primary();
@@ -240,9 +292,8 @@ static void foreign_handle_create(struct Window *window) {
         return;
 
     const struct wlr_ext_foreign_toplevel_handle_v1_state state = {
-        .title = window->xdg_toplevel->title ? window->xdg_toplevel->title : "",
-        .app_id =
-            window->xdg_toplevel->app_id ? window->xdg_toplevel->app_id : "",
+        .title = window_title(window),
+        .app_id = window_app_id(window),
     };
 
     window->foreign_handle = wlr_ext_foreign_toplevel_handle_v1_create(
@@ -260,9 +311,8 @@ static void foreign_handle_update(struct Window *window) {
     if (window->foreign_handle == NULL) return;
 
     const struct wlr_ext_foreign_toplevel_handle_v1_state state = {
-        .title = window->xdg_toplevel->title ? window->xdg_toplevel->title : "",
-        .app_id =
-            window->xdg_toplevel->app_id ? window->xdg_toplevel->app_id : "",
+        .title = window_title(window),
+        .app_id = window_app_id(window),
     };
 
     wlr_ext_foreign_toplevel_handle_v1_update_state(
@@ -272,25 +322,14 @@ static void foreign_handle_update(struct Window *window) {
 
 static void window_apply_rules(struct Window *window) {
     if (window == NULL || window->closed || window->rules_applied) return;
-
-    const char *app_id = window->xdg_toplevel->app_id;
-    const char *title = window->xdg_toplevel->title;
-
     window->rules_applied = true;
 
     struct WindowRuleActions act;
-    if (!rules_match(app_id, title, &act)) return;
-
+    if (!rules_match(window_app_id(window), window_title(window), &act)) return;
     if (act.has_space) wm_assign_new_window_space(window, act.space);
 }
 
-static void window_handle_map(struct wl_listener *l, void *data) {
-    (void)data;
-
-    struct Window *window = wl_container_of(l, window, map);
-
-    // The map signal and `window_handle_commit()` both call us on the same
-    // commit—the first one gets the cake.
+static void window_do_map(struct Window *window) {
     if (window->mapped) return;
     window->mapped = true;
 
@@ -318,21 +357,41 @@ static void window_handle_map(struct wl_listener *l, void *data) {
     idle_update_inhibit();
 }
 
+static void window_do_unmap(struct Window *window) {
+    if (!window->mapped) return;
+    window->mapped = false;
+
+    struct wlr_surface *surface = window_wlr_surface(window);
+    bool had_focus = surface != NULL && server.seat != NULL
+                  && server.seat->keyboard_state.focused_surface == surface;
+
+    wlr_handle_destroy(window);
+    foreign_handle_destroy(window);
+    wlr_scene_node_set_enabled(&window->scene_tree->node, false);
+    wlr_scene_node_set_enabled(&window->popup_tree->node, false);
+
+    wl_list_remove(&window->focus_link);
+    wl_list_init(&window->focus_link);
+
+    ipc_notify_window_closed(window);
+
+    if (had_focus) seat_focus(NULL);
+
+    wm_mark_layout_dirty();
+    idle_update_inhibit();
+}
+
+static void window_handle_map(struct wl_listener *l, void *data) {
+    (void)data;
+    struct Window *window = wl_container_of(l, window, map);
+    window_do_map(window);
+}
+
 static void window_handle_unmap(struct wl_listener *l, void *data) {
     (void)data;
 
     struct Window *window = wl_container_of(l, window, unmap);
-
-    window->mapped = false;
-
-    wlr_handle_destroy(window);
-    foreign_handle_destroy(window);
-    wm_mark_layout_dirty();
-    wlr_scene_node_set_enabled(&window->scene_tree->node, false);
-    wlr_scene_node_set_enabled(&window->popup_tree->node, false);
-
-    ipc_notify_window_closed(window);
-    idle_update_inhibit();
+    window_do_unmap(window);
 }
 
 static void window_handle_commit(struct wl_listener *l, void *data) {
@@ -359,9 +418,7 @@ static void window_handle_commit(struct wl_listener *l, void *data) {
         if (!window->anim.running) window_clear_clip(window);
     }
 
-    if (!window->mapped && surf->surface->mapped) {
-        window_handle_map(&window->map, NULL);
-    }
+    if (!window->mapped && surf->surface->mapped) { window_do_map(window); }
 }
 
 static void window_handle_destroy(struct wl_listener *l, void *data) {
@@ -394,7 +451,6 @@ static void window_handle_request_maximize(struct wl_listener *l, void *data) {
 
     struct Window *window = wl_container_of(l, window, request_maximize);
     struct wlr_xdg_surface *surf = window->xdg_toplevel->base;
-
     if (surf->initialized) { wlr_xdg_surface_schedule_configure(surf); }
 }
 
@@ -404,15 +460,12 @@ window_handle_request_fullscreen(struct wl_listener *l, void *data) {
 
     struct Window *window = wl_container_of(l, window, request_fullscreen);
     if (!window->xdg_toplevel->base->initialized) return;
-
     window_set_fullscreen(window, window->xdg_toplevel->requested.fullscreen);
 }
 
 static void window_handle_request_minimize(struct wl_listener *l, void *data) {
+    (void)l;
     (void)data;
-
-    struct Window *window = wl_container_of(l, window, request_minimize);
-    (void)window; // no "minimize" for now
 }
 
 static void window_handle_set_title(struct wl_listener *l, void *data) {
@@ -497,6 +550,7 @@ void window_create(struct wlr_xdg_toplevel *xdg_toplevel) {
     window->popup_tree = wlr_scene_tree_create(server.popup_tree);
 
     if (window->popup_tree == NULL) {
+        xdg_toplevel->base->data = NULL;
         wlr_scene_node_destroy(&window->scene_tree->node);
         free(window);
         return;
@@ -507,6 +561,19 @@ void window_create(struct wlr_xdg_toplevel *xdg_toplevel) {
     window_update_corners(window);
     wlr_scene_node_set_enabled(&window->scene_tree->node, false);
     wlr_scene_node_set_enabled(&window->popup_tree->node, false);
+
+    window->title = strdup(xdg_toplevel->title ? xdg_toplevel->title : "");
+    window->app_id = strdup(xdg_toplevel->app_id ? xdg_toplevel->app_id : "");
+
+    if (window->title == NULL || window->app_id == NULL) {
+        xdg_toplevel->base->data = NULL;
+        wlr_scene_node_destroy(&window->scene_tree->node);
+        wlr_scene_node_destroy(&window->popup_tree->node);
+        free(window->title);
+        free(window->app_id);
+        free(window);
+        return;
+    }
 
     window->map.notify = window_handle_map;
     wl_signal_add(&xdg_toplevel->base->surface->events.map, &window->map);
@@ -549,22 +616,45 @@ void window_create(struct wlr_xdg_toplevel *xdg_toplevel) {
 
 void window_destroy(struct Window *window) {
     if (window->closed) return;
+    if (window->mapped) window_do_unmap(window);
+
     window->closed = true;
     cursor_window_destroyed(window);
 
     wl_list_remove(&window->focus_link);
 
-    wl_list_remove(&window->map.link);
-    wl_list_remove(&window->unmap.link);
-    wl_list_remove(&window->commit.link);
-    wl_list_remove(&window->destroy.link);
-    wl_list_remove(&window->request_move.link);
-    wl_list_remove(&window->request_resize.link);
-    wl_list_remove(&window->request_maximize.link);
-    wl_list_remove(&window->request_fullscreen.link);
-    wl_list_remove(&window->request_minimize.link);
-    wl_list_remove(&window->set_title.link);
-    wl_list_remove(&window->set_app_id.link);
+#ifdef XWAYLAND
+    if (window->is_xwayland) {
+        xw_unbind(window);
+
+        wl_list_remove(&window->xw_associate.link);
+        wl_list_remove(&window->xw_dissociate.link);
+        wl_list_remove(&window->xw_destroy.link);
+        wl_list_remove(&window->xw_request_configure.link);
+        wl_list_remove(&window->xw_request_move.link);
+        wl_list_remove(&window->xw_request_resize.link);
+        wl_list_remove(&window->xw_request_maximize.link);
+        wl_list_remove(&window->xw_request_fullscreen.link);
+        wl_list_remove(&window->xw_request_minimize.link);
+        wl_list_remove(&window->xw_request_activate.link);
+        wl_list_remove(&window->xw_request_close.link);
+        wl_list_remove(&window->xw_set_title.link);
+        wl_list_remove(&window->xw_set_class.link);
+    } else
+#endif
+    {
+        wl_list_remove(&window->map.link);
+        wl_list_remove(&window->unmap.link);
+        wl_list_remove(&window->commit.link);
+        wl_list_remove(&window->destroy.link);
+        wl_list_remove(&window->request_move.link);
+        wl_list_remove(&window->request_resize.link);
+        wl_list_remove(&window->request_maximize.link);
+        wl_list_remove(&window->request_fullscreen.link);
+        wl_list_remove(&window->request_minimize.link);
+        wl_list_remove(&window->set_title.link);
+        wl_list_remove(&window->set_app_id.link);
+    }
 
     if (window->scene_tree != NULL) {
         wlr_scene_node_destroy(&window->scene_tree->node);
@@ -577,7 +667,6 @@ void window_destroy(struct Window *window) {
     }
 
     wlr_handle_destroy(window);
-    ipc_notify_window_closed(window);
     wl_list_remove(&window->link);
     wm_mark_layout_dirty();
     foreign_handle_destroy(window);
@@ -627,25 +716,62 @@ void window_set_position(struct Window *window, int32_t x, int32_t y) {
     window->x = x;
     window->y = y;
     window->pos_valid = true;
+
+#ifdef XWAYLAND
+    if (window->is_xwayland && window->xwayland_surface != NULL
+        && window->width > 0 && window->height > 0) {
+        wlr_xwayland_surface_configure(
+            window->xwayland_surface, (int16_t)x, (int16_t)y,
+            (uint16_t)window->width, (uint16_t)window->height
+        );
+    }
+#endif
 }
 
 void window_set_size(struct Window *window, int32_t w, int32_t h) {
     if (w < 1) w = 1;
     if (h < 1) h = 1;
 
-    struct wlr_xdg_surface *surf = window->xdg_toplevel->base;
-    if (!surf->initialized) { return; }
-
     if (window->prop_valid && window->prop_w == w && window->prop_h == h)
         return;
 
-    wlr_xdg_toplevel_set_size(window->xdg_toplevel, w, h);
     window->prop_w = w;
     window->prop_h = h;
     window->prop_valid = true;
+
+#ifdef XWAYLAND
+    if (window->is_xwayland) {
+        int32_t tx = window->pos_valid
+                       ? window->x
+                       : (window->has_target ? window->target_box.x : 0);
+
+        int32_t ty = window->pos_valid
+                       ? window->y
+                       : (window->has_target ? window->target_box.y : 0);
+
+        wlr_xwayland_surface_configure(
+            window->xwayland_surface, (int16_t)tx, (int16_t)ty, (uint16_t)w,
+            (uint16_t)h
+        );
+
+        window->width = w;
+        window->height = h;
+        return;
+    }
+#endif
+
+    struct wlr_xdg_surface *surf = window->xdg_toplevel->base;
+    if (!surf->initialized) { return; }
+    wlr_xdg_toplevel_set_size(window->xdg_toplevel, w, h);
 }
 
 void window_set_tiled(struct Window *window, bool tiled) {
+#ifdef XWAYLAND
+    if (window->is_xwayland) {
+        (void)tiled;
+        return;
+    }
+#endif
     struct wlr_xdg_surface *surf = window->xdg_toplevel->base;
     if (!surf->initialized) return;
 
@@ -660,13 +786,34 @@ void window_set_tiled(struct Window *window, bool tiled) {
 }
 
 void window_set_clip(struct Window *window, int32_t w, int32_t h) {
+#ifdef XWAYLAND
+    if (window->is_xwayland) {
+        if (window->xw_surface_tree == NULL) return;
+
+        struct wlr_box clip = {.x = 0, .y = 0, .width = w, .height = h};
+        wlr_scene_subsurface_tree_set_clip(
+            &window->xw_surface_tree->node, &clip
+        );
+
+        return;
+    }
+#endif
     struct wlr_box geo = window->xdg_toplevel->base->geometry;
     struct wlr_box clip = {.x = geo.x, .y = geo.y, .width = w, .height = h};
-
     wlr_scene_subsurface_tree_set_clip(&window->scene_tree->node, &clip);
 }
 
 void window_clear_clip(struct Window *window) {
+#ifdef XWAYLAND
+    if (window->is_xwayland) {
+        if (window->xw_surface_tree == NULL) return;
+        wlr_scene_subsurface_tree_set_clip(
+            &window->xw_surface_tree->node, NULL
+        );
+
+        return;
+    }
+#endif
     struct wlr_box geo = window->xdg_toplevel->base->geometry;
     if (geo.width <= 0 || geo.height <= 0) {
         wlr_scene_subsurface_tree_set_clip(&window->scene_tree->node, NULL);
@@ -677,6 +824,12 @@ void window_clear_clip(struct Window *window) {
 }
 
 void window_close(struct Window *window) {
+#ifdef XWAYLAND
+    if (window->is_xwayland) {
+        wlr_xwayland_surface_close(window->xwayland_surface);
+        return;
+    }
+#endif
     wlr_xdg_toplevel_send_close(window->xdg_toplevel);
 }
 
@@ -695,3 +848,332 @@ void window_reparent(struct Window *window, bool to_float) {
     if (window->scene_tree->node.parent == target) return;
     wlr_scene_node_reparent(&window->scene_tree->node, target);
 }
+
+#ifdef XWAYLAND
+static void xw_handle_map(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Window *window = wl_container_of(l, window, xw_map);
+    window_do_map(window);
+}
+
+static void xw_handle_unmap(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Window *window = wl_container_of(l, window, xw_unmap);
+    window_do_unmap(window);
+}
+
+static void xw_handle_tree_destroy(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Window *window = wl_container_of(l, window, xw_tree_destroy);
+    wl_list_remove(&window->xw_tree_destroy.link);
+    window->xw_surface_tree = NULL;
+}
+
+static void xw_unbind(struct Window *window) {
+    if (window->xw_bound) {
+        wl_list_remove(&window->xw_map.link);
+        wl_list_remove(&window->xw_unmap.link);
+        window->xw_bound = false;
+    }
+
+    if (window->xw_surface_tree != NULL) {
+        wl_list_remove(&window->xw_tree_destroy.link);
+        wlr_scene_node_destroy(&window->xw_surface_tree->node);
+        window->xw_surface_tree = NULL;
+    }
+}
+
+static void xw_bind(struct Window *window) {
+    struct wlr_surface *surface = window->xwayland_surface->surface;
+    if (window->closed || window->xw_bound || surface == NULL) return;
+
+    window->xw_surface_tree =
+        wlr_scene_subsurface_tree_create(window->scene_tree, surface);
+    if (window->xw_surface_tree == NULL) {
+        log_err("unable to create scene tree for x11 window: OOM");
+        wlr_xwayland_surface_close(window->xwayland_surface);
+        return;
+    }
+
+    window->xw_tree_destroy.notify = xw_handle_tree_destroy;
+    wl_signal_add(
+        &window->xw_surface_tree->node.events.destroy, &window->xw_tree_destroy
+    );
+
+    window->xw_map.notify = xw_handle_map;
+    wl_signal_add(&surface->events.map, &window->xw_map);
+    window->xw_unmap.notify = xw_handle_unmap;
+    wl_signal_add(&surface->events.unmap, &window->xw_unmap);
+    window->xw_bound = true;
+
+    window_update_corners(window);
+
+    if (surface->mapped) { window_do_map(window); }
+}
+
+static void xw_handle_associate(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Window *window = wl_container_of(l, window, xw_associate);
+    xw_bind(window);
+}
+
+static void xw_handle_dissociate(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Window *window = wl_container_of(l, window, xw_dissociate);
+
+    // wlroots unmaps the surface before emitting this, but be explicit.
+    if (window->mapped) window_do_unmap(window);
+    xw_unbind(window);
+}
+
+static void xw_handle_destroy(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Window *window = wl_container_of(l, window, xw_destroy);
+    window_destroy(window);
+}
+
+static void xw_handle_request_configure(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Window *window = wl_container_of(l, window, xw_request_configure);
+    if (window->closed || window->xwayland_surface == NULL) return;
+
+    int32_t x, y, w, h;
+    if (window->has_target) {
+        x = window->target_box.x;
+        y = window->target_box.y;
+        w = window->target_box.width;
+        h = window->target_box.height;
+    } else {
+        x = window->pos_valid ? window->x : 0;
+        y = window->pos_valid ? window->y : 0;
+        w = window->xwayland_surface->width;
+        h = window->xwayland_surface->height;
+    }
+
+    if (w < 1) w = 1;
+    if (h < 1) h = 1;
+
+    wlr_xwayland_surface_configure(
+        window->xwayland_surface, (int16_t)x, (int16_t)y, (uint16_t)w,
+        (uint16_t)h
+    );
+}
+
+static void xw_handle_request_move(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Window *window = wl_container_of(l, window, xw_request_move);
+    if (!layouts_is_tiled(wm.layout)) {
+        cursor_begin_interactive(window, SEAT_OP_MOVE, 0);
+    }
+}
+
+static void xw_handle_request_resize(struct wl_listener *l, void *data) {
+    struct wlr_xwayland_resize_event *ev = data;
+
+    struct Window *window = wl_container_of(l, window, xw_request_resize);
+    if (!layouts_is_tiled(wm.layout)) {
+        cursor_begin_interactive(window, SEAT_OP_RESIZE, ev->edges);
+    }
+}
+
+static void xw_handle_request_maximize(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Window *window = wl_container_of(l, window, xw_request_maximize);
+
+    if (window->xwayland_surface) {
+        wlr_xwayland_surface_set_maximized(
+            window->xwayland_surface, false, false
+        );
+    }
+}
+
+static void xw_handle_request_fullscreen(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Window *window = wl_container_of(l, window, xw_request_fullscreen);
+    if (!window->xwayland_surface) return;
+    window_set_fullscreen(window, window->xwayland_surface->fullscreen);
+}
+
+static void xw_handle_request_minimize(struct wl_listener *l, void *data) {
+    (void)l;
+    (void)data;
+}
+
+static void xw_handle_request_activate(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Window *window = wl_container_of(l, window, xw_request_activate);
+    if (window->closed) return;
+    if (window->space_hidden) wm_switch_space(window->space);
+    seat_focus(window);
+}
+
+static void xw_handle_request_close(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Window *window = wl_container_of(l, window, xw_request_close);
+    window_close(window);
+}
+
+static void xw_handle_set_title(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Window *window = wl_container_of(l, window, xw_set_title);
+    const char *new_title =
+        window->xwayland_surface->title ? window->xwayland_surface->title : "";
+
+    const char *old_title = window->title ? window->title : "";
+    if (strcmp(new_title, old_title) == 0) return;
+
+    char *copy = strdup(new_title);
+    if (copy == NULL) {
+        log_err("unable to cache x11 window title: OOM");
+        return;
+    }
+
+    free(window->title);
+    window->title = copy;
+
+    if (window->wlr_handle) {
+        wlr_foreign_toplevel_handle_v1_set_title(window->wlr_handle, new_title);
+    }
+
+    foreign_handle_update(window);
+    ipc_notify_window_meta(window);
+}
+
+static void xw_handle_set_class(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Window *window = wl_container_of(l, window, xw_set_class);
+    const char *new_id =
+        window->xwayland_surface->class ? window->xwayland_surface->class : "";
+
+    const char *old_id = window->app_id ? window->app_id : "";
+    if (strcmp(new_id, old_id) == 0) return;
+
+    char *copy = strdup(new_id);
+    if (copy == NULL) {
+        log_err("Unable to cache x11 window class: OOM");
+        return;
+    }
+
+    free(window->app_id);
+    window->app_id = copy;
+
+    if (window->wlr_handle) {
+        wlr_foreign_toplevel_handle_v1_set_app_id(window->wlr_handle, new_id);
+    }
+
+    foreign_handle_update(window);
+    ipc_notify_window_meta(window);
+}
+
+void window_create_xwayland(struct wlr_xwayland_surface *xw) {
+    struct Window *window = calloc(1, sizeof(*window));
+    if (window == NULL) {
+        wlr_xwayland_surface_close(xw);
+        return;
+    }
+
+    window->is_xwayland = true;
+    window->xwayland_surface = xw;
+    window->space = wm.current_space;
+    window->node_tag.type = NODE_WINDOW;
+
+    struct wlr_scene_tree *parent = layer_for_layout(wm.layout);
+    window->scene_tree = wlr_scene_tree_create(parent);
+    if (window->scene_tree == NULL) {
+        free(window);
+        wlr_xwayland_surface_close(xw);
+        return;
+    }
+
+    xw->data = window->scene_tree;
+    window->scene_tree->node.data = &window->node_tag;
+
+    window->popup_tree = wlr_scene_tree_create(server.popup_tree);
+    if (window->popup_tree == NULL) {
+        xw->data = NULL;
+        wlr_scene_node_destroy(&window->scene_tree->node);
+        free(window);
+        wlr_xwayland_surface_close(xw);
+        return;
+    }
+
+    window->popup_tree->node.data = &window->node_tag;
+
+    wlr_scene_node_set_enabled(&window->scene_tree->node, false);
+    wlr_scene_node_set_enabled(&window->popup_tree->node, false);
+
+    window->title = strdup(xw->title ? xw->title : "");
+    window->app_id = strdup(xw->class ? xw->class : "");
+    if (window->title == NULL || window->app_id == NULL) {
+        xw->data = NULL;
+        wlr_scene_node_destroy(&window->scene_tree->node);
+        wlr_scene_node_destroy(&window->popup_tree->node);
+        free(window->title);
+        free(window->app_id);
+        free(window);
+        wlr_xwayland_surface_close(xw);
+        return;
+    }
+
+    wl_list_init(&window->focus_link);
+
+    window->xw_associate.notify = xw_handle_associate;
+    wl_signal_add(&xw->events.associate, &window->xw_associate);
+
+    window->xw_dissociate.notify = xw_handle_dissociate;
+    wl_signal_add(&xw->events.dissociate, &window->xw_dissociate);
+
+    window->xw_destroy.notify = xw_handle_destroy;
+    wl_signal_add(&xw->events.destroy, &window->xw_destroy);
+
+    window->xw_request_configure.notify = xw_handle_request_configure;
+    wl_signal_add(&xw->events.request_configure, &window->xw_request_configure);
+
+    window->xw_request_move.notify = xw_handle_request_move;
+    wl_signal_add(&xw->events.request_move, &window->xw_request_move);
+
+    window->xw_request_resize.notify = xw_handle_request_resize;
+    wl_signal_add(&xw->events.request_resize, &window->xw_request_resize);
+
+    window->xw_request_maximize.notify = xw_handle_request_maximize;
+    wl_signal_add(&xw->events.request_maximize, &window->xw_request_maximize);
+
+    window->xw_request_fullscreen.notify = xw_handle_request_fullscreen;
+    wl_signal_add(
+        &xw->events.request_fullscreen, &window->xw_request_fullscreen
+    );
+
+    window->xw_request_minimize.notify = xw_handle_request_minimize;
+    wl_signal_add(&xw->events.request_minimize, &window->xw_request_minimize);
+
+    window->xw_request_activate.notify = xw_handle_request_activate;
+    wl_signal_add(&xw->events.request_activate, &window->xw_request_activate);
+
+    window->xw_request_close.notify = xw_handle_request_close;
+    wl_signal_add(&xw->events.request_close, &window->xw_request_close);
+
+    window->xw_set_title.notify = xw_handle_set_title;
+    wl_signal_add(&xw->events.set_title, &window->xw_set_title);
+
+    window->xw_set_class.notify = xw_handle_set_class;
+    wl_signal_add(&xw->events.set_class, &window->xw_set_class);
+
+    wl_list_insert(wm.windows.prev, &window->link);
+    xw_bind(window);
+}
+
+#endif

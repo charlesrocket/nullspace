@@ -154,7 +154,12 @@ int server_init(struct wl_display *display) {
         return -1;
     }
 
-    wlr_compositor_create(display, 6, server.renderer);
+    server.compositor = wlr_compositor_create(display, 6, server.renderer);
+    if (server.compositor == NULL) {
+        log_err("Failed to create compositor");
+        return -1;
+    }
+
     wlr_subcompositor_create(display);
     wlr_data_device_manager_create(display);
     wlr_data_control_manager_v1_create(display);
@@ -369,7 +374,7 @@ static bool inhibitor_surface_visible(struct wlr_surface *surface) {
     struct Window *w;
     wl_list_for_each(w, &wm.windows, link) {
         if (w->closed) continue;
-        if (w->xdg_toplevel->base->surface == root) {
+        if (window_wlr_surface(w) == root) {
             return w->mapped && !w->space_hidden;
         }
     }

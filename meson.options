@@ -6,6 +6,13 @@ option(
 )
 
 option(
+  'xwayland',
+  type: 'feature',
+  value: 'auto',
+  description: 'XWayland support (requires xcb, xcb-randr, xwayland)',
+)
+
+option(
   'asan',
   type : 'boolean',
   value : false,

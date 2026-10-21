@@ -3,6 +3,9 @@
 #include "log.h"
 #include "manager.h"
 #include "server.h"
+#ifdef XWAYLAND
+#include "xwayland.h"
+#endif
 
 #include <signal.h>
 #include <stdio.h>
@@ -99,6 +102,10 @@ int main(int argc, char *argv[]) {
     setenv("WAYLAND_DISPLAY", socket, 1);
     log_info("Display socket is %s", socket);
 
+#ifdef XWAYLAND
+    if (!xwayland_init(display)) { log_warn("XWayland is not ready"); }
+#endif
+
     ipc_init();
     ipc_attach_event_loop(server.event_loop);
 
@@ -123,6 +130,9 @@ int main(int argc, char *argv[]) {
 
     log_info("Shutting down");
     ipc_destroy();
+#ifdef XWAYLAND
+    xwayland_finish();
+#endif
     server_detach_listeners();
 
     wlr_backend_destroy(server.backend);
