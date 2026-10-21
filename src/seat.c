@@ -318,8 +318,9 @@ void seat_focus(struct Window *window) {
     if (window == NULL) window = wm_focus_stack_top();
 
     struct wlr_surface *want = window ? window_wlr_surface(window) : NULL;
-    struct wlr_surface *prev = server.seat->keyboard_state.focused_surface;
+    if (window != NULL && want == NULL) return;
 
+    struct wlr_surface *prev = server.seat->keyboard_state.focused_surface;
     if (prev == want) return;
 
     if (prev != NULL) {
@@ -332,7 +333,7 @@ void seat_focus(struct Window *window) {
         }
     }
 
-    if (window != NULL) {
+    if (window != NULL && want != NULL) {
         window_set_activated(window, true);
 
         struct wlr_keyboard *kb = wlr_seat_get_keyboard(server.seat);
