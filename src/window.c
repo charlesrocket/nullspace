@@ -619,8 +619,10 @@ void window_destroy(struct Window *window) {
     if (window->mapped) window_do_unmap(window);
 
     window->closed = true;
-    cursor_window_destroyed(window);
 
+    if (window->xwayland_surface != NULL) window->xwayland_surface->data = NULL;
+
+    cursor_window_destroyed(window);
     wl_list_remove(&window->focus_link);
 
 #ifdef XWAYLAND
