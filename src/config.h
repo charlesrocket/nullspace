@@ -20,8 +20,17 @@
 #define CFG_CENTER_WHEN_SINGLE_STACK true
 
 #define CFG_CMD_TERMINAL             "foot", NULL
-#define CFG_CMD_BROWSER              "firefox", NULL
-#define CFG_CMD_IDE                  "gram", NULL
+
+#define CFG_CMD_F1                   "thunar", NULL
+#define CFG_CMD_F2                   CFG_CMD_TERMINAL
+#define CFG_CMD_F3                   "firefox", NULL
+#define CFG_CMD_F4                   "gram", NULL
+#define CFG_CMD_F5                   NULL, NULL
+#define CFG_CMD_F6                   NULL, NULL
+#define CFG_CMD_F7                   NULL, NULL
+#define CFG_CMD_F8                   NULL, NULL
+#define CFG_CMD_F9                   NULL, NULL
+#define CFG_CMD_F10                  NULL, NULL
 
 #define CFG_WINDOW_RULES                                                       \
     "space:1,appid:Signal", "space:2,title:foot", "space:2,appid:Alacritty",   \
@@ -50,9 +59,16 @@
 
 #define CFG_KEYBINDS                                                           \
     CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_Return, CFG_CMD_TERMINAL)            \
-    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F2, CFG_CMD_TERMINAL)                \
-    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F3, CFG_CMD_BROWSER)                 \
-    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F4, CFG_CMD_IDE)                     \
+    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F1, CFG_CMD_F1)                      \
+    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F2, CFG_CMD_F2)                      \
+    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F3, CFG_CMD_F3)                      \
+    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F4, CFG_CMD_F4)                      \
+    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F5, CFG_CMD_F5)                      \
+    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F6, CFG_CMD_F6)                      \
+    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F7, CFG_CMD_F7)                      \
+    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F8, CFG_CMD_F8)                      \
+    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F9, CFG_CMD_F9)                      \
+    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F10, CFG_CMD_F10)                    \
     CFG_BIND(CFG_MOD_SUPER, XKB_KEY_q, ACTION_CLOSE)                           \
     CFG_BIND(CFG_MOD_SUPER, XKB_KEY_f, ACTION_FOCUS_NEXT)                      \
     CFG_BIND(CFG_MOD_SUPER, XKB_KEY_l, ACTION_CYCLE_LAYOUT)                    \
