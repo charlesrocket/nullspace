@@ -185,7 +185,6 @@ int server_init(struct wl_display *display) {
     server.content_tree = wlr_scene_tree_create(&server.scene->tree);
 
     server.background_tree = wlr_scene_tree_create(server.content_tree);
-    server.wallpaper_blur_tree = wlr_scene_tree_create(server.content_tree);
     server.bottom_tree = wlr_scene_tree_create(server.content_tree);
     server.tile_tree = wlr_scene_tree_create(server.content_tree);
     server.float_tree = wlr_scene_tree_create(server.content_tree);

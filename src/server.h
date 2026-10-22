@@ -47,7 +47,6 @@ struct NsServer {
     struct wlr_scene_output_layout *scene_layout;
 
     struct wlr_scene_tree *background_tree;
-    struct wlr_scene_tree *wallpaper_blur_tree;
     struct wlr_scene_tree *bottom_tree;
     struct wlr_scene_tree *tile_tree;
     struct wlr_scene_tree *float_tree;

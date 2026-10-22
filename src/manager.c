@@ -346,8 +346,8 @@ void wm_init(void) {
     wm.wallpaper.pattern_grid_spacing = CFG_WALLPAPER_PATTERN_GRID_SPACING;
     wm.wallpaper.pattern_dot_radius = CFG_WALLPAPER_PATTERN_DOT_RADIUS;
     wm.wallpaper.blur_enabled = CFG_WALLPAPER_BLUR_ENABLED;
-    wm.wallpaper.blur_radius = CFG_BLUR_RADIUS;
-    wm.wallpaper.blur_passes = CFG_BLUR_PASSES;
+    wm.wallpaper.blur_radius = CFG_WALLPAPER_BLUR_RADIUS;
+    wm.wallpaper.blur_passes = CFG_WALLPAPER_BLUR_PASSES;
 #endif
 
     wm.libinput.tap_state = CFG_LIBINPUT_TAP_STATE;

@@ -44,6 +44,7 @@ xcb_randr = dependency('xcb-randr', required: get_option('xwayland'))
 libinput = dependency('libinput')
 pixman = dependency('pixman-1')
 spng = dependency('spng', required: get_option('wallpaper'))
+pthreads = dependency('threads')
 
 build_xwayland = xcb.found() and xcb_randr.found()
 
@@ -77,6 +78,7 @@ executable(
     libinput,
     pixman,
     spng,
+    pthreads,
   ],
   include_directories: [
     inc_public,

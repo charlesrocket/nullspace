@@ -7,7 +7,6 @@
 
 struct Output;
 struct wlr_scene_buffer;
-struct wlr_scene_blur;
 
 struct WallpaperConfig {
     int32_t pattern_bg_r, pattern_bg_g, pattern_bg_b;
@@ -25,23 +24,29 @@ struct WallpaperConfig {
 struct WallpaperOutput {
     struct Output *output;
     struct wlr_scene_buffer *scene_buffer;
-    struct wlr_scene_blur *blur;
     struct wl_list link;
 
     int32_t width, height;
+
+    uint8_t *cached_sharp;
+    uint8_t *cached_blurred;
+
     int32_t drawn_w, drawn_h;
     int32_t drawn_pattern_bg_r, drawn_pattern_bg_g, drawn_pattern_bg_b;
     int32_t drawn_pattern_dot_r, drawn_pattern_dot_g, drawn_pattern_dot_b;
     int32_t drawn_pattern_grid_spacing, drawn_pattern_dot_radius;
+    int32_t drawn_blur_radius, drawn_blur_passes;
 
-    uint8_t *cached_sharp;
-
-    bool drawn_loaded, drawn_valid;
+    bool drawn_loaded, drawn_valid, drawn_blur_active, drawn_blur_enabled;
 };
 
 bool wallpaper_load_image(const char *path);
 void wallpaper_invalidate_all(void);
 bool wallpaper_blur_wanted(void);
+
+void wallpaper_worker_init(void);
+void wallpaper_worker_finish(void);
+
 void wallpaper_finish(void);
 
 struct WallpaperOutput *wallpaper_output_create(struct Output *output);

@@ -3,6 +3,9 @@
 #include "log.h"
 #include "manager.h"
 #include "server.h"
+#ifdef WALLPAPER
+#include "wallpaper.h"
+#endif
 #ifdef XWAYLAND
 #include "xwayland.h"
 #endif
@@ -109,6 +112,11 @@ int main(int argc, char *argv[]) {
     ipc_init();
     ipc_attach_event_loop(server.event_loop);
 
+#ifdef WALLPAPER
+    wallpaper_worker_init();
+    wm_set_wallpaper_path(wm.wallpaper.path);
+#endif
+
     {
         bool created = false;
         wlr_multi_for_each_backend(
@@ -118,21 +126,16 @@ int main(int argc, char *argv[]) {
         if (!created) log_info("No default output requested");
     }
 
-#ifdef WALLPAPER
-    {
-        const char *wp = getenv("NSP_WALLPAPER");
-        wm_set_wallpaper_path(wp != NULL ? wp : wm.wallpaper.path);
-    }
-#endif
-
     log_info("Entering event loop");
     wl_display_run(display);
 
     log_info("Shutting down");
     ipc_destroy();
+
 #ifdef XWAYLAND
     xwayland_finish();
 #endif
+
     server_detach_listeners();
 
     wlr_backend_destroy(server.backend);

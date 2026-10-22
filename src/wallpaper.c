@@ -1,10 +1,10 @@
 #include "wallpaper.h"
 
-#include "config.h"
 #include "log.h"
 #include "manager.h"
 #include "output.h"
 #include "server.h"
+#include "window.h"
 
 #include <drm_fourcc.h>
 #include <errno.h>
@@ -12,14 +12,18 @@
 #include <inttypes.h>
 #include <limits.h>
 #include <pixman.h>
+#include <pthread.h>
 #include <scenefx/types/wlr_scene.h>
 #include <spng.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/_pthreadtypes.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
+#include <wayland-server-core.h>
 #include <wayland-util.h>
 #include <wlr/interfaces/wlr_buffer.h>
 #include <wlr/types/wlr_buffer.h>
@@ -41,22 +45,94 @@ static struct Wallpaper {
     .outputs = {.prev = &g_wallpaper.outputs, .next = &g_wallpaper.outputs},
 };
 
-void wallpaper_finish(void) {
-    if (!wl_list_empty(&g_wallpaper.outputs)) {
-        log_warn("wallpaper_finish with live outputs");
+struct WpJob {
+    struct wl_list link;
+    struct WallpaperOutput *wpo;
+
+    uint32_t gen;
+
+    int32_t width, height;
+    int32_t src_w, src_h;
+    int32_t pattern_bg_r, pattern_bg_g, pattern_bg_b;
+    int32_t pattern_dot_r, pattern_dot_g, pattern_dot_b;
+    int32_t pattern_grid_spacing, pattern_dot_radius;
+    int32_t blur_radius, blur_passes;
+
+    uint8_t *src, *sharp, *blurred;
+
+    bool blur_enabled, src_loaded;
+};
+
+static struct {
+    struct wl_event_source *wake_source;
+    struct wl_list pending, completed;
+
+    pthread_t thread;
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+
+    uint32_t gen;
+    int wake_pipe[2];
+
+    bool quit, started;
+} g_worker = {
+    .mutex = PTHREAD_MUTEX_INITIALIZER,
+    .cond = PTHREAD_COND_INITIALIZER,
+    .wake_pipe = {-1, -1},
+};
+
+static void paint_default_pattern(
+    uint8_t *dst, int w, int h, int32_t bg_r, int32_t bg_g, int32_t bg_b,
+    int32_t dot_r, int32_t dot_g, int32_t dot_b, int32_t spacing,
+    int32_t dot_radius
+) {
+    if (w <= 0 || h <= 0) return;
+    if (spacing < 1) spacing = 1;
+    if (dot_radius < 0) dot_radius = 0;
+    if (dot_radius > spacing) dot_radius = spacing;
+
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            uint8_t *dp = &dst[((size_t)y * (size_t)w + (size_t)x) * 4];
+            dp[0] = (uint8_t)bg_b;
+            dp[1] = (uint8_t)bg_g;
+            dp[2] = (uint8_t)bg_r;
+            dp[3] = 255;
+        }
     }
 
-    free(g_wallpaper.image_pixels);
-    g_wallpaper.image_pixels = NULL;
-    g_wallpaper.image_width = 0;
-    g_wallpaper.image_height = 0;
-    g_wallpaper.loaded = false;
-}
+    int cols = w / spacing;
+    int rows = h / spacing;
+    int used_w = cols * spacing;
+    int used_h = rows * spacing;
+    int offset_x = (w - used_w) / 2 + spacing / 2;
+    int offset_y = (h - used_h) / 2 + spacing / 2;
 
-static uint8_t clamp_u8(int32_t v) {
-    if (v < 0) return 0;
-    if (v > 255) return 255;
-    return (uint8_t)v;
+    for (int row = 0; row < rows; row++) {
+        int gy = offset_y + row * spacing;
+        for (int col = 0; col < cols; col++) {
+            int gx = offset_x + col * spacing;
+            for (int dy = -dot_radius; dy <= dot_radius; dy++) {
+                int py = gy + dy;
+                if (py < 0 || py >= h) continue;
+
+                for (int dx = -dot_radius; dx <= dot_radius; dx++) {
+                    int px = gx + dx;
+                    if (px < 0 || px >= w) continue;
+                    if (dx * dx + dy * dy > dot_radius * dot_radius + 1)
+                        continue;
+
+                    uint8_t *dp =
+                        &dst[((size_t)py * (size_t)w + (size_t)px) * 4];
+
+                    dp[0] = (uint8_t)dot_b;
+                    dp[1] = (uint8_t)dot_g;
+                    dp[2] = (uint8_t)dot_r;
+                    dp[3] = 255;
+                }
+            }
+        }
+    }
 }
 
 static void put_px(uint8_t *p, uint8_t r, uint8_t g, uint8_t b) {
@@ -64,62 +140,6 @@ static void put_px(uint8_t *p, uint8_t r, uint8_t g, uint8_t b) {
     p[1] = g;
     p[2] = r;
     p[3] = 255;
-}
-
-static void paint_default_pattern(uint8_t *dst, int w, int h) {
-    if (w <= 0 || h <= 0) return;
-
-    size_t uw = (size_t)w;
-    size_t uh = (size_t)h;
-    size_t stride = uw * 4;
-
-    int32_t spacing = wm.wallpaper.pattern_grid_spacing;
-    int32_t radius = wm.wallpaper.pattern_dot_radius;
-
-    if (spacing < 1) spacing = 1;
-    if (radius < 0) radius = 0;
-    if (radius > spacing) radius = spacing;
-
-    uint8_t bg_r = clamp_u8(wm.wallpaper.pattern_bg_r);
-    uint8_t bg_g = clamp_u8(wm.wallpaper.pattern_bg_g);
-    uint8_t bg_b = clamp_u8(wm.wallpaper.pattern_bg_b);
-    uint8_t dot_r = clamp_u8(wm.wallpaper.pattern_dot_r);
-    uint8_t dot_g = clamp_u8(wm.wallpaper.pattern_dot_g);
-    uint8_t dot_b = clamp_u8(wm.wallpaper.pattern_dot_b);
-
-    for (size_t x = 0; x < uw; x++) put_px(&dst[x * 4], bg_r, bg_g, bg_b);
-    for (size_t y = 1; y < uh; y++) memcpy(dst + y * stride, dst, stride);
-
-    int cols = w / spacing;
-    int rows = h / spacing;
-    int offset_x = (w - cols * spacing) / 2 + spacing / 2;
-    int offset_y = (h - rows * spacing) / 2 + spacing / 2;
-    int64_t max_d2 = (int64_t)radius * radius + 1;
-
-    for (int row = 0; row < rows; row++) {
-        int gy = offset_y + row * spacing;
-        int y0 = gy - radius < 0 ? 0 : gy - radius;
-        int y1 = gy + radius >= h ? h - 1 : gy + radius;
-
-        for (int col = 0; col < cols; col++) {
-            int gx = offset_x + col * spacing;
-            int x0 = gx - radius < 0 ? 0 : gx - radius;
-            int x1 = gx + radius >= w ? w - 1 : gx + radius;
-
-            for (int py = y0; py <= y1; py++) {
-                int dy = py - gy;
-                for (int px = x0; px <= x1; px++) {
-                    int dx = px - gx;
-                    if ((int64_t)dx * dx + (int64_t)dy * dy > max_d2) continue;
-
-                    put_px(
-                        &dst[(size_t)py * stride + (size_t)px * 4], dot_r,
-                        dot_g, dot_b
-                    );
-                }
-            }
-        }
-    }
 }
 
 static bool image_size_ok(const char *path, uint64_t w, uint64_t h) {
@@ -196,9 +216,8 @@ static bool ppm_buf_read_int(struct ppm_buf *b, int *out) {
     long v = strtol(token, &end, 10);
 
     if (errno != 0 || end == token || *end != '\0' || v < INT_MIN
-        || v > INT_MAX) {
+        || v > INT_MAX)
         return false;
-    }
 
     *out = (int)v;
     return true;
@@ -219,24 +238,14 @@ read_whole_file(const char *path, uint8_t **out_data, size_t *out_size) {
         return false;
     }
 
-    if (!S_ISREG(st.st_mode)) {
-        log_warn("'%s' is not a regular file", path);
-        close(fd);
-        return false;
-    }
-
-    if (st.st_size <= 0) {
-        log_warn("'%s' is empty", path);
+    if (!S_ISREG(st.st_mode) || st.st_size <= 0) {
+        log_warn("'%s' is not a non-empty regular file", path);
         close(fd);
         return false;
     }
 
     if ((uint64_t)st.st_size > MAX_FILE_BYTES) {
-        log_warn(
-            "'%s' is too large (%" PRIu64 " bytes, max %" PRIu64 ")", path,
-            (uint64_t)st.st_size, MAX_FILE_BYTES
-        );
-
+        log_warn("'%s' is too large", path);
         close(fd);
         return false;
     }
@@ -345,9 +354,9 @@ static uint8_t *png_decode_with(
     int *out_w, int *out_h
 ) {
     int ret = spng_set_image_limits(ctx, MAX_DIMENSION, MAX_DIMENSION);
-    if (ret == 0) {
+
+    if (ret == 0)
         ret = spng_set_chunk_limits(ctx, PNG_CHUNK_LIMIT, PNG_CACHE_LIMIT);
-    }
 
     if (ret == 0) ret = spng_set_png_buffer(ctx, data, size);
     if (ret != 0) {
@@ -430,13 +439,9 @@ image_load(const char *path, uint8_t **out_px, int *out_w, int *out_h) {
 
     if (!read_whole_file(path, &filebuf, &filebuf_size)) return false;
 
-    bool ok;
-
-    if (is_png(filebuf, filebuf_size)) {
-        ok = png_decode(path, filebuf, filebuf_size, out_px, out_w, out_h);
-    } else {
-        ok = ppm_decode(path, filebuf, filebuf_size, out_px, out_w, out_h);
-    }
+    bool ok = is_png(filebuf, filebuf_size)
+                ? png_decode(path, filebuf, filebuf_size, out_px, out_w, out_h)
+                : ppm_decode(path, filebuf, filebuf_size, out_px, out_w, out_h);
 
     free(filebuf);
     return ok;
@@ -542,6 +547,151 @@ scale_cover(const uint8_t *src, int sw, int sh, uint8_t *dst, int dw, int dh) {
     return ok;
 }
 
+static void box_blur(uint8_t *pixels, int w, int h, int radius) {
+    if (radius <= 0 || w <= 0 || h <= 0) return;
+
+    uint8_t *scratch = malloc((size_t)w * (size_t)h * 4);
+    if (scratch == NULL) return;
+
+    for (int y = 0; y < h; y++) {
+        uint8_t *row = &pixels[(size_t)y * (size_t)w * 4];
+        uint8_t *out_row = &scratch[(size_t)y * (size_t)w * 4];
+        for (int c = 0; c < 3; c++) {
+            long sum = 0;
+            int count = 0;
+            for (int x = -radius; x <= radius; x++) {
+                int cx = x < 0 ? 0 : (x >= w ? w - 1 : x);
+                sum += row[cx * 4 + c];
+                count++;
+            }
+
+            for (int x = 0; x < w; x++) {
+                int denom = count > 0 ? count : 1;
+                out_row[x * 4 + c] = (uint8_t)(sum / denom);
+                int add_x = x + radius + 1;
+                int rem_x = x - radius;
+                if (add_x >= w) add_x = w - 1;
+                if (rem_x < 0) rem_x = 0;
+
+                sum += row[add_x * 4 + c];
+                sum -= row[rem_x * 4 + c];
+            }
+        }
+    }
+
+    for (int x = 0; x < w; x++) {
+        for (int c = 0; c < 3; c++) {
+            long sum = 0;
+            int count = 0;
+            for (int y = -radius; y <= radius; y++) {
+                int cy = y < 0 ? 0 : (y >= h ? h - 1 : y);
+
+                sum += scratch
+                    [((size_t)cy * (size_t)w + (size_t)x) * 4 + (size_t)c];
+
+                count++;
+            }
+            for (int y = 0; y < h; y++) {
+                int denom = count > 0 ? count : 1;
+
+                pixels[((size_t)y * (size_t)w + (size_t)x) * 4 + (size_t)c] =
+                    (uint8_t)(sum / denom);
+
+                int add_y = y + radius + 1;
+                int rem_y = y - radius;
+                if (add_y >= h) add_y = h - 1;
+                if (rem_y < 0) rem_y = 0;
+
+                sum += scratch
+                    [((size_t)add_y * (size_t)w + (size_t)x) * 4 + (size_t)c];
+                sum -= scratch
+                    [((size_t)rem_y * (size_t)w + (size_t)x) * 4 + (size_t)c];
+            }
+        }
+    }
+
+    free(scratch);
+}
+
+static void wpjob_free(struct WpJob *job) {
+    if (job == NULL) return;
+    free(job->src);
+    free(job->sharp);
+    free(job->blurred);
+    free(job);
+}
+
+static void wpjob_compute(struct WpJob *job) {
+    size_t image_size = (size_t)job->width * (size_t)job->height * 4;
+
+    job->sharp = calloc(1, image_size);
+    job->blurred = calloc(1, image_size);
+    if (job->sharp == NULL || job->blurred == NULL) {
+        free(job->sharp);
+        free(job->blurred);
+        job->sharp = NULL;
+        job->blurred = NULL;
+        return;
+    }
+
+    if (!job->src_loaded
+        || !scale_cover(
+            job->src, job->src_w, job->src_h, job->sharp, job->width,
+            job->height
+        )) {
+        paint_default_pattern(
+            job->sharp, job->width, job->height, job->pattern_bg_r,
+            job->pattern_bg_g, job->pattern_bg_b, job->pattern_dot_r,
+            job->pattern_dot_g, job->pattern_dot_b, job->pattern_grid_spacing,
+            job->pattern_dot_radius
+        );
+    }
+
+    memcpy(job->blurred, job->sharp, image_size);
+
+    if (job->blur_enabled) {
+        for (int p = 0; p < job->blur_passes; p++) {
+            box_blur(job->blurred, job->width, job->height, job->blur_radius);
+        }
+    }
+}
+
+static void *worker_main(void *arg) {
+    (void)arg;
+
+    pthread_mutex_lock(&g_worker.mutex);
+    for (;;) {
+        while (wl_list_empty(&g_worker.pending) && !g_worker.quit) {
+            pthread_cond_wait(&g_worker.cond, &g_worker.mutex);
+        }
+
+        if (g_worker.quit) break;
+
+        struct WpJob *job = wl_container_of(g_worker.pending.next, job, link);
+        wl_list_remove(&job->link);
+
+        if (job->gen != g_worker.gen) {
+            wpjob_free(job);
+            continue;
+        }
+
+        pthread_mutex_unlock(&g_worker.mutex);
+        wpjob_compute(job);
+        pthread_mutex_lock(&g_worker.mutex);
+
+        if (job->gen != g_worker.gen || g_worker.quit) {
+            wpjob_free(job);
+            continue;
+        }
+
+        wl_list_insert(&g_worker.completed, &job->link);
+        (void)!write(g_worker.wake_pipe[1], "x", 1);
+    }
+
+    pthread_mutex_unlock(&g_worker.mutex);
+    return NULL;
+}
+
 struct wallpaper_buffer {
     struct wlr_buffer base;
     uint8_t *data;
@@ -558,10 +708,9 @@ static bool wallpaper_buffer_begin_data_ptr_access(
     struct wlr_buffer *wlr_buffer, uint32_t flags, void **data,
     uint32_t *format, size_t *stride
 ) {
-    struct wallpaper_buffer *buf = wl_container_of(wlr_buffer, buf, base);
-
     (void)flags;
 
+    struct wallpaper_buffer *buf = wl_container_of(wlr_buffer, buf, base);
     *data = buf->data;
     *format = DRM_FORMAT_XRGB8888;
     *stride = buf->stride;
@@ -600,11 +749,35 @@ static struct wallpaper_buffer *wallpaper_buffer_create(int w, int h) {
     return buf;
 }
 
+bool wallpaper_blur_wanted(void) {
+    if (!wm.wallpaper.blur_enabled) return false;
+
+    struct Window *w;
+    wl_list_for_each(w, &wm.windows, link) {
+        if (w->closed) continue;
+        if (w->space_hidden) continue;
+        if (w->space != wm.current_space) continue;
+        return true;
+    }
+
+    return false;
+}
+
+static void wpo_free_cache(struct WallpaperOutput *wpo) {
+    free(wpo->cached_sharp);
+    wpo->cached_sharp = NULL;
+    free(wpo->cached_blurred);
+    wpo->cached_blurred = NULL;
+    wpo->drawn_valid = false;
+}
+
 static void wpo_record_state(struct WallpaperOutput *wpo) {
     wpo->drawn_valid = true;
     wpo->drawn_w = wpo->width;
     wpo->drawn_h = wpo->height;
     wpo->drawn_loaded = g_wallpaper.loaded;
+    wpo->drawn_blur_active = wallpaper_blur_wanted();
+    wpo->drawn_blur_enabled = wm.wallpaper.blur_enabled;
 
     wpo->drawn_pattern_bg_r = wm.wallpaper.pattern_bg_r;
     wpo->drawn_pattern_bg_g = wm.wallpaper.pattern_bg_g;
@@ -614,52 +787,213 @@ static void wpo_record_state(struct WallpaperOutput *wpo) {
     wpo->drawn_pattern_dot_b = wm.wallpaper.pattern_dot_b;
     wpo->drawn_pattern_grid_spacing = wm.wallpaper.pattern_grid_spacing;
     wpo->drawn_pattern_dot_radius = wm.wallpaper.pattern_dot_radius;
-}
-
-static bool wpo_up_to_date(const struct WallpaperOutput *wpo) {
-    if (!wpo->drawn_valid || wpo->drawn_loaded != g_wallpaper.loaded) {
-        return false;
-    }
-
-    if (g_wallpaper.loaded) return true;
-
-    return wpo->drawn_pattern_bg_r == wm.wallpaper.pattern_bg_r
-        && wpo->drawn_pattern_bg_g == wm.wallpaper.pattern_bg_g
-        && wpo->drawn_pattern_bg_b == wm.wallpaper.pattern_bg_b
-        && wpo->drawn_pattern_dot_r == wm.wallpaper.pattern_dot_r
-        && wpo->drawn_pattern_dot_g == wm.wallpaper.pattern_dot_g
-        && wpo->drawn_pattern_dot_b == wm.wallpaper.pattern_dot_b
-        && wpo->drawn_pattern_grid_spacing == wm.wallpaper.pattern_grid_spacing
-        && wpo->drawn_pattern_dot_radius == wm.wallpaper.pattern_dot_radius;
+    wpo->drawn_blur_radius = wm.wallpaper.blur_radius;
+    wpo->drawn_blur_passes = wm.wallpaper.blur_passes;
 }
 
 static void wpo_redraw(struct WallpaperOutput *wpo) {
-    int w = wpo->width;
-    int h = wpo->height;
+    if (wpo->cached_sharp == NULL || wpo->cached_blurred == NULL) return;
+    if (wpo->width <= 0 || wpo->height <= 0) return;
 
-    wpo_record_state(wpo);
+    struct wallpaper_buffer *buf =
+        wallpaper_buffer_create(wpo->width, wpo->height);
+    if (buf == NULL) return;
 
-    struct wallpaper_buffer *buf = wallpaper_buffer_create(w, h);
-    if (buf == NULL) {
-        log_warn("Failed to allocate %dx%d wallpaper buffer", w, h);
-        return;
-    }
-
-    if (!g_wallpaper.loaded
-        || !scale_cover(
-            g_wallpaper.image_pixels, g_wallpaper.image_width,
-            g_wallpaper.image_height, buf->data, w, h
-        )) {
-        paint_default_pattern(buf->data, w, h);
+    size_t image_size = (size_t)wpo->width * (size_t)wpo->height * 4;
+    if (wallpaper_blur_wanted()) {
+        memcpy(buf->data, wpo->cached_blurred, image_size);
+    } else {
+        memcpy(buf->data, wpo->cached_sharp, image_size);
     }
 
     wlr_scene_buffer_set_buffer(wpo->scene_buffer, &buf->base);
     wlr_buffer_drop(&buf->base);
 
     pixman_region32_t opaque;
-    pixman_region32_init_rect(&opaque, 0, 0, (unsigned)w, (unsigned)h);
+    pixman_region32_init_rect(
+        &opaque, 0, 0, (unsigned)wpo->width, (unsigned)wpo->height
+    );
+
     wlr_scene_buffer_set_opaque_region(wpo->scene_buffer, &opaque);
     pixman_region32_fini(&opaque);
+
+    wpo_record_state(wpo);
+}
+
+static void apply_job(struct WpJob *job) {
+    struct WallpaperOutput *wpo = job->wpo;
+
+    if (wpo == NULL || job->sharp == NULL || job->blurred == NULL
+        || wpo->width != job->width || wpo->height != job->height) {
+        wpjob_free(job);
+        return;
+    }
+
+    free(wpo->cached_sharp);
+    wpo->cached_sharp = job->sharp;
+    job->sharp = NULL;
+
+    free(wpo->cached_blurred);
+    wpo->cached_blurred = job->blurred;
+    job->blurred = NULL;
+
+    wpo->drawn_valid = false;
+    wpo_redraw(wpo);
+    wpjob_free(job);
+}
+
+static int on_worker_wake(int fd, uint32_t mask, void *data) {
+    (void)mask;
+    (void)data;
+
+    char buf[64];
+    while (read(fd, buf, sizeof(buf)) > 0) {}
+
+    pthread_mutex_lock(&g_worker.mutex);
+
+    struct WpJob *job, *tmp;
+    wl_list_for_each_safe(job, tmp, &g_worker.completed, link) {
+        wl_list_remove(&job->link);
+        pthread_mutex_unlock(&g_worker.mutex);
+        apply_job(job);
+        pthread_mutex_lock(&g_worker.mutex);
+    }
+
+    pthread_mutex_unlock(&g_worker.mutex);
+
+    return 0;
+}
+
+void wallpaper_worker_init(void) {
+    if (g_worker.started) return;
+    if (server.event_loop == NULL) return;
+
+    wl_list_init(&g_worker.pending);
+    wl_list_init(&g_worker.completed);
+
+    if (pipe(g_worker.wake_pipe) < 0) {
+        log_err("pipe() failed: %s", strerror(errno));
+        return;
+    }
+
+    fcntl(g_worker.wake_pipe[0], F_SETFL, O_NONBLOCK);
+    fcntl(g_worker.wake_pipe[1], F_SETFL, O_NONBLOCK);
+
+    g_worker.wake_source = wl_event_loop_add_fd(
+        server.event_loop, g_worker.wake_pipe[0], WL_EVENT_READABLE,
+        on_worker_wake, NULL
+    );
+
+    if (g_worker.wake_source == NULL) {
+        log_err("Failed to register wake source");
+        close(g_worker.wake_pipe[0]);
+        close(g_worker.wake_pipe[1]);
+        g_worker.wake_pipe[0] = g_worker.wake_pipe[1] = -1;
+        return;
+    }
+
+    if (pthread_create(&g_worker.thread, NULL, worker_main, NULL) != 0) {
+        log_err("pthread_create failed");
+        wl_event_source_remove(g_worker.wake_source);
+        g_worker.wake_source = NULL;
+        close(g_worker.wake_pipe[0]);
+        close(g_worker.wake_pipe[1]);
+        g_worker.wake_pipe[0] = g_worker.wake_pipe[1] = -1;
+        return;
+    }
+
+    g_worker.started = true;
+}
+
+void wallpaper_worker_finish(void) {
+    if (!g_worker.started) return;
+
+    pthread_mutex_lock(&g_worker.mutex);
+    g_worker.quit = true;
+    pthread_cond_signal(&g_worker.cond);
+    pthread_mutex_unlock(&g_worker.mutex);
+
+    pthread_join(g_worker.thread, NULL);
+
+    struct WpJob *job, *tmp;
+    wl_list_for_each_safe(job, tmp, &g_worker.pending, link) {
+        wl_list_remove(&job->link);
+        wpjob_free(job);
+    }
+    wl_list_for_each_safe(job, tmp, &g_worker.completed, link) {
+        wl_list_remove(&job->link);
+        wpjob_free(job);
+    }
+
+    if (g_worker.wake_source != NULL) {
+        wl_event_source_remove(g_worker.wake_source);
+        g_worker.wake_source = NULL;
+    }
+    if (g_worker.wake_pipe[0] >= 0) close(g_worker.wake_pipe[0]);
+    if (g_worker.wake_pipe[1] >= 0) close(g_worker.wake_pipe[1]);
+    g_worker.wake_pipe[0] = g_worker.wake_pipe[1] = -1;
+
+    g_worker.started = false;
+    g_worker.quit = false;
+    g_worker.gen = 0;
+}
+
+static void wpo_enqueue_rebuild(struct WallpaperOutput *wpo) {
+    if (!g_worker.started) return;
+    if (wpo->width <= 0 || wpo->height <= 0) return;
+
+    struct WpJob *job = calloc(1, sizeof(*job));
+    if (job == NULL) return;
+
+    job->wpo = wpo;
+    job->width = wpo->width;
+    job->height = wpo->height;
+
+    if (g_wallpaper.loaded && g_wallpaper.image_pixels != NULL) {
+        size_t sz = (size_t)g_wallpaper.image_width
+                  * (size_t)g_wallpaper.image_height * 4;
+        job->src = malloc(sz);
+        if (job->src != NULL) {
+            memcpy(job->src, g_wallpaper.image_pixels, sz);
+            job->src_w = g_wallpaper.image_width;
+            job->src_h = g_wallpaper.image_height;
+            job->src_loaded = true;
+        }
+    }
+
+    job->pattern_bg_r = wm.wallpaper.pattern_bg_r;
+    job->pattern_bg_g = wm.wallpaper.pattern_bg_g;
+    job->pattern_bg_b = wm.wallpaper.pattern_bg_b;
+    job->pattern_dot_r = wm.wallpaper.pattern_dot_r;
+    job->pattern_dot_g = wm.wallpaper.pattern_dot_g;
+    job->pattern_dot_b = wm.wallpaper.pattern_dot_b;
+    job->pattern_grid_spacing = wm.wallpaper.pattern_grid_spacing;
+    job->pattern_dot_radius = wm.wallpaper.pattern_dot_radius;
+    job->blur_radius = wm.wallpaper.blur_radius;
+    job->blur_passes = wm.wallpaper.blur_passes;
+    job->blur_enabled = wm.wallpaper.blur_enabled;
+
+    pthread_mutex_lock(&g_worker.mutex);
+
+    struct WpJob *j, *tmp;
+    wl_list_for_each_safe(j, tmp, &g_worker.pending, link) {
+        if (j->wpo == wpo) {
+            wl_list_remove(&j->link);
+            wpjob_free(j);
+        }
+    }
+    wl_list_for_each_safe(j, tmp, &g_worker.completed, link) {
+        if (j->wpo == wpo) {
+            wl_list_remove(&j->link);
+            wpjob_free(j);
+        }
+    }
+
+    job->gen = g_worker.gen;
+    wl_list_insert(g_worker.pending.prev, &job->link);
+    pthread_cond_signal(&g_worker.cond);
+
+    pthread_mutex_unlock(&g_worker.mutex);
 }
 
 bool wallpaper_load_image(const char *path) {
@@ -689,52 +1023,43 @@ bool wallpaper_load_image(const char *path) {
 }
 
 void wallpaper_invalidate_all(void) {
+    if (!g_worker.started) return;
+
+    pthread_mutex_lock(&g_worker.mutex);
+    g_worker.gen++;
+
+    struct WpJob *job, *tmp;
+    wl_list_for_each_safe(job, tmp, &g_worker.pending, link) {
+        wl_list_remove(&job->link);
+        wpjob_free(job);
+    }
+
+    wl_list_for_each_safe(job, tmp, &g_worker.completed, link) {
+        wl_list_remove(&job->link);
+        wpjob_free(job);
+    }
+
+    pthread_mutex_unlock(&g_worker.mutex);
+
     struct WallpaperOutput *wpo;
     wl_list_for_each(wpo, &g_wallpaper.outputs, link) {
         wpo->drawn_valid = false;
+        wpo_enqueue_rebuild(wpo);
     }
 }
 
-bool wallpaper_blur_wanted(void) {
-    if (!wm.wallpaper.blur_enabled) return false; // TODO move earlier?
+void wallpaper_finish(void) {
+    wallpaper_worker_finish();
 
-    struct Window *w;
-    wl_list_for_each(w, &wm.windows, link) {
-        if (w->closed) continue;
-        if (w->space_hidden) continue;
-        if (w->space != wm.current_space) continue;
-
-        return true;
+    if (!wl_list_empty(&g_wallpaper.outputs)) {
+        log_warn("wallpaper_finish with live outputs");
     }
 
-    return false;
-}
-
-static void wpo_sync_blur(struct WallpaperOutput *wpo, struct Output *output) {
-    if (!wallpaper_blur_wanted()) {
-        if (wpo->blur != NULL) {
-            wlr_scene_node_destroy(&wpo->blur->node);
-            wpo->blur = NULL;
-        }
-
-        return;
-    }
-
-    if (output->width <= 0 || output->height <= 0) return;
-
-    if (wpo->blur == NULL) {
-        wpo->blur = wlr_scene_blur_create(
-            server.wallpaper_blur_tree, output->width, output->height
-        );
-
-        if (wpo->blur == NULL) return;
-
-        wlr_scene_blur_set_strength(wpo->blur, CFG_BLUR_STRENGTH);
-        wlr_scene_blur_set_alpha(wpo->blur, CFG_BLUR_ALPHA);
-    }
-
-    wlr_scene_node_set_position(&wpo->blur->node, output->pos_x, output->pos_y);
-    wlr_scene_blur_set_size(wpo->blur, output->width, output->height);
+    free(g_wallpaper.image_pixels);
+    g_wallpaper.image_pixels = NULL;
+    g_wallpaper.image_width = 0;
+    g_wallpaper.image_height = 0;
+    g_wallpaper.loaded = false;
 }
 
 struct WallpaperOutput *wallpaper_output_create(struct Output *output) {
@@ -756,18 +1081,34 @@ struct WallpaperOutput *wallpaper_output_create(struct Output *output) {
     );
 
     wl_list_insert(&g_wallpaper.outputs, &wpo->link);
-    wpo_sync_blur(wpo, output);
-
     return wpo;
 }
 
 void wallpaper_output_destroy(struct WallpaperOutput *wpo) {
     if (wpo == NULL) return;
 
-    if (wpo->blur != NULL) {
-        wlr_scene_node_destroy(&wpo->blur->node);
-        wpo->blur = NULL;
+    if (g_worker.started) {
+        pthread_mutex_lock(&g_worker.mutex);
+        struct WpJob *j, *tmp;
+        wl_list_for_each_safe(j, tmp, &g_worker.pending, link) {
+            if (j->wpo == wpo) {
+                wl_list_remove(&j->link);
+                wpjob_free(j);
+            }
+        }
+
+        wl_list_for_each_safe(j, tmp, &g_worker.completed, link) {
+            if (j->wpo == wpo) {
+                wl_list_remove(&j->link);
+                wpjob_free(j);
+            }
+        }
+
+        pthread_mutex_unlock(&g_worker.mutex);
     }
+
+    free(wpo->cached_sharp);
+    free(wpo->cached_blurred);
 
     if (wpo->scene_buffer != NULL) {
         wlr_scene_node_destroy(&wpo->scene_buffer->node);
@@ -777,6 +1118,39 @@ void wallpaper_output_destroy(struct WallpaperOutput *wpo) {
     free(wpo);
 }
 
+static bool wpo_needs_rebuild(const struct WallpaperOutput *wpo) {
+    if (wpo->cached_sharp == NULL || wpo->cached_blurred == NULL) return true;
+    if (wpo->drawn_w != wpo->width || wpo->drawn_h != wpo->height) return true;
+    if (wpo->drawn_loaded != g_wallpaper.loaded) return true;
+
+    if (!g_wallpaper.loaded) {
+        if (wpo->drawn_pattern_bg_r != wm.wallpaper.pattern_bg_r) return true;
+        if (wpo->drawn_pattern_bg_g != wm.wallpaper.pattern_bg_g) return true;
+        if (wpo->drawn_pattern_bg_b != wm.wallpaper.pattern_bg_b) return true;
+        if (wpo->drawn_pattern_dot_r != wm.wallpaper.pattern_dot_r) return true;
+        if (wpo->drawn_pattern_dot_g != wm.wallpaper.pattern_dot_g) return true;
+        if (wpo->drawn_pattern_dot_b != wm.wallpaper.pattern_dot_b) return true;
+        if (wpo->drawn_pattern_grid_spacing
+            != wm.wallpaper.pattern_grid_spacing)
+            return true;
+
+        if (wpo->drawn_pattern_dot_radius != wm.wallpaper.pattern_dot_radius)
+            return true;
+    }
+
+    if (wpo->drawn_blur_radius != wm.wallpaper.blur_radius) return true;
+    if (wpo->drawn_blur_passes != wm.wallpaper.blur_passes) return true;
+    if (wpo->drawn_blur_enabled != wm.wallpaper.blur_enabled) return true;
+
+    return false;
+}
+
+static bool wpo_needs_redraw(const struct WallpaperOutput *wpo) {
+    if (wpo->cached_sharp == NULL || wpo->cached_blurred == NULL) return false;
+    if (!wpo->drawn_valid) return true;
+    return wpo->drawn_blur_active != wallpaper_blur_wanted();
+}
+
 static void wpo_update(struct WallpaperOutput *wpo) {
     struct Output *output = wpo->output;
     if (output->width <= 0 || output->height <= 0) return;
@@ -784,16 +1158,18 @@ static void wpo_update(struct WallpaperOutput *wpo) {
     if (wpo->width != output->width || wpo->height != output->height) {
         wpo->width = output->width;
         wpo->height = output->height;
-        wpo->drawn_valid = false;
+        wpo_free_cache(wpo);
     }
 
     wlr_scene_node_set_position(
         &wpo->scene_buffer->node, output->pos_x, output->pos_y
     );
 
-    wpo_sync_blur(wpo, output);
-
-    if (!wpo_up_to_date(wpo)) wpo_redraw(wpo);
+    if (wpo_needs_rebuild(wpo)) {
+        wpo_enqueue_rebuild(wpo);
+    } else if (wpo_needs_redraw(wpo)) {
+        wpo_redraw(wpo);
+    }
 }
 
 void wallpaper_update_all(void) {
