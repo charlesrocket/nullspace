@@ -1,7 +1,9 @@
+#include "config.h"
 #include "ipc.h"
 #include "keymap.h"
 #include "log.h"
 #include "manager.h"
+#include "seat.h"
 #include "server.h"
 #ifdef WALLPAPER
 #include "wallpaper.h"
@@ -31,6 +33,13 @@
 #endif
 
 #define LOG_TOPIC ""
+
+static void spawn_startup(void *d) {
+    // TODO
+    (void)d;
+
+    seat_spawn((const char *const[]){CFG_CMD_START});
+}
 
 static void create_default_output(struct wlr_backend *backend, void *data) {
     bool *done = data;
@@ -126,6 +135,7 @@ int main(int argc, char *argv[]) {
         if (!created) log_info("No default output requested");
     }
 
+    wl_event_loop_add_idle(server.event_loop, spawn_startup, NULL);
     log_info("Entering event loop");
     wl_display_run(display);
 

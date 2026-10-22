@@ -19,6 +19,8 @@
 #define CFG_CENTER_OVERSPREAD        false
 #define CFG_CENTER_WHEN_SINGLE_STACK true
 
+#define CFG_CMD_START                "desktop-startup", NULL
+
 #define CFG_CMD_TERMINAL             "foot", NULL
 
 #define CFG_CMD_F1                   "thunar", NULL
