@@ -63,7 +63,7 @@ void output_create(struct wlr_output *wlr_output) {
     if (!wlr_output_init_render(
             wlr_output, server.allocator, server.renderer
         )) {
-        wlr_log(WLR_ERROR, "Failed to init render");
+        log_warn("Failed to init render");
 
         return;
     }
@@ -155,20 +155,16 @@ static void output_handle_frame(struct wl_listener *l, void *data) {
     if (wm.layout_dirty) {
         wm.layout_dirty = false;
         layout_apply();
-
 #ifdef WALLPAPER
-        // wallpaper_update_output(out);
         wallpaper_update_all();
 #endif
     }
 
     wm_animation_tick_all();
 
-    if (!wlr_scene_output_commit(out->scene_output, NULL)) {
-        log_warn("Scene commit failed on %s", out->wlr_output->name);
-    } else {
-        session_lock_output_committed(out);
-    }
+    if (!wlr_scene_output_commit(out->scene_output, NULL)) { return; }
+
+    session_lock_output_committed(out);
 
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
