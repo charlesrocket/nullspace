@@ -23,6 +23,7 @@ void seat_init(void);
 void seat_handle_new_input(struct wlr_input_device *device);
 void seat_focus(struct Window *window);
 void seat_spawn(const void *arg);
+void seat_spawn_shell(const char *cmdline);
 void seat_foreach_input_device(
     void (*fn)(struct wlr_input_device *, void *), void *data
 );

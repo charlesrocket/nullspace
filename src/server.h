@@ -21,11 +21,12 @@
 #include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/types/wlr_xdg_shell.h>
 
+struct wlr_output_power_manager_v1;
+struct wlr_xdg_activation_v1;
 struct wlr_ext_foreign_toplevel_list_v1;
 struct wlr_foreign_toplevel_manager_v1;
 struct wlr_idle_inhibit_manager_v1;
 struct wlr_idle_notifier_v1;
-struct wlr_output_power_manager_v1;
 struct wlr_xwayland;
 
 struct Window;
@@ -58,15 +59,16 @@ struct NsServer {
     struct wlr_scene_tree *lock_tree;
     struct wlr_scene_rect *lock_bg;
 
+    struct wlr_layer_shell_v1 *layer_shell;
+
+    struct wlr_xdg_activation_v1 *xdg_activation;
     struct wlr_xdg_shell *xdg_shell;
+    struct wlr_xdg_decoration_manager_v1 *xdg_decoration;
+
     struct wl_listener new_xdg_toplevel;
     struct wl_listener new_xdg_popup;
-
-    struct wlr_xdg_decoration_manager_v1 *xdg_decoration;
-    struct wl_listener new_xdg_decoration;
-
-    struct wlr_layer_shell_v1 *layer_shell;
     struct wl_listener new_layer_surface;
+    struct wl_listener new_xdg_decoration;
 
     struct wlr_seat *seat;
 

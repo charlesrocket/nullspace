@@ -19,7 +19,7 @@
 #define CFG_CENTER_OVERSPREAD        false
 #define CFG_CENTER_WHEN_SINGLE_STACK true
 
-#define CFG_CMD_START                "desktop-startup", NULL
+#define CFG_CMD_START                "desktop-startup", NULL // startup script
 
 #define CFG_CMD_TERMINAL             "foot", NULL
 
@@ -48,11 +48,15 @@
 #define CFG_MOD_SHIFT               WLR_MODIFIER_SHIFT // Shift key
 
 #define CFG_FOCUS_FOLLOW            true // focus follows the cursor
+#define CFG_FOCUS_ON_ACTIVATE       true
 
 #define CFG_BIND(MODS, KEY, ACTION) {MODS, KEY, ACTION, NULL},
 
 #define CFG_SPAWN_BIND(MODS, KEY, CMD)                                         \
     {MODS, KEY, ACTION_SPAWN, (const char *const[]){CMD}},
+
+#define CFG_SPAWN_SHELL_BIND(MODS, KEY, CMD)                                   \
+    {MODS, KEY, ACTION_SPAWN_SHELL, (CMD)},
 
 // Spaces key
 #define CFG_SPACEKEY(KEY, N)                                                   \

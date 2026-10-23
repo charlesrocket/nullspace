@@ -6,6 +6,7 @@
 #include "layouts/layout.h"
 #include "manager.h"
 #include "server.h"
+#include "spawn.h"
 #include "src/actions.h"
 #include "window.h"
 
@@ -53,31 +54,14 @@ void seat_foreach_input_device(
 }
 
 void seat_init(void) { wl_list_init(&input_devices); }
-
-void seat_spawn(const void *arg) {
-    const char *const *argv = arg;
-
-    pid_t pid = fork();
-    if (pid == 0) {
-        setsid();
-
-        int devnull = open("/dev/null", O_RDWR);
-        if (devnull >= 0) {
-            dup2(devnull, STDIN_FILENO);
-            dup2(devnull, STDOUT_FILENO);
-            dup2(devnull, STDERR_FILENO);
-            if (devnull > STDERR_FILENO) close(devnull);
-        }
-
-        execvp(argv[0], (char *const *)argv);
-        _exit(127);
-    }
-}
+void seat_spawn(const void *arg) { spawn((const char *const *)arg); }
+void seat_spawn_shell(const char *cmdline) { spawn_shell(cmdline); }
 
 static void seat_action(enum Action action, const void *arg) {
     switch (action) {
         case ACTION_NONE: break;
         case ACTION_SPAWN: seat_spawn(arg); break;
+        case ACTION_SPAWN_SHELL: seat_spawn_shell((const char *)arg); break;
         case ACTION_CLOSE:
             {
                 struct Window *focused = window_focused();

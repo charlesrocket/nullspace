@@ -22,6 +22,7 @@
 #include <wlr/types/wlr_ext_foreign_toplevel_list_v1.h>
 #include <wlr/types/wlr_foreign_toplevel_management_v1.h>
 #include <wlr/types/wlr_output.h>
+#include <wlr/types/wlr_xdg_activation_v1.h>
 #include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/util/edges.h>
 #include <wlr/util/log.h>
@@ -265,6 +266,10 @@ static void wlr_handle_create(struct Window *window) {
         );
     }
 
+    wlr_foreign_toplevel_handle_v1_set_app_id(
+        window->wlr_handle, window_app_id(window)
+    );
+
     window->wlr_request_activate.notify = wlr_handle_request_activate;
     wl_signal_add(
         &window->wlr_handle->events.request_activate,
@@ -334,6 +339,11 @@ static void window_do_map(struct Window *window) {
     window->mapped = true;
 
     window_apply_rules(window);
+
+    if (!window->space_hidden && window->space != wm.current_space) {
+        wm_switch_space(window->space);
+    }
+
     wlr_handle_create(window);
     foreign_handle_create(window);
     wm_mark_layout_dirty();

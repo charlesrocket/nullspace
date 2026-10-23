@@ -5,6 +5,7 @@
 #include "manager.h"
 #include "seat.h"
 #include "server.h"
+#include "spawn.h"
 #ifdef WALLPAPER
 #include "wallpaper.h"
 #endif
@@ -140,6 +141,8 @@ int main(int argc, char *argv[]) {
     wl_display_run(display);
 
     log_info("Shutting down");
+
+    wl_display_destroy_clients(display);
     ipc_destroy();
 
 #ifdef XWAYLAND
@@ -147,9 +150,7 @@ int main(int argc, char *argv[]) {
 #endif
 
     server_detach_listeners();
-
     wlr_backend_destroy(server.backend);
-    wl_display_destroy_clients(display);
 
     server_finish();
     keymap_destroy();

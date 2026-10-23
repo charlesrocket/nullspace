@@ -1,5 +1,6 @@
 #include "server.h"
 
+#include "activation.h"
 #include "background.h"
 #include "cursor.h"
 #include "input.h"
@@ -164,7 +165,6 @@ int server_init(struct wl_display *display) {
     wlr_data_device_manager_create(display);
     wlr_data_control_manager_v1_create(display);
     wlr_viewporter_create(display);
-    wlr_xdg_activation_v1_create(display);
     wlr_relative_pointer_manager_v1_create(display);
     wlr_pointer_constraints_v1_create(display);
     wlr_server_decoration_manager_create(display);
@@ -310,6 +310,14 @@ int server_init(struct wl_display *display) {
 
     seat_init();
 
+    server.xdg_activation = wlr_xdg_activation_v1_create(display);
+    if (server.xdg_activation == NULL) {
+        log_err("Failed to create xdg-activation global");
+        return -1;
+    }
+
+    activation_init(server.xdg_activation);
+
     if (!wlr_backend_start(server.backend)) {
         log_err("failed to start wlroots backend");
         return -1;
@@ -340,6 +348,7 @@ void server_detach_listeners(void) {
     wl_list_remove(&server.output_power_set_mode.link);
     wl_list_remove(&server.new_idle_inhibitor.link);
 
+    activation_finish();
     session_lock_detach_listeners();
 }
 
