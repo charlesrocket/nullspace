@@ -47,15 +47,43 @@ consume_exclusive(struct wlr_layer_surface_v1 *layer, struct wlr_box *box) {
 
     switch (edge) {
         case WLR_EDGE_TOP:
-            box->y += zone + state->margin.top;
-            box->height -= zone + state->margin.top;
-            break;
-        case WLR_EDGE_BOTTOM: box->height -= zone + state->margin.bottom; break;
+            {
+                int32_t off = zone > (int32_t)state->margin.top
+                                ? zone
+                                : (int32_t)state->margin.top;
+
+                box->y += off;
+                box->height -= off;
+                break;
+            }
+        case WLR_EDGE_BOTTOM:
+            {
+                int32_t off = zone > (int32_t)state->margin.bottom
+                                ? zone
+                                : (int32_t)state->margin.bottom;
+
+                box->height -= off;
+                break;
+            }
         case WLR_EDGE_LEFT:
-            box->x += zone + state->margin.left;
-            box->width -= zone + state->margin.left;
-            break;
-        case WLR_EDGE_RIGHT: box->width -= zone + state->margin.right; break;
+            {
+                int32_t off = zone > (int32_t)state->margin.left
+                                ? zone
+                                : (int32_t)state->margin.left;
+
+                box->x += off;
+                box->width -= off;
+                break;
+            }
+        case WLR_EDGE_RIGHT:
+            {
+                int32_t off = zone > (int32_t)state->margin.right
+                                ? zone
+                                : (int32_t)state->margin.right;
+
+                box->width -= off;
+                break;
+            }
         default: break;
     }
 
@@ -79,35 +107,35 @@ static struct wlr_box layer_bounds_for(struct LayerSurface *ls) {
 
     if (state->exclusive_zone == 0) {
         struct wlr_box box = full;
-        struct LayerSurface *it;
-
-        wl_list_for_each(it, &wm.layer_surfaces, link) {
-            if (it->output != o || !it->mapped) continue;
-            consume_exclusive(it->layer_surface, &box);
+        for (int i = 3; i >= 0; i--) {
+            struct LayerSurface *it;
+            wl_list_for_each(it, &wm.layer_surfaces, link) {
+                if (it->output != o || !it->mapped) continue;
+                if (it->layer_surface->current.layer != (uint32_t)i) continue;
+                consume_exclusive(it->layer_surface, &box);
+            }
         }
 
         return box;
     }
 
     struct wlr_box box = full;
-    const uint32_t target = ls->layer_surface->current.layer;
     bool reached = false;
 
     for (int i = 3; i >= 0 && !reached; i--) {
         struct LayerSurface *it;
         wl_list_for_each(it, &wm.layer_surfaces, link) {
+            if (it->layer_surface->current.layer != (uint32_t)i) continue;
+            if (it->output != o || !it->mapped) continue;
             if (it == ls) {
                 reached = true;
                 break;
             }
 
-            if (it->output != o || !it->mapped) continue;
-            if (it->layer_surface->current.layer != (uint32_t)i) continue;
             consume_exclusive(it->layer_surface, &box);
         }
     }
 
-    (void)target;
     return box;
 }
 
@@ -121,10 +149,13 @@ static void update_output_usable_area(struct Output *o) {
         .height = o->height,
     };
 
-    struct LayerSurface *ls;
-    wl_list_for_each(ls, &wm.layer_surfaces, link) {
-        if (ls->output != o || !ls->mapped) continue;
-        consume_exclusive(ls->layer_surface, &box);
+    for (int i = 3; i >= 0; i--) {
+        struct LayerSurface *ls;
+        wl_list_for_each(ls, &wm.layer_surfaces, link) {
+            if (ls->output != o || !ls->mapped) continue;
+            if (ls->layer_surface->current.layer != (uint32_t)i) continue;
+            consume_exclusive(ls->layer_surface, &box);
+        }
     }
 
     int32_t w = box.width > 0 ? box.width : 1;
