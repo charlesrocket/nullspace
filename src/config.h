@@ -7,11 +7,12 @@
 
 #define CFG_DEFAULT_LAYOUT           LAYOUT_VERTICAL_TILE
 
-#define CFG_GAP_OUTER_H              8
-#define CFG_GAP_OUTER_V              8
-#define CFG_GAP_INNER_H              8
-#define CFG_GAP_INNER_V              8
+#define CFG_GAPS                     8
 #define CFG_SMART_GAPS               false
+#define CFG_GAP_OUTER_H              CFG_GAPS
+#define CFG_GAP_OUTER_V              CFG_GAPS
+#define CFG_GAP_INNER_H              CFG_GAPS
+#define CFG_GAP_INNER_V              CFG_GAPS
 
 #define CFG_NMASTERS                 2
 #define CFG_MFACT                    0.5f
