@@ -12,6 +12,7 @@
 #include "popup.h"
 #include "seat.h"
 #include "session.h"
+#include "space.h"
 #include "window.h"
 #ifdef WALLPAPER
 #include "wallpaper.h"
@@ -265,9 +266,11 @@ int server_init(struct wl_display *display) {
     wl_list_init(&server.outputs);
     wl_list_init(&server.keyboards);
 
+    if (!ext_workspace_init(display)) { log_warn("ext-workspace unavailable"); }
+
     server.layer_shell = wlr_layer_shell_v1_create(display, 4);
     if (server.layer_shell == NULL) {
-        log_err("failed to create layer-shell global");
+        log_err("Failed to create layer-shell global");
         return -1;
     }
 
@@ -360,6 +363,7 @@ void server_finish(void) {
     wallpaper_finish();
 #endif
     background_effect_finish();
+    ext_workspace_finish();
 
     if (server.cursor_mgr) wlr_xcursor_manager_destroy(server.cursor_mgr);
     if (server.cursor) wlr_cursor_destroy(server.cursor);

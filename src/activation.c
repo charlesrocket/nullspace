@@ -134,10 +134,18 @@ static void handle_request_activate(struct wl_listener *l, void *data) {
             if (window->space != wm.current_space) {
                 wm_switch_space(window->space);
             }
+
             seat_focus(window);
         } else {
+            if (window->space != wm.current_space) {
+                wm_mark_space_urgent(window->space);
+            }
+
             log_debug("Suppressed by config");
         }
+    } else if (window != NULL && !window->closed && window->mapped
+               && window->space != wm.current_space) {
+        wm_mark_space_urgent(window->space);
     }
 
     ev->token->data = NULL;

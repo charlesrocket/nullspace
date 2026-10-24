@@ -39,6 +39,9 @@ struct IpcKeyMeta {
         "space_window_count", IPC_A_R, NULL,                                   \
         "window count on a space (arg: index)"                                 \
     )                                                                          \
+    K_SPECIAL(                                                                 \
+        "space_urgent", IPC_A_R, NULL, "urgent state on a space (arg: index)"  \
+    )                                                                          \
     K_SPECIAL("focused_title", IPC_A_R, NULL, "title of focused window")       \
     K_SPECIAL("focused_app_id", IPC_A_R, NULL, "app_id of focused window")     \
     K_SPECIAL("mfact", IPC_A_RW, "0.0,1", "master area factor")                \

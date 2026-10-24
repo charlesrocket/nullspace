@@ -5,6 +5,7 @@
 #include "manager.h"
 #include "server.h"
 #include "session.h"
+#include "space.h"
 #ifdef WALLPAPER
 #include "wallpaper.h"
 #endif
@@ -117,6 +118,8 @@ void output_create(struct wlr_output *wlr_output) {
 
     wl_list_insert(&server.outputs, &out->link);
 
+    ext_workspace_output_enter(out);
+
     log_info(
         "Added %s (%dx%d @ %d,%d)", wlr_output->name, out->width, out->height,
         out->pos_x, out->pos_y
@@ -203,6 +206,8 @@ void output_destroy(struct Output *out) {
     wl_list_remove(&out->request_state.link);
     wl_list_remove(&out->destroy.link);
     wl_list_remove(&out->link);
+
+    ext_workspace_output_leave(out);
 
     if (out->scene_output != NULL) {
         wlr_scene_output_destroy(out->scene_output);

@@ -8,6 +8,7 @@
 #include "rules.h"
 #include "seat.h"
 #include "server.h"
+#include "space.h"
 #include "window.h"
 
 #include <nullspace/layouts.h>
@@ -30,6 +31,15 @@ void wm_mark_layout_dirty(void) {
     struct Output *o;
     wl_list_for_each(o, &server.outputs, link)
         wlr_output_schedule_frame(o->wlr_output);
+}
+
+void wm_mark_space_urgent(int space) {
+    if (space < 0 || space >= SPACE_COUNT) return;
+    if (space == wm.current_space) return;
+    if (wm.space_urgent[space]) return;
+
+    wm.space_urgent[space] = true;
+    ext_workspace_update_states();
 }
 
 bool wm_animation_active(void) {
@@ -252,6 +262,9 @@ void wm_switch_space(int space) {
     }
 
     wm.current_space = space;
+    wm.space_urgent[space] = false;
+
+    ext_workspace_update_states();
 
     struct Window *top = wm_focus_stack_top();
     seat_focus(top);

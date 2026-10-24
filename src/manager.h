@@ -44,7 +44,7 @@ struct WindowManager {
     char *kb_layout;
 
     bool layout_dirty, rounded_corners, smart_gaps, center_overspread,
-        center_when_single_stack;
+        center_when_single_stack, space_urgent[SPACE_COUNT];
 };
 
 extern struct WindowManager wm;
@@ -55,6 +55,7 @@ void wm_switch_space(int space);
 void wm_move_window_to_space(struct Window *window, int space);
 void wm_set_kb_layout(const char *layout);
 void wm_mark_layout_dirty(void);
+void wm_mark_space_urgent(int space);
 void wm_assign_new_window_space(struct Window *window, int space);
 
 bool wm_animation_active(void);

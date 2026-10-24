@@ -14,6 +14,7 @@ src_files = files(
   'seat.c',
   'spawn.c',
   'server.c',
+  'space.c',
   'rules.c',
   'input.c',
   'output.c',
