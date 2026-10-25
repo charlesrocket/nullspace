@@ -38,6 +38,8 @@
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_output_power_management_v1.h>
 #include <wlr/types/wlr_pointer_constraints_v1.h>
+#include <wlr/types/wlr_primary_selection.h>
+#include <wlr/types/wlr_primary_selection_v1.h>
 #include <wlr/types/wlr_relative_pointer_v1.h>
 #include <wlr/types/wlr_screencopy_v1.h>
 #include <wlr/types/wlr_server_decoration.h>
@@ -67,6 +69,9 @@ static void handle_new_xdg_popup(struct wl_listener *l, void *data);
 static void handle_new_xdg_decoration(struct wl_listener *l, void *data);
 
 static void handle_request_set_selection(struct wl_listener *l, void *data);
+static void
+handle_request_set_primary_selection(struct wl_listener *l, void *data);
+
 static void handle_request_start_drag(struct wl_listener *l, void *data);
 static void handle_request_set_cursor(struct wl_listener *l, void *data);
 
@@ -165,6 +170,7 @@ int server_init(struct wl_display *display) {
     wlr_subcompositor_create(display);
     wlr_data_device_manager_create(display);
     wlr_data_control_manager_v1_create(display);
+    wlr_primary_selection_v1_device_manager_create(display);
     wlr_viewporter_create(display);
     wlr_relative_pointer_manager_v1_create(display);
     wlr_pointer_constraints_v1_create(display);
@@ -247,6 +253,21 @@ int server_init(struct wl_display *display) {
         &server.seat->events.request_set_selection,
         &server.request_set_selection
     );
+
+    server.request_set_selection.notify = handle_request_set_selection;
+    wl_signal_add(
+        &server.seat->events.request_set_selection,
+        &server.request_set_selection
+    );
+
+    server.request_set_primary_selection.notify =
+        handle_request_set_primary_selection;
+    wl_signal_add(
+        &server.seat->events.request_set_primary_selection,
+        &server.request_set_primary_selection
+    );
+
+    server.request_start_drag.notify = handle_request_start_drag;
 
     server.request_start_drag.notify = handle_request_start_drag;
     wl_signal_add(
@@ -344,6 +365,7 @@ void server_detach_listeners(void) {
     wl_list_remove(&server.cursor_frame.link);
 
     wl_list_remove(&server.request_set_selection.link);
+    wl_list_remove(&server.request_set_primary_selection.link);
     wl_list_remove(&server.request_start_drag.link);
     wl_list_remove(&server.request_set_cursor.link);
     wl_list_remove(&server.request_set_cursor_shape.link);
@@ -522,6 +544,14 @@ static void handle_request_set_selection(struct wl_listener *l, void *data) {
 
     struct wlr_seat_request_set_selection_event *ev = data;
     wlr_seat_set_selection(server.seat, ev->source, ev->serial);
+}
+
+static void
+handle_request_set_primary_selection(struct wl_listener *l, void *data) {
+    (void)l;
+
+    struct wlr_seat_request_set_primary_selection_event *ev = data;
+    wlr_seat_set_primary_selection(server.seat, ev->source, ev->serial);
 }
 
 static void handle_request_start_drag(struct wl_listener *l, void *data) {
