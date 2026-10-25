@@ -33,6 +33,7 @@
 #include <wlr/types/wlr_data_control_v1.h>
 #include <wlr/types/wlr_ext_foreign_toplevel_list_v1.h>
 #include <wlr/types/wlr_foreign_toplevel_management_v1.h>
+#include <wlr/types/wlr_fractional_scale_v1.h>
 #include <wlr/types/wlr_idle_inhibit_v1.h>
 #include <wlr/types/wlr_idle_notify_v1.h>
 #include <wlr/types/wlr_output.h>
@@ -170,6 +171,7 @@ int server_init(struct wl_display *display) {
     wlr_subcompositor_create(display);
     wlr_data_device_manager_create(display);
     wlr_data_control_manager_v1_create(display);
+    wlr_fractional_scale_manager_v1_create(display, 1);
     wlr_primary_selection_v1_device_manager_create(display);
     wlr_viewporter_create(display);
     wlr_relative_pointer_manager_v1_create(display);
@@ -247,12 +249,6 @@ int server_init(struct wl_display *display) {
     wl_signal_add(&server.cursor->events.axis, &server.cursor_axis);
     server.cursor_frame.notify = cursor_handle_frame;
     wl_signal_add(&server.cursor->events.frame, &server.cursor_frame);
-
-    server.request_set_selection.notify = handle_request_set_selection;
-    wl_signal_add(
-        &server.seat->events.request_set_selection,
-        &server.request_set_selection
-    );
 
     server.request_set_selection.notify = handle_request_set_selection;
     wl_signal_add(

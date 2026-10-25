@@ -5,13 +5,16 @@
 #include "popup.h"
 #include "seat.h"
 #include "server.h"
+#include "src/window.h"
 
+#include <math.h>
 #include <scenefx/types/wlr_scene.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <wayland-server-core.h>
 #include <wayland-util.h>
 #include <wlr-layer-shell-unstable-v1-protocol.h>
+#include <wlr/types/wlr_fractional_scale_v1.h>
 #include <wlr/types/wlr_layer_shell_v1.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/types/wlr_xdg_shell.h>
@@ -370,6 +373,14 @@ void layers_handle_new_surface(struct wl_listener *listener, void *data) {
     ls->layer_surface = layer;
     ls->output = output_for(layer);
     ls->node_tag.type = NODE_LAYER_SURFACE;
+
+    if (ls->output != NULL && ls->output->wlr_output != NULL) {
+        const double scale = (double)ls->output->wlr_output->scale;
+        wlr_fractional_scale_v1_notify_scale(layer->surface, scale);
+        wlr_surface_set_preferred_buffer_scale(
+            layer->surface, (int32_t)ceil(scale)
+        );
+    }
 
     struct wlr_scene_tree *parent = layer_tree_for(layer->pending.layer);
 
