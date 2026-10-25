@@ -165,15 +165,17 @@ static void output_handle_frame(struct wl_listener *l, void *data) {
 
     wm_animation_tick_all();
 
-    if (!wlr_scene_output_commit(out->scene_output, NULL)) { return; }
+    const bool committed = wlr_scene_output_commit(out->scene_output, NULL);
 
-    session_lock_output_committed(out);
+    if (committed) { session_lock_output_committed(out); }
 
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
     wlr_scene_output_send_frame_done(out->scene_output, &now);
 
-    if (wm_animation_active()) wlr_output_schedule_frame(out->wlr_output);
+    if (committed && wm_animation_active()) {
+        wlr_output_schedule_frame(out->wlr_output);
+    }
 }
 
 static void output_handle_request_state(struct wl_listener *l, void *data) {

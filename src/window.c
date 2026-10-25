@@ -222,6 +222,8 @@ void window_set_fullscreen(struct Window *window, bool fullscreen) {
     }
 
     if (fullscreen) window_raise(window);
+
+    idle_update_inhibit();
     wm_mark_layout_dirty();
 }
 
@@ -358,8 +360,6 @@ static void window_do_map(struct Window *window) {
         wl_list_remove(&window->focus_link);
         wl_list_insert(&wm.focus_stack, &window->focus_link);
     } else {
-        // Update the focus stack, grant keyboard focus to the client (sole
-        // `wlr_seat_keyboard_notify_enter` caller).
         seat_focus(window);
     }
 
@@ -429,6 +429,11 @@ static void window_handle_commit(struct wl_listener *l, void *data) {
     }
 
     if (!window->mapped && surf->surface->mapped) { window_do_map(window); }
+
+    if (!wl_list_empty(&surf->surface->current.frame_callback_list)) {
+        struct Output *out = output_primary();
+        if (out != NULL) { wlr_output_schedule_frame(out->wlr_output); }
+    }
 }
 
 static void window_handle_destroy(struct wl_listener *l, void *data) {

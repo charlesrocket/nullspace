@@ -405,12 +405,22 @@ static bool inhibitor_surface_visible(struct wlr_surface *surface) {
     wl_list_for_each(w, &wm.windows, link) {
         if (w->closed) continue;
         if (window_wlr_surface(w) == root) {
-            return w->mapped && !w->space_hidden;
+            if (!w->mapped || w->space_hidden) return false;
+
+            int lx = 0, ly = 0;
+            if (!wlr_scene_node_coords(&w->scene_tree->node, &lx, &ly)) {
+                return false;
+            }
+
+            return true;
         }
     }
 
     struct LayerSurface *ls = layer_surface_from_wlr_surface(root);
-    return ls != NULL && ls->mapped;
+    if (ls == NULL || !ls->mapped) return false;
+
+    int lx = 0, ly = 0;
+    return wlr_scene_node_coords(&ls->scene_tree->node, &lx, &ly);
 }
 
 void idle_update_inhibit(void) {
