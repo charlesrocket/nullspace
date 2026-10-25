@@ -876,6 +876,8 @@ void wallpaper_worker_init(void) {
         return;
     }
 
+    fcntl(g_worker.wake_pipe[0], F_SETFD, FD_CLOEXEC);
+    fcntl(g_worker.wake_pipe[1], F_SETFD, FD_CLOEXEC);
     fcntl(g_worker.wake_pipe[0], F_SETFL, O_NONBLOCK);
     fcntl(g_worker.wake_pipe[1], F_SETFL, O_NONBLOCK);
 

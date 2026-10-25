@@ -1,5 +1,6 @@
 #include "seat.h"
 
+#include "config.h"
 #include "input.h"
 #include "ipc.h"
 #include "keymap.h"
@@ -145,12 +146,10 @@ static void seat_action(enum Action action, const void *arg) {
 }
 
 static bool handle_keybinding(xkb_keysym_t sym, uint32_t mods) {
-    for (size_t i = 0; i < cfg_keybinds_len; i++) {
-        const struct KeyDef *kb = &cfg_keybinds[i];
-        if (kb->key != sym) continue;
-        if (kb->mods != mods) continue;
-
-        seat_action(kb->action, kb->arg);
+    for (size_t i = 0; i < config.bind_count; i++) {
+        const struct UserBind *ub = &config.binds[i];
+        if (ub->key != sym || ub->mods != mods) continue;
+        seat_action(ub->action, ub->arg);
         return true;
     }
 

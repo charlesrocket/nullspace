@@ -10,7 +10,6 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <math.h>
 #include <ns-util.h>
 #include <nullspace/keys.h>
 #include <nullspace/layouts.h>
@@ -98,29 +97,9 @@ static bool parse_bool(const char *s, bool *out) {
     return false;
 }
 
-static bool parse_int(const char *s, long *out) {
-    if (!s || !*s) return false;
-    char *end = NULL;
-    errno = 0;
-    long v = strtol(s, &end, 10);
-    if (errno || end == s || *end) return false;
-    *out = v;
-    return true;
-}
-
-static bool parse_float(const char *s, float *out) {
-    if (!s || !*s) return false;
-    char *end = NULL;
-    errno = 0;
-    float v = strtof(s, &end);
-    if (errno || end == s || *end || !isfinite(v)) return false;
-    *out = v;
-    return true;
-}
-
 static bool parse_space(const char *s, int *out) {
     long v;
-    if (!parse_int(s, &v) || v < 0 || v >= SPACE_COUNT) return false;
+    if (!ns_parse_int(s, &v) || v < 0 || v >= SPACE_COUNT) return false;
     *out = (int)v;
     return true;
 }
@@ -136,34 +115,6 @@ static char *split_token(char *s) {
     *p++ = '\0';
     p = skip_ws(p);
     return *p ? p : NULL;
-}
-
-static const struct {
-    enum Layout id;
-    const char *name;
-} layout_table[] = {
-#define ROW(id, label, desc) {(id), (label)},
-    LAYOUTS_TABLE(ROW)
-#undef ROW
-};
-
-static const char *layout_name(enum Layout l) {
-    for (size_t i = 0; i < ARRAY_LEN(layout_table); i++) {
-        if (layout_table[i].id == l) return layout_table[i].name;
-    }
-
-    return "?";
-}
-
-static bool parse_layout(const char *s, enum Layout *out) {
-    for (size_t i = 0; i < ARRAY_LEN(layout_table); i++) {
-        if (!strcmp(s, layout_table[i].name)) {
-            *out = layout_table[i].id;
-            return true;
-        }
-    }
-
-    return false;
 }
 
 static uint32_t client_wanted_mask(const struct IpcClient *c) {
@@ -509,7 +460,7 @@ static int space_window_count(int space);
 
 static const char *get_layout(const char *arg, struct Value *out) {
     (void)arg;
-    *out = v_str(layout_name(wm.layout));
+    *out = v_str(ns_layout_name(wm.layout));
     return NULL;
 }
 
@@ -555,7 +506,7 @@ static const char *get_mfact(const char *arg, struct Value *out) {
 
 static const char *set_layout(const char *value) {
     enum Layout l;
-    if (!parse_layout(value, &l)) return "bad layout";
+    if (!ns_parse_layout_name(value, &l)) return "bad layout";
     return queue_action(act_set_layout, (int)l);
 }
 
@@ -565,7 +516,8 @@ static const char *set_current_space(const char *value) {
 
 static const char *set_mfact(const char *value) {
     float v;
-    if (!parse_float(value, &v) || v <= 0.0f || v >= 1.0f) return "bad value";
+    if (!ns_parse_float(value, &v) || v <= 0.0f || v >= 1.0f)
+        return "bad value";
 
     wm.mfact = v;
     emit_kv(NULL, "EVT", "mfact", v_float(v));
@@ -719,7 +671,7 @@ static const char *set_key(const char *key, const char *value) {
 #define IPC_KEY_INT(name, access, after, desc, field, min, max)                \
     if (((access) & IPC_A_W) && !strcmp(key, name)) {                          \
         long v;                                                                \
-        if (!parse_int(value, &v) || v < (min) || v > (max))                   \
+        if (!ns_parse_int(value, &v) || v < (min) || v > (max))                \
             return "bad value";                                                \
         (field) = (int32_t)v;                                                  \
         emit_kv(NULL, "EVT", name, v_int(v));                                  \
@@ -729,7 +681,7 @@ static const char *set_key(const char *key, const char *value) {
 #define IPC_KEY_FLOAT(name, access, after, desc, field, min, max)              \
     if (((access) & IPC_A_W) && !strcmp(key, name)) {                          \
         float v;                                                               \
-        if (!parse_float(value, &v) || v < (min) || v > (max))                 \
+        if (!ns_parse_float(value, &v) || v < (min) || v > (max))              \
             return "bad value";                                                \
         (field) = v;                                                           \
         emit_kv(NULL, "EVT", name, v_float(v));                                \
@@ -879,7 +831,7 @@ static void emit_all_state(struct IpcClient *to) {
 
 void ipc_notify_layout(void) {
     if (!ipc_initialized) return;
-    emit_kv(NULL, "EVT", "layout", v_str(layout_name(wm.layout)));
+    emit_kv(NULL, "EVT", "layout", v_str(ns_layout_name(wm.layout)));
 }
 
 void ipc_notify_space(void) {

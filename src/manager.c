@@ -325,18 +325,18 @@ void wm_init(void) {
     wl_list_init(&wm.layer_surfaces);
 
     wm.current_space = 1;
-    wm.layout = CFG_DEFAULT_LAYOUT;
+    wm.layout = config.default_layout;
 
-    wm.tiled_gap_outer_h = CFG_GAP_OUTER_H;
-    wm.tiled_gap_outer_v = CFG_GAP_OUTER_V;
-    wm.tiled_gap_inner_h = CFG_GAP_INNER_H;
-    wm.tiled_gap_inner_v = CFG_GAP_INNER_V;
-    wm.smart_gaps = CFG_SMART_GAPS;
+    wm.tiled_gap_outer_h = config.gaps;
+    wm.tiled_gap_outer_v = config.gaps;
+    wm.tiled_gap_inner_h = config.gaps;
+    wm.tiled_gap_inner_v = config.gaps;
+    wm.smart_gaps = config.smart_gaps;
 
-    wm.nmasters = CFG_NMASTERS;
-    wm.mfact = CFG_MFACT;
-    wm.center_overspread = CFG_CENTER_OVERSPREAD;
-    wm.center_when_single_stack = CFG_CENTER_WHEN_SINGLE_STACK;
+    wm.nmasters = config.nmasters;
+    wm.mfact = config.mfact;
+    wm.center_overspread = config.center_overspread;
+    wm.center_when_single_stack = config.center_when_single_stack;
 
     wm.rounded_corners = CFG_ROUNDED_CORNERS_ENABLED;
     wm.rounded_corners_radius = CFG_ROUNDED_CORNERS_RADIUS;
@@ -349,7 +349,10 @@ void wm_init(void) {
     wm.animations.duration_space = CFG_ANIM_DURATION_SPACE;
 
 #ifdef WALLPAPER
-    wm.wallpaper.path = strdup(CFG_WALLPAPER_PATH);
+    wm.wallpaper.path = strdup(
+        config.wallpaper_path ? config.wallpaper_path : CFG_WALLPAPER_PATH
+    );
+
     wm.wallpaper.pattern_bg_r = CFG_WALLPAPER_PATTERN_BG_R;
     wm.wallpaper.pattern_bg_g = CFG_WALLPAPER_PATTERN_BG_G;
     wm.wallpaper.pattern_bg_b = CFG_WALLPAPER_PATTERN_BG_B;
@@ -363,21 +366,32 @@ void wm_init(void) {
     wm.wallpaper.blur_passes = CFG_WALLPAPER_BLUR_PASSES;
 #endif
 
-    wm.libinput.tap_state = CFG_LIBINPUT_TAP_STATE;
-    wm.libinput.natural_scroll = CFG_LIBINPUT_NATURAL_SCROLL;
-    wm.libinput.left_handed = CFG_LIBINPUT_LEFT_HANDED;
-    wm.libinput.middle_emulation = CFG_LIBINPUT_MIDDLE_EMULATION;
-    wm.libinput.dwt = CFG_LIBINPUT_DWT;
-    wm.libinput.drag = CFG_LIBINPUT_DRAG;
-    wm.libinput.drag_lock = CFG_LIBINPUT_DRAG_LOCK;
-    wm.libinput.three_finger_drag = CFG_LIBINPUT_THREE_FINGER_DRAG;
-    wm.libinput.accel_profile = CFG_LIBINPUT_ACCEL_PROFILE;
-    wm.libinput.accel_speed = CFG_LIBINPUT_ACCEL_SPD;
-    wm.libinput.click_method = CFG_LIBINPUT_CLICK_METHOD;
-    wm.libinput.scroll_method = CFG_LIBINPUT_SCROLL_METHOD;
+    wm.libinput.tap_state = config.libinput_tap_state;
+    wm.libinput.natural_scroll = config.libinput_natural_scroll;
+    wm.libinput.left_handed = config.libinput_left_handed;
+    wm.libinput.middle_emulation = config.libinput_middle_emulation;
+    wm.libinput.dwt = config.libinput_dwt;
+    wm.libinput.drag = config.libinput_drag;
+    wm.libinput.drag_lock = config.libinput_drag_lock;
+    wm.libinput.three_finger_drag = config.libinput_three_finger_drag;
+    wm.libinput.accel_profile = config.libinput_accel_profile;
+    wm.libinput.accel_speed = config.libinput_accel_speed;
+    wm.libinput.click_method = config.libinput_click_method;
+    wm.libinput.scroll_method = config.libinput_scroll_method;
 
     wm.kb_layout = NULL;
 
     animation_init();
     rules_init();
+}
+
+void wm_finish(void) {
+    rules_free();
+    free(wm.kb_layout);
+    wm.kb_layout = NULL;
+
+#ifdef WALLPAPER
+    free(wm.wallpaper.path);
+    wm.wallpaper.path = NULL;
+#endif
 }

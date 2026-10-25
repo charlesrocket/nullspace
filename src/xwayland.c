@@ -544,7 +544,7 @@ static void xw_handle_new_surface(struct wl_listener *l, void *data) {
 }
 
 bool xwayland_init(struct wl_display *display) {
-    if (!CFG_XWAYLAND) {
+    if (!config.xwayland) {
         log_info("Server disabled");
         return false;
     }

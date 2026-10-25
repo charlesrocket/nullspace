@@ -1,6 +1,7 @@
 src_files = files(
   'main.c',
   'manager.c',
+  'config.c',
   'log.c',
   'layers.c',
   'layouts/layout.c',

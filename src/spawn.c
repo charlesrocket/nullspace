@@ -17,8 +17,13 @@
 #include <unistd.h>
 
 #define LOG_TOPIC "spawn"
+#define ACT_LEN   (sizeof(ACT_PREFIX) - 1)
+#define SID_LEN   (sizeof(SID_PREFIX) - 1)
 
 extern char **environ;
+
+static const char ACT_PREFIX[] = "XDG_ACTIVATION_TOKEN=";
+static const char SID_PREFIX[] = "DESKTOP_STARTUP_ID=";
 
 struct SpawnEnv {
     char **envp;
@@ -76,8 +81,8 @@ static bool build_env(const char *token_name, struct SpawnEnv *out) {
 
     size_t j = 0;
     for (size_t i = 0; i < n; i++) {
-        if (strncmp(environ[i], "XDG_ACTIVATION_TOKEN=", 22) == 0) continue;
-        if (strncmp(environ[i], "DESKTOP_STARTUP_ID=", 20) == 0) continue;
+        if (strncmp(environ[i], ACT_PREFIX, ACT_LEN) == 0) continue;
+        if (strncmp(environ[i], SID_PREFIX, SID_LEN) == 0) continue;
 
         out->envp[j++] = environ[i];
     }
@@ -85,8 +90,8 @@ static bool build_env(const char *token_name, struct SpawnEnv *out) {
     if (token_name != NULL) {
         size_t len = strlen(token_name);
 
-        out->token_activation = malloc(22 + len + 1);
-        out->token_startup = malloc(20 + len + 1);
+        out->token_activation = malloc(ACT_LEN + len + 1);
+        out->token_startup = malloc(SID_LEN + len + 1);
 
         if (out->token_activation == NULL || out->token_startup == NULL) {
             free(out->token_activation);
@@ -100,11 +105,11 @@ static bool build_env(const char *token_name, struct SpawnEnv *out) {
             return false;
         }
 
-        memcpy(out->token_activation, "XDG_ACTIVATION_TOKEN=", 22);
-        memcpy(out->token_activation + 22, token_name, len + 1);
+        memcpy(out->token_activation, ACT_PREFIX, ACT_LEN);
+        memcpy(out->token_activation + ACT_LEN, token_name, len + 1);
 
-        memcpy(out->token_startup, "DESKTOP_STARTUP_ID=", 20);
-        memcpy(out->token_startup + 20, token_name, len + 1);
+        memcpy(out->token_startup, SID_PREFIX, SID_LEN);
+        memcpy(out->token_startup + SID_LEN, token_name, len + 1);
 
         out->envp[j++] = out->token_activation;
         out->envp[j++] = out->token_startup;
@@ -190,12 +195,16 @@ static int do_spawn(const char *const *argv, const char *shell_cmd) {
     }
 
     if (pid == 0) {
-        // Single fork
         restore_signals();
         setsid();
 
-        execve(exe, exec_argv, env.envp);
-        _exit(127);
+        pid_t pid2 = fork();
+        if (pid2 == 0) {
+            execve(exe, exec_argv, env.envp);
+            _exit(127);
+        }
+
+        _exit(pid2 < 0 ? 1 : 0);
     }
 
     free_env(&env);

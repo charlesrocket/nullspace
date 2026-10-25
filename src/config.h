@@ -1,9 +1,15 @@
 #pragma once
 
+#include "actions.h"
+
 #include <dev/evdev/input-event-codes.h>
+#include <nullspace/layouts.h>
+#include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <wlr/types/wlr_keyboard.h>
 #include <xkbcommon/xkbcommon-keysyms.h>
+#include <xkbcommon/xkbcommon.h>
 
 #define CFG_DEFAULT_LAYOUT           LAYOUT_VERTICAL_TILE
 
@@ -20,23 +26,21 @@
 #define CFG_CENTER_OVERSPREAD        false
 #define CFG_CENTER_WHEN_SINGLE_STACK true
 
-#define CFG_CMD_START                "desktop-startup", NULL // startup script
-
-#define CFG_CMD_TERMINAL             "foot", NULL
-
-#define CFG_CMD_F1                   "thunar", NULL
+#define CFG_CMD_START                "desktop-startup" // startup script
+#define CFG_CMD_TERMINAL             "foot"
+#define CFG_CMD_F1                   "thunar"
 #define CFG_CMD_F2                   CFG_CMD_TERMINAL
-#define CFG_CMD_F3                   "firefox", NULL
-#define CFG_CMD_F4                   "gram", NULL
-#define CFG_CMD_F5                   NULL, NULL
-#define CFG_CMD_F6                   NULL, NULL
-#define CFG_CMD_F7                   NULL, NULL
-#define CFG_CMD_F8                   NULL, NULL
-#define CFG_CMD_F9                   NULL, NULL
-#define CFG_CMD_F10                  NULL, NULL
+#define CFG_CMD_F3                   "waterfox"
+#define CFG_CMD_F4                   "gram"
+#define CFG_CMD_F5                   ""
+#define CFG_CMD_F6                   ""
+#define CFG_CMD_F7                   ""
+#define CFG_CMD_F8                   ""
+#define CFG_CMD_F9                   ""
+#define CFG_CMD_F10                  ""
 
 #define CFG_WINDOW_RULES                                                       \
-    "space:1,appid:Signal", "space:2,title:foot", "space:2,appid:Alacritty",   \
+    "space:2,title:foot", "space:2,appid:Alacritty",                           \
         "space:2,appid:com.mitchellh.ghostty", "space:3,appid:firefox",        \
         "space:4,appid:emacs", "space:4,appid:app.liten.Gram",                 \
         "space:4,appid:ev.zed.Zed", "space:5,appid:gedit",                     \
@@ -53,33 +57,16 @@
 
 #define CFG_BIND(MODS, KEY, ACTION) {MODS, KEY, ACTION, NULL},
 
-#define CFG_SPAWN_BIND(MODS, KEY, CMD)                                         \
-    {MODS, KEY, ACTION_SPAWN, (const char *const[]){CMD}},
-
-#define CFG_SPAWN_SHELL_BIND(MODS, KEY, CMD)                                   \
-    {MODS, KEY, ACTION_SPAWN_SHELL, (CMD)},
-
 // Spaces key
 #define CFG_SPACEKEY(KEY, N)                                                   \
     CFG_BIND(CFG_MOD_SUPER, KEY, ACTION_SPACE_##N)                             \
     CFG_BIND(CFG_MOD_SUPER | CFG_MOD_SHIFT, KEY, ACTION_MOVE_TO_SPACE_##N)
 
 #define CFG_KEYBINDS                                                           \
-    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_Return, CFG_CMD_TERMINAL)            \
-    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F1, CFG_CMD_F1)                      \
-    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F2, CFG_CMD_F2)                      \
-    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F3, CFG_CMD_F3)                      \
-    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F4, CFG_CMD_F4)                      \
-    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F5, CFG_CMD_F5)                      \
-    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F6, CFG_CMD_F6)                      \
-    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F7, CFG_CMD_F7)                      \
-    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F8, CFG_CMD_F8)                      \
-    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F9, CFG_CMD_F9)                      \
-    CFG_SPAWN_BIND(CFG_MOD_SUPER, XKB_KEY_F10, CFG_CMD_F10)                    \
     CFG_BIND(CFG_MOD_SUPER, XKB_KEY_q, ACTION_CLOSE)                           \
     CFG_BIND(CFG_MOD_SUPER, XKB_KEY_f, ACTION_FOCUS_NEXT)                      \
     CFG_BIND(CFG_MOD_SUPER, XKB_KEY_l, ACTION_CYCLE_LAYOUT)                    \
-    CFG_BIND(CFG_MOD_SUPER, XKB_KEY_r, ACTION_EXIT)                            \
+    CFG_BIND(CFG_MOD_SUPER, XKB_KEY_k, ACTION_EXIT)                            \
     CFG_BIND(CFG_MOD_SUPER | CFG_MOD_SHIFT, XKB_KEY_f, ACTION_FULLSCREEN)      \
     CFG_SPACEKEY(XKB_KEY_1, 1)                                                 \
     CFG_SPACEKEY(XKB_KEY_2, 2)                                                 \
@@ -101,8 +88,7 @@
 // grp:win_space_toggle | grp:alt_caps_toggle
 #define CFG_KB_OPTIONS                 "grp:alt_space_toggle" // XKB options
 #define CFG_KB_LAYOUTS                 "us,no" // comma-separated layouts
-
-#define CFG_KB_RATE_HZ                 26 // repeats/sec
+#define CFG_KB_RATE_HZ                 26      // repeats/sec
 #define CFG_KB_DELAY_MS                600
 
 #define CFG_LIBINPUT_TAP_STATE         1
@@ -125,7 +111,7 @@
 #define CFG_LIBINPUT_SCROLL_METHOD     -1
 
 #define CFG_ROUNDED_CORNERS_ENABLED    true
-#define CFG_ROUNDED_CORNERS_RADIUS     8 // min 2
+#define CFG_ROUNDED_CORNERS_RADIUS     8 // minimum is 2
 
 #define CFG_ANIMATIONS_ENABLED         true
 
@@ -179,3 +165,62 @@
 #ifdef XWAYLAND
 #define CFG_XWAYLAND true // lazy
 #endif
+
+// RUNTIME
+
+struct UserBind {
+    uint32_t mods;
+    xkb_keysym_t key;
+    enum Action action;
+    char *arg; // owned, ?NULL (when unused)
+};
+
+struct Config {
+    struct UserBind *binds;
+    enum Layout default_layout;
+
+    int gaps;
+    bool smart_gaps;
+    int nmasters;
+    float mfact;
+    bool center_overspread;
+    bool center_when_single_stack;
+
+    char *cmd_f1, *cmd_f2, *cmd_f3, *cmd_f4, *cmd_f5, *cmd_f6, *cmd_f7, *cmd_f8,
+        *cmd_f9, *cmd_f10, *cmd_start, *cmd_terminal;
+
+    char **window_rules;
+    size_t window_rule_count;
+
+    bool focus_follow, focus_on_activate;
+
+    char *kb_options, *kb_layouts;
+    int kb_rate_hz, kb_delay_ms;
+
+    int libinput_tap_state;
+    int libinput_natural_scroll;
+    int libinput_left_handed;
+    int libinput_middle_emulation;
+    int libinput_dwt;
+    int libinput_drag;
+    int libinput_drag_lock;
+    int libinput_three_finger_drag;
+    int libinput_accel_profile;
+    float libinput_accel_speed;
+    int libinput_click_method;
+    int libinput_scroll_method;
+
+    size_t bind_count;
+
+#ifdef WALLPAPER
+    char *wallpaper_path;
+#endif
+#ifdef XWAYLAND
+    bool xwayland;
+#endif
+};
+
+extern struct Config config;
+
+void config_init(void);
+void config_finish(void);

@@ -50,6 +50,7 @@ struct WindowManager {
 extern struct WindowManager wm;
 
 void wm_init(void);
+void wm_finish(void);
 void wm_set_layout(enum Layout layout);
 void wm_switch_space(int space);
 void wm_move_window_to_space(struct Window *window, int space);

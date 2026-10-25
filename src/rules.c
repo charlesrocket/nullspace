@@ -5,14 +5,13 @@
 #include "manager.h"
 
 #include <errno.h>
+#include <ns-util.h>
 #include <regex.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
 #define LOG_TOPIC "rules"
-
-static const char *const rule_specs[] = {NULL, CFG_WINDOW_RULES};
 
 struct Rule {
     regex_t app_id;
@@ -27,16 +26,6 @@ struct Rule {
 static struct Rule *rules;
 static size_t rule_count;
 static bool rules_loaded;
-
-static char *trim(char *s) {
-    while (*s == ' ' || *s == '\t') s++;
-
-    char *end = s + strlen(s);
-    while (end > s && (end[-1] == ' ' || end[-1] == '\t')) end--;
-
-    *end = '\0';
-    return s;
-}
 
 static bool compile(regex_t *re, const char *pattern, const char *spec) {
     int err = regcomp(re, pattern, REG_EXTENDED | REG_ICASE | REG_NOSUB);
@@ -55,7 +44,7 @@ static void rule_free(struct Rule *r) {
 }
 
 static bool parse_field(char *field, const char *spec, struct Rule *r) {
-    field = trim(field);
+    field = ns_trim(field);
     if (*field == '\0') return true;
 
     char *colon = strchr(field, ':');
@@ -65,8 +54,8 @@ static bool parse_field(char *field, const char *spec, struct Rule *r) {
     }
 
     *colon = '\0';
-    const char *key = trim(field);
-    const char *val = trim(colon + 1);
+    const char *key = ns_trim(field);
+    const char *val = ns_trim(colon + 1);
 
     if (*val == '\0') {
         log_err("window rule \"%s\": empty value for \"%s\"", spec, key);
@@ -144,7 +133,7 @@ static bool parse_rule(const char *spec, struct Rule *r) {
 void rules_init(void) {
     if (rules_loaded) return;
 
-    size_t spec_count = sizeof(rule_specs) / sizeof(rule_specs[0]) - 1;
+    size_t spec_count = config.window_rule_count;
     if (spec_count == 0) {
         rules_loaded = true;
         return;
@@ -159,11 +148,13 @@ void rules_init(void) {
     rules_loaded = true;
 
     for (size_t i = 0; i < spec_count; i++) {
-        if (parse_rule(rule_specs[i + 1], &rules[rule_count])) { rule_count++; }
+        if (parse_rule(config.window_rules[i], &rules[rule_count]))
+            rule_count++;
     }
 
-    log_info("loaded %zu/%zu", rule_count, spec_count);
+    log_info("Loaded %zu/%zu", rule_count, spec_count);
 }
+
 void rules_free(void) {
     for (size_t i = 0; i < rule_count; i++) rule_free(&rules[i]);
 

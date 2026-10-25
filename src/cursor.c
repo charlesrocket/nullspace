@@ -154,7 +154,7 @@ static void focus_follow_on_motion(struct Window *under) {
     struct Window *prev = hovered_window;
     hovered_window = under; // always track, even when not activating
 
-    if (!CFG_FOCUS_FOLLOW || under == NULL) return;
+    if (!config.focus_follow || under == NULL) return;
     if (server.locked || !layouts_is_tiled(wm.layout)) return;
     if (buttons_down > 0) return; // never switch focus mid-drag
 

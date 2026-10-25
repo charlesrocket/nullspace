@@ -27,8 +27,8 @@ void keymap_init(void) {
     }
 
     struct xkb_rule_names names = {
-        .layout = CFG_KB_LAYOUTS,
-        .options = CFG_KB_OPTIONS,
+        .layout = config.kb_layouts,
+        .options = config.kb_options,
     };
 
     xkb_keymap = xkb_keymap_new_from_names(
@@ -60,7 +60,10 @@ void keymap_destroy(void) {
 void keymap_apply(struct wlr_keyboard *keyboard) {
     if (keyboard == NULL || xkb_keymap == NULL) return;
     wlr_keyboard_set_keymap(keyboard, xkb_keymap);
-    wlr_keyboard_set_repeat_info(keyboard, CFG_KB_RATE_HZ, CFG_KB_DELAY_MS);
+    wlr_keyboard_set_repeat_info(
+        keyboard, config.kb_rate_hz, config.kb_delay_ms
+    );
+
     keymap_notify_layout(keyboard);
 }
 

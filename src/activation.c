@@ -127,10 +127,10 @@ static void handle_request_activate(struct wl_listener *l, void *data) {
 
     if (allowed && window != NULL && !window->closed) {
         if (!window->mapped) {
-            if (CFG_FOCUS_ON_ACTIVATE && ctx != NULL) {
+            if (config.focus_on_activate && ctx != NULL) {
                 wm_assign_new_window_space(window, ctx->space);
             }
-        } else if (CFG_FOCUS_ON_ACTIVATE) {
+        } else if (config.focus_on_activate) {
             if (window->space != wm.current_space) {
                 wm_switch_space(window->space);
             }

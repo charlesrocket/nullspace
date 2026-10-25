@@ -3,7 +3,6 @@
 #include "keymap.h"
 #include "log.h"
 #include "manager.h"
-#include "seat.h"
 #include "server.h"
 #include "spawn.h"
 #ifdef WALLPAPER
@@ -13,11 +12,14 @@
 #include "xwayland.h"
 #endif
 
+#include <fcntl.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <wayland-server-core.h>
 #include <wayland-util.h>
@@ -35,11 +37,25 @@
 
 #define LOG_TOPIC ""
 
+static int on_term(int sig, void *data) {
+    (void)sig;
+
+    wl_display_terminate(data);
+    return 0;
+}
+
 static void spawn_startup(void *d) {
     // TODO
     (void)d;
 
-    seat_spawn((const char *const[]){CFG_CMD_START});
+    if (config.cmd_start != NULL && config.cmd_start[0] != '\0')
+        spawn_shell(config.cmd_start);
+}
+
+static void on_sigchld(int sig) {
+    (void)sig;
+
+    while (waitpid(-1, NULL, WNOHANG) > 0) {}
 }
 
 static void create_default_output(struct wlr_backend *backend, void *data) {
@@ -71,7 +87,16 @@ int main(int argc, char *argv[]) {
 
     log_init();
     log_info("Nullspace version %s", VERSION);
-    signal(SIGCHLD, SIG_IGN);
+    config_init();
+
+    signal(SIGPIPE, SIG_IGN);
+
+    struct sigaction sa_chld = {
+        .sa_handler = on_sigchld, .sa_flags = SA_RESTART
+    };
+
+    sigemptyset(&sa_chld.sa_mask);
+    sigaction(SIGCHLD, &sa_chld, NULL);
 
     const char *outer_wl = getenv("WAYLAND_DISPLAY");
     char *saved_wl = outer_wl ? strdup(outer_wl) : NULL;
@@ -80,8 +105,13 @@ int main(int argc, char *argv[]) {
     if (display == NULL) {
         log_err("Failed to create wl_display");
         free(saved_wl);
+        config_finish();
         return 1;
     }
+
+    struct wl_event_loop *loop = wl_display_get_event_loop(display);
+    wl_event_loop_add_signal(loop, SIGTERM, on_term, display);
+    wl_event_loop_add_signal(loop, SIGINT, on_term, display);
 
     setenv("XDG_SESSION_TYPE", "wayland", 1);
     setenv("XDG_SESSION_DESKTOP", "Nullspace", 1);
@@ -100,6 +130,7 @@ int main(int argc, char *argv[]) {
         log_err("Failed server start");
         wl_display_destroy(display);
         free(saved_wl);
+        config_finish();
         return 1;
     }
 
@@ -109,6 +140,7 @@ int main(int argc, char *argv[]) {
         server_finish();
         wl_display_destroy(display);
         free(saved_wl);
+        config_finish();
         return 1;
     }
 
@@ -132,7 +164,6 @@ int main(int argc, char *argv[]) {
         wlr_multi_for_each_backend(
             server.backend, create_default_output, &created
         );
-
         if (!created) log_info("No default output requested");
     }
 
@@ -154,6 +185,8 @@ int main(int argc, char *argv[]) {
 
     server_finish();
     keymap_destroy();
+    wm_finish();
+    config_finish();
     wl_display_destroy(display);
 
     free(saved_wl);
