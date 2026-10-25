@@ -2,6 +2,111 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-10-25
+
+### Bug Fixes
+
+- Add libinput result listener
+- Use logging macro
+- Update animation settings
+- Update destroyers
+- Init kevent struct
+- Change startup space
+- Improve list formatting
+- Update instance signature
+- Fix focus on close
+- Sync animation speed with topbar
+- Improve animations on close
+- Activate xdg toplevel
+- Handle popups
+- Handle foreign toplevel
+- Wire up idle notifier
+- Set toplevel base
+- Track node type
+- Move `node.data`
+- Improve buffering/tables
+- Improve socket writes/buffering
+- Update env vars
+- Import session header
+- Drop space counts
+- Fine-tune blur settings
+- Adjust blur radius
+- Add popup tree
+- Fix inconsistent decorations
+- Destroy window surface data
+- Improve focus guards
+- Switch to pre-scenefx `box_blur()`
+- Properly handle `EBUSY`
+- Correct exclusive zone placements
+- Fix default `ACTION_EXIT`
+
+### Documentation
+
+- Add build type
+
+### Features
+
+- Add default bindings
+- Expose socket
+- Add logger
+- Add `nctl`
+- Switch to scenefx
+- Add png support
+- Add background blur toggle
+- Implement power management
+- Add power commands
+- Implement fullscreen action
+- Implement session lock
+- Add rounded corners
+- Add focus follow
+- Add popup shadows
+- Add window rules
+- Add xwayland support
+- Add start command
+- Implement xdg activation
+- Implement ext-workspace
+- Add `CFG_GAPS`
+- Add config file
+- Implement primary selection interface
+- Implement fractional scaling
+
+### Operations
+
+- Add formatter
+
+### Performance
+
+- Gate blur passes
+- Improve dirty checks
+
+### Refactor
+
+- Fix imports
+- Fix unused params
+- Update layout helpers
+- Drop redundant imports
+- Simplify `animation_ease()`
+- Drop header guards
+- Move `Window` objects
+- Move `window_from_scene_node()`
+- Move `output_from_wlr_output()`
+- Extract `Popup`
+- Define FN keys
+
+### Styling
+
+- Fix macros formatting
+- Fix imports formatting
+
+### Build
+
+- Add version string
+- Add `asan` option
+- Gate memory sanitizer
+- Gate `spng`
+- Enable `FORTIFY_SOURCE`
+- Move wlr flag
+
 ## [0.1.1] - 2026-10-02
 
 ### Bug Fixes
