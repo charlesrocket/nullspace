@@ -561,6 +561,10 @@ bool xwayland_init(struct wl_display *display) {
         return false;
     }
 
+    if (server.xwayland->display_name != NULL) {
+        setenv("DISPLAY", server.xwayland->display_name, 1);
+    }
+
     if (server.seat != NULL) {
         wlr_xwayland_set_seat(server.xwayland, server.seat);
     }
