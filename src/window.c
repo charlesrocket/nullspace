@@ -117,8 +117,7 @@ void window_apply_target(
             from.x = target.x + reveal_dir * offset;
             type = ANIM_SPACE;
             duration = wm.animations.duration_space;
-        } else {
-            // Slide from above/below
+        } else { // slide from above/below
             from = target;
             from.y = wm.animations.open_from_top ? -target.height
                                                  : target.y + target.height;
@@ -256,7 +255,6 @@ static void wlr_handle_create(struct Window *window) {
     wlr_foreign_toplevel_handle_v1_set_title(
         window->wlr_handle, window_title(window)
     );
-
     wlr_foreign_toplevel_handle_v1_set_app_id(
         window->wlr_handle, window_app_id(window)
     );
@@ -267,10 +265,6 @@ static void wlr_handle_create(struct Window *window) {
             window->wlr_handle, o->wlr_output
         );
     }
-
-    wlr_foreign_toplevel_handle_v1_set_app_id(
-        window->wlr_handle, window_app_id(window)
-    );
 
     window->wlr_request_activate.notify = wlr_handle_request_activate;
     wl_signal_add(
@@ -369,6 +363,7 @@ static void window_do_map(struct Window *window) {
 
 static void window_do_unmap(struct Window *window) {
     if (!window->mapped) return;
+
     window->mapped = false;
 
     struct wlr_surface *surface = window_wlr_surface(window);
@@ -380,9 +375,12 @@ static void window_do_unmap(struct Window *window) {
     wlr_scene_node_set_enabled(&window->scene_tree->node, false);
     wlr_scene_node_set_enabled(&window->popup_tree->node, false);
 
-    wl_list_remove(&window->focus_link);
-    wl_list_init(&window->focus_link);
+    if (window->focus_link.next != NULL
+        && window->focus_link.next != &window->focus_link) {
+        wl_list_remove(&window->focus_link);
+    }
 
+    wl_list_init(&window->focus_link);
     ipc_notify_window_closed(window);
 
     if (had_focus) seat_focus(NULL);
@@ -638,7 +636,13 @@ void window_destroy(struct Window *window) {
     if (window->xwayland_surface != NULL) window->xwayland_surface->data = NULL;
 
     cursor_window_destroyed(window);
-    wl_list_remove(&window->focus_link);
+
+    if (window->focus_link.next != NULL
+        && window->focus_link.next != &window->focus_link) {
+        wl_list_remove(&window->focus_link);
+    }
+
+    wl_list_init(&window->focus_link);
 
 #ifdef XWAYLAND
     if (window->is_xwayland) {
@@ -684,7 +688,14 @@ void window_destroy(struct Window *window) {
     }
 
     wlr_handle_destroy(window);
-    wl_list_remove(&window->link);
+
+    if (window->link.next == NULL || window->link.prev == NULL) {
+        log_warn("window_destroy: window->link already unlinked");
+    } else {
+        wl_list_remove(&window->link);
+        wl_list_init(&window->link);
+    }
+
     wm_mark_layout_dirty();
     foreign_handle_destroy(window);
     idle_update_inhibit();
@@ -697,7 +708,7 @@ void window_destroy(struct Window *window) {
 struct Window *window_focused(void) {
     struct Window *w;
     wl_list_for_each_reverse(w, &wm.focus_stack, focus_link) {
-        if (w->closed || w->space_hidden) continue;
+        if (w->closed || !w->mapped || w->space_hidden) continue;
         return w;
     }
 
@@ -942,8 +953,6 @@ static void xw_handle_dissociate(struct wl_listener *l, void *data) {
     (void)data;
 
     struct Window *window = wl_container_of(l, window, xw_dissociate);
-
-    // wlroots unmaps the surface before emitting this, but be explicit.
     if (window->mapped) window_do_unmap(window);
     xw_unbind(window);
 }

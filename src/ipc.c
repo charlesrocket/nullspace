@@ -789,7 +789,7 @@ static int space_window_count(int space) {
     int n = 0;
     struct Window *w;
     wl_list_for_each(w, &wm.windows, link) {
-        if (!w->closed && w->space == space) n++;
+        if (!w->closed && w->mapped && w->space == space) n++;
     }
 
     return n;
@@ -848,7 +848,7 @@ static void emit_all_state(struct IpcClient *to) {
 
     struct Window *w;
     wl_list_for_each(w, &wm.windows, link) {
-        if (!w->closed) emit_window(to, w);
+        if (!w->closed && w->mapped) emit_window(to, w);
     }
 
     line_lit("EVT ready");

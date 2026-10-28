@@ -755,6 +755,7 @@ bool wallpaper_blur_wanted(void) {
     struct Window *w;
     wl_list_for_each(w, &wm.windows, link) {
         if (w->closed) continue;
+        if (!w->mapped) continue;
         if (w->space_hidden) continue;
         if (w->space != wm.current_space) continue;
         return true;

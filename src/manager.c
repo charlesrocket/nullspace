@@ -46,7 +46,7 @@ bool wm_animation_active(void) {
     if (!wm.animations.enabled) return false;
     struct Window *w;
     wl_list_for_each(w, &wm.windows, link) {
-        if (w->closed) continue;
+        if (w->closed || !w->mapped) continue;
         if (w->anim.running) return true;
         if (w->hide_dir != 0) return true;
     }
@@ -59,7 +59,7 @@ void wm_animation_tick_all(void) {
     int64_t now = animation_now_ms();
     struct Window *w;
     wl_list_for_each(w, &wm.windows, link) {
-        if (w->closed) continue;
+        if (w->closed || !w->mapped) continue;
         if (!w->anim.running && w->hide_dir == 0) continue;
 
         if (w->anim.running) {
@@ -87,7 +87,7 @@ struct Window *wm_focus_stack_top(void) {
     struct wl_list *cur = wm.focus_stack.prev;
     while (cur != &wm.focus_stack) {
         struct Window *w = wl_container_of(cur, w, focus_link);
-        if (!w->closed && !w->space_hidden) return w;
+        if (!w->closed && w->mapped && !w->space_hidden) return w;
         cur = cur->prev;
     }
 
@@ -97,7 +97,7 @@ struct Window *wm_focus_stack_top(void) {
 struct Window *wm_focus_stack_top_except(struct Window *skip) {
     struct Window *w;
     wl_list_for_each_reverse(w, &wm.focus_stack, focus_link) {
-        if (w == skip || w->closed || w->space_hidden) continue;
+        if (w == skip || w->closed || !w->mapped || w->space_hidden) continue;
         return w;
     }
 
@@ -116,7 +116,7 @@ struct Window *wm_next_window(struct Window *window) {
         }
 
         struct Window *w = wl_container_of(cur, w, link);
-        if (!w->closed && !w->space_hidden) return w;
+        if (!w->closed && w->mapped && !w->space_hidden) return w;
         cur = cur->next;
     }
 
@@ -240,8 +240,7 @@ void wm_switch_space(int space) {
 
     struct Window *window;
     wl_list_for_each(window, &wm.windows, link) {
-        if (window->closed) continue;
-
+        if (window->closed || !window->mapped) continue;
         if (window->space == space) { // reveal
             if (!window->space_hidden) continue;
             window->space_hidden = false;
