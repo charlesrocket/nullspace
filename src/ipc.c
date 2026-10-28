@@ -78,6 +78,29 @@ static struct wl_event_loop *ipc_loop;
 static bool ipc_initialized;
 static char ipc_path[256];
 
+void ipc_process_pending_commands(void);
+
+static void schedule_pending_processing(void);
+
+static bool ipc_pending_scheduled;
+
+static void ipc_idle_handler(void *data) {
+    (void)data;
+
+    ipc_pending_scheduled = false;
+    ipc_process_pending_commands();
+
+    if (!wl_list_empty(&ipc_pending)) { schedule_pending_processing(); }
+}
+
+static void schedule_pending_processing(void) {
+    if (ipc_loop == NULL) return;
+    if (ipc_pending_scheduled) return;
+
+    ipc_pending_scheduled = true;
+    wl_event_loop_add_idle(ipc_loop, ipc_idle_handler, NULL);
+}
+
 static bool parse_bool(const char *s, bool *out) {
     static const char *const yes[] = {"1", "true", "on", "yes"};
     static const char *const no[] = {"0", "false", "off", "no"};
@@ -421,6 +444,8 @@ static const char *queue_action(IpcAction action, int arg) {
     p->arg = arg;
     wl_list_insert(ipc_pending.prev, &p->link);
     ipc_pending_count++;
+
+    schedule_pending_processing();
     return NULL;
 }
 
@@ -521,6 +546,7 @@ static const char *set_mfact(const char *value) {
 
     wm.mfact = v;
     emit_kv(NULL, "EVT", "mfact", v_float(v));
+    wm_mark_layout_dirty();
     return NULL;
 }
 
@@ -1267,6 +1293,8 @@ static void register_server_source(void) {
 void ipc_attach_event_loop(struct wl_event_loop *loop) {
     ipc_loop = loop;
     register_server_source();
+
+    if (!wl_list_empty(&ipc_pending)) schedule_pending_processing();
 }
 
 void ipc_init(void) {
@@ -1299,6 +1327,7 @@ void ipc_destroy(void) {
         free(p);
     }
     ipc_pending_count = 0;
+    ipc_pending_scheduled = false;
 
     if (ipc_server_source != NULL) {
         wl_event_source_remove(ipc_server_source);

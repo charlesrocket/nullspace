@@ -32,7 +32,7 @@ static void output_usable_area(
 }
 
 static bool window_is_layoutable(const struct Window *w) {
-    return !w->closed && !w->space_hidden && w->mapped;
+    return !w->closed && !w->space_hidden && w->mapped && !w->fullscreen;
 }
 
 static struct Window *layout_focused_window(void) {
