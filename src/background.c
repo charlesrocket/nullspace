@@ -7,6 +7,7 @@
 
 #include <pixman.h>
 #include <scenefx/types/wlr_scene.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <wayland-server-core.h>
@@ -38,8 +39,8 @@ struct BgEffectSurface {
 
     pixman_region32_t pending_blur;
     pixman_region32_t current_blur;
-    pixman_region32_t applied;
-    int applied_x, applied_y;
+
+    int applied_x, applied_y, applied_w, applied_h;
 };
 
 static struct wl_list bg_effect_surfaces;
@@ -83,8 +84,6 @@ static void clear_rects(struct BgEffectSurface *bg) {
     wl_list_for_each_safe(r, tmp, &bg->rects, link) {
         wlr_scene_node_destroy(&r->blur->node);
     }
-
-    pixman_region32_clear(&bg->applied);
 }
 
 static void handle_blur_tree_destroy(struct wl_listener *l, void *data) {
@@ -117,14 +116,52 @@ static struct wlr_scene_tree *ensure_blur_tree(struct BgEffectSurface *bg) {
     return blur_tree;
 }
 
+static void
+rect_set_mask(struct BgEffectRect *r, struct wlr_scene_node *surface_node) {
+    if (surface_node == NULL || surface_node->type != WLR_SCENE_NODE_BUFFER) {
+        return;
+    }
+
+    wlr_scene_blur_set_transparency_mask_source(
+        r->blur, wlr_scene_buffer_from_node(surface_node)
+    );
+}
+
+static struct BgEffectRect *rect_create(
+    struct BgEffectSurface *bg, struct wlr_scene_tree *tree,
+    struct wlr_scene_node *surface_node, int x, int y, int w, int h
+) {
+    struct wlr_scene_blur *blur = wlr_scene_blur_create(tree, w, h);
+    if (blur == NULL) return NULL;
+
+    wlr_scene_node_set_position(&blur->node, x, y);
+    wlr_scene_blur_set_strength(blur, CFG_BLUR_STRENGTH);
+    wlr_scene_blur_set_alpha(blur, CFG_BLUR_ALPHA);
+
+    struct BgEffectRect *r = calloc(1, sizeof(*r));
+    if (r == NULL) {
+        wlr_scene_node_destroy(&blur->node);
+        return NULL;
+    }
+
+    r->blur = blur;
+    rect_set_mask(r, surface_node);
+
+    r->destroy.notify = handle_rect_destroy;
+    wl_signal_add(&blur->node.events.destroy, &r->destroy);
+    wl_list_insert(&bg->rects, &r->link);
+
+    return r;
+}
+
 static void blur_nodes_update(struct BgEffectSurface *bg) {
     if (bg->surface == NULL) return;
 
-    pixman_region32_t region;
-    pixman_region32_init(&region);
-
     int sw = bg->surface->current.width;
     int sh = bg->surface->current.height;
+
+    pixman_region32_t region;
+    pixman_region32_init(&region);
 
     if (sw > 0 && sh > 0 && pixman_region32_not_empty(&bg->current_blur)) {
         pixman_region32_t box;
@@ -136,72 +173,53 @@ static void blur_nodes_update(struct BgEffectSurface *bg) {
         pixman_region32_fini(&box);
     }
 
-    if (!pixman_region32_not_empty(&region)) {
+    if (pixman_region32_not_empty(&region)) {
+        pixman_region32_subtract(
+            &region, &region, &bg->surface->current.opaque
+        );
+    }
+
+    bool wanted = pixman_region32_not_empty(&region);
+    pixman_region32_fini(&region);
+
+    if (!wanted) {
         clear_rects(bg);
-        pixman_region32_fini(&region);
         return;
     }
 
     struct wlr_scene_tree *tree = ensure_blur_tree(bg);
-    if (tree == NULL) {
-        pixman_region32_fini(&region);
-        return;
-    }
-
     struct wlr_scene_node *surface_node =
         find_surface_node(&server.scene->tree, bg->surface);
-    if (surface_node == NULL) {
-        pixman_region32_fini(&region);
-        return;
+
+    if (tree == NULL || surface_node == NULL) return;
+
+    int x = surface_node->x;
+    int y = surface_node->y;
+
+    struct BgEffectRect *cur = NULL;
+    if (!wl_list_empty(&bg->rects)) {
+        cur = wl_container_of(bg->rects.next, cur, link);
     }
 
-    int offset_x = surface_node->x;
-    int offset_y = surface_node->y;
+    if (cur != NULL) {
+        rect_set_mask(cur, surface_node);
 
-    if (!wl_list_empty(&bg->rects) && bg->applied_x == offset_x
-        && bg->applied_y == offset_y
-        && pixman_region32_equal(&bg->applied, &region)) {
-        pixman_region32_fini(&region);
-        return;
-    }
-
-    clear_rects(bg);
-
-    int nrects = 0;
-    const pixman_box32_t *rects = pixman_region32_rectangles(&region, &nrects);
-
-    for (int i = 0; i < nrects; i++) {
-        int x = offset_x + rects[i].x1;
-        int y = offset_y + rects[i].y1;
-        int w = rects[i].x2 - rects[i].x1;
-        int h = rects[i].y2 - rects[i].y1;
-        if (w <= 0 || h <= 0) continue;
-
-        struct wlr_scene_blur *blur = wlr_scene_blur_create(tree, w, h);
-        if (blur == NULL) continue;
-
-        wlr_scene_node_set_position(&blur->node, x, y);
-        wlr_scene_blur_set_strength(blur, CFG_BLUR_STRENGTH);
-        wlr_scene_blur_set_alpha(blur, CFG_BLUR_ALPHA);
-
-        struct BgEffectRect *r = calloc(1, sizeof(*r));
-        if (r == NULL) {
-            wlr_scene_node_destroy(&blur->node);
-            continue;
+        if (bg->applied_x == x && bg->applied_y == y && bg->applied_w == sw
+            && bg->applied_h == sh) {
+            return;
         }
 
-        r->blur = blur;
-        r->destroy.notify = handle_rect_destroy;
-        wl_signal_add(&blur->node.events.destroy, &r->destroy);
-        wl_list_insert(&bg->rects, &r->link);
+        wlr_scene_blur_set_size(cur->blur, sw, sh);
+        wlr_scene_node_set_position(&cur->blur->node, x, y);
+    } else {
+        cur = rect_create(bg, tree, surface_node, x, y, sw, sh);
+        if (cur == NULL) return;
     }
 
-    pixman_region32_copy(&bg->applied, &region);
-
-    bg->applied_x = offset_x;
-    bg->applied_y = offset_y;
-
-    pixman_region32_fini(&region);
+    bg->applied_x = x;
+    bg->applied_y = y;
+    bg->applied_w = sw;
+    bg->applied_h = sh;
 }
 
 static void detach_from_surface(struct BgEffectSurface *bg) {
@@ -246,7 +264,6 @@ static void handle_resource_destroy(struct wl_resource *resource) {
     detach_from_surface(bg);
 
     wl_list_remove(&bg->link);
-    pixman_region32_fini(&bg->applied);
     pixman_region32_fini(&bg->pending_blur);
     pixman_region32_fini(&bg->current_blur);
     free(bg);
@@ -335,7 +352,6 @@ static void manager_handle_get_background_effect(
     bg->surface = surface;
     pixman_region32_init(&bg->pending_blur);
     pixman_region32_init(&bg->current_blur);
-    pixman_region32_init(&bg->applied);
     wl_list_init(&bg->rects);
 
     bg->surface_commit.notify = handle_surface_commit;
