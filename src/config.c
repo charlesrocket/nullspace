@@ -723,7 +723,7 @@ parse_key(const char *key, const char *value, bool *seen_window_rule) {
         return;
     }
 
-    log_warn("config: unknown key '%s'", key);
+    log_warn("Unknown key '%s'", key);
 }
 
 static bool config_path(char *buf, size_t size) {
@@ -894,6 +894,7 @@ static void parse_config_file(FILE *f) {
             log_warn("Ignoring line without '=': %s", s);
             continue;
         }
+
         *eq = '\0';
 
         char *key = ns_trim(s);
@@ -902,6 +903,7 @@ static void parse_config_file(FILE *f) {
 
         parse_key(key, value, &seen_window_rule);
     }
+
     free(line);
 }
 
@@ -935,7 +937,8 @@ void config_init(void) {
     parse_config_file(f);
     if (ferror(f)) log_warn("Read error on '%s'", path);
     fclose(f);
-    log_info("Loaded config '%s'", path);
+
+    log_info("Loaded '%s'", path);
 
     build_binds();
 }
