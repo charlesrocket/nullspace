@@ -163,7 +163,7 @@ int main(int argc, char *argv[]) {
     }
 
     setenv("WAYLAND_DISPLAY", socket, 1);
-    log_info("Display socket is %s", socket);
+    log_info("Display socket is '%s'", socket);
 
 #ifdef XWAYLAND
     if (!xwayland_init(display)) { log_warn("XWayland is not ready"); }
