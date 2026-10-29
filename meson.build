@@ -46,6 +46,19 @@ pixman = dependency('pixman-1')
 spng = dependency('spng', required: get_option('wallpaper'))
 pthreads = dependency('threads')
 
+deps = [
+  wayland_server,
+  scenefx,
+  wlroots,
+  xkbcommon,
+  xcb_randr,
+  xcb,
+  libinput,
+  pixman,
+  spng,
+  pthreads,
+]
+
 build_xwayland = xcb.found() and xcb_randr.found()
 
 if build_xwayland
@@ -59,30 +72,32 @@ if build_wallpaper
 endif
 
 inc_public = include_directories('include')
+inc_test = include_directories('test')
+
+test_support = files(
+  'test/ns-harness.c',
+)
 
 subdir('protocol')
+
+includes = [
+  inc_public,
+  proto_inc,
+]
+
+test_includes = [
+  inc_test,
+]
+
 subdir('contrib')
 subdir('src')
 
 executable(
   'nullspace',
+  'src/main.c',
   src_files,
   proto_sources,
-  dependencies: [
-    wayland_server,
-    scenefx,
-    wlroots,
-    xkbcommon,
-    xcb_randr,
-    xcb,
-    libinput,
-    pixman,
-    spng,
-    pthreads,
-  ],
-  include_directories: [
-    inc_public,
-    proto_inc,
-  ],
+  dependencies: deps,
+  include_directories: includes,
   install: true,
 )

@@ -1,5 +1,4 @@
 src_files = files(
-  'main.c',
   'manager.c',
   'config.c',
   'log.c',
@@ -32,3 +31,5 @@ endif
 if build_xwayland
   src_files += files('xwayland.c')
 endif
+
+subdir('test')
