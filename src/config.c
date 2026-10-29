@@ -1,9 +1,9 @@
 #include "config.h"
 
+#include "actions.h"
 #include "input.h"
 #include "log.h"
 #include "nullspace/layouts.h"
-#include "src/actions.h"
 
 #include <err.h>
 #include <errno.h>

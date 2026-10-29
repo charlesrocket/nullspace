@@ -5,7 +5,7 @@
 #include "popup.h"
 #include "seat.h"
 #include "server.h"
-#include "src/window.h"
+#include "window.h"
 
 #include <math.h>
 #include <scenefx/types/wlr_scene.h>

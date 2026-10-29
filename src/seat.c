@@ -1,5 +1,6 @@
 #include "seat.h"
 
+#include "actions.h"
 #include "config.h"
 #include "input.h"
 #include "ipc.h"
@@ -8,7 +9,6 @@
 #include "manager.h"
 #include "server.h"
 #include "spawn.h"
-#include "src/actions.h"
 #include "window.h"
 
 #include <dev/evdev/input-event-codes.h>
