@@ -379,6 +379,18 @@ void wm_init(void) {
 
     wm.kb_layout = NULL;
 
+    {
+        char cursor_size_fmt[16];
+        snprintf(
+            cursor_size_fmt, sizeof(cursor_size_fmt), "%u", config.cursor_size
+        );
+
+        setenv("XCURSOR_SIZE", cursor_size_fmt, 1);
+        if (config.cursor_theme != NULL) {
+            setenv("XCURSOR_THEME", config.cursor_theme, 1);
+        }
+    }
+
     animation_init();
     rules_init();
 }

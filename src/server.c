@@ -2,6 +2,7 @@
 
 #include "activation.h"
 #include "background.h"
+#include "config.h"
 #include "cursor.h"
 #include "input.h"
 #include "layers.h"
@@ -234,7 +235,10 @@ int server_init(struct wl_display *display) {
 
     server.cursor = wlr_cursor_create();
     wlr_cursor_attach_output_layout(server.cursor, server.output_layout);
-    server.cursor_mgr = wlr_xcursor_manager_create(NULL, 24);
+
+    uint32_t cursor_size =
+        config.cursor_size > 0 ? (uint32_t)config.cursor_size : 24;
+    server.cursor_mgr = wlr_xcursor_manager_create(NULL, cursor_size);
 
     server.cursor_motion.notify = cursor_handle_motion;
     wl_signal_add(&server.cursor->events.motion, &server.cursor_motion);

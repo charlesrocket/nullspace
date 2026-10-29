@@ -214,6 +214,8 @@ static void set_defaults(void) {
     config.gaps = CFG_GAPS;
     config.smart_gaps = CFG_SMART_GAPS;
     config.nmasters = CFG_NMASTERS;
+    config.cursor_size = CFG_CURSOR_SIZE;
+    config.cursor_theme = CFG_CURSOR_THEME;
     config.mfact = CFG_MFACT;
     config.center_overspread = CFG_CENTER_OVERSPREAD;
     config.center_when_single_stack = CFG_CENTER_WHEN_SINGLE_STACK;
@@ -470,6 +472,13 @@ parse_key(const char *key, const char *value, bool *seen_window_rule) {
             log_warn("Bad gaps '%s'", value);
         return;
     }
+    if (strcmp(key, "cursor_size") == 0) {
+        if (ns_parse_int(value, &l) && l >= 0 && l <= 1000)
+            config.cursor_size = (int)l;
+        else
+            log_warn("Bad cursor size '%s'", value);
+        return;
+    }
     if (strcmp(key, "smart_gaps") == 0) {
         if (parse_bool(value, &b))
             config.smart_gaps = b;
@@ -508,6 +517,10 @@ parse_key(const char *key, const char *value, bool *seen_window_rule) {
 
     if (strcmp(key, "cmd_start") == 0) {
         set_string(&config.cmd_start, value);
+        return;
+    }
+    if (strcmp(key, "cursor_theme") == 0) {
+        set_string(&config.cursor_theme, value);
         return;
     }
     if (strcmp(key, "cmd_terminal") == 0) {
@@ -781,6 +794,7 @@ static bool write_default_config(const char *path) {
     ok = ok
       && w_kv_str(fd, "default_layout", ns_layout_name(config.default_layout));
     ok = ok && w_kv_long(fd, "gaps", config.gaps);
+    ok = ok && w_kv_long(fd, "cursor_size", config.cursor_size);
     ok = ok && w_kv_bool(fd, "smart_gaps", config.smart_gaps);
     ok = ok && w_kv_long(fd, "nmasters", config.nmasters);
     ok = ok && w_kv_float(fd, "mfact", (double)config.mfact, 3);
@@ -792,6 +806,7 @@ static bool write_default_config(const char *path) {
 
     ok = ok && w_str(fd, "\n");
     ok = ok && w_kv_str(fd, "cmd_start", config.cmd_start);
+    ok = ok && w_kv_str(fd, "cursor_theme", config.cursor_theme);
     ok = ok && w_kv_str(fd, "cmd_terminal", config.cmd_terminal);
     ok = ok && w_kv_str(fd, "cmd_f1", config.cmd_f1);
     ok = ok && w_kv_str(fd, "cmd_f2", config.cmd_f2);
@@ -955,6 +970,7 @@ void config_finish(void) {
     } while (0)
 
     FREE_CFG(cmd_start);
+    FREE_CFG(cursor_theme);
     FREE_CFG(cmd_terminal);
     FREE_CFG(cmd_f1);
     FREE_CFG(cmd_f2);

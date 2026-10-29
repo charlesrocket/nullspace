@@ -13,6 +13,9 @@
 
 #define CFG_DEFAULT_LAYOUT           LAYOUT_VERTICAL_TILE
 
+#define CFG_CURSOR_SIZE              24
+#define CFG_CURSOR_THEME             NULL
+
 #define CFG_GAPS                     8
 #define CFG_SMART_GAPS               false
 #define CFG_GAP_OUTER_H              CFG_GAPS
@@ -180,6 +183,8 @@ struct Config {
     enum Layout default_layout;
 
     int gaps;
+    int cursor_size;
+    char *cursor_theme;
     bool smart_gaps;
     int nmasters;
     float mfact;
