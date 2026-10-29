@@ -15,7 +15,6 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <sys/_clock_id.h>
 #include <time.h>
 #include <wayland-server-core.h>
 #include <wayland-util.h>
@@ -60,6 +59,23 @@ int output_set_power(const char *name, int mode) {
     return matched;
 }
 
+static void output_update_geometry(struct Output *out) {
+    struct wlr_box box;
+    wlr_output_layout_get_box(server.output_layout, out->wlr_output, &box);
+    if (box.width <= 0 || box.height <= 0) return;
+
+    out->pos_x = box.x;
+    out->pos_y = box.y;
+    out->width = box.width;
+    out->height = box.height;
+
+    out->area_x = box.x;
+    out->area_y = box.y;
+    out->area_width = box.width;
+    out->area_height = box.height;
+    out->area_set = true;
+}
+
 void output_create(struct wlr_output *wlr_output) {
     if (!wlr_output_init_render(
             wlr_output, server.allocator, server.renderer
@@ -67,6 +83,30 @@ void output_create(struct wlr_output *wlr_output) {
         log_warn("Failed to init render");
 
         return;
+    }
+
+    {
+        struct wlr_output_state state;
+        wlr_output_state_init(&state);
+        wlr_output_state_set_enabled(&state, true);
+
+        struct wlr_output_mode *mode = wlr_output_preferred_mode(wlr_output);
+        if (mode != NULL) {
+            wlr_output_state_set_mode(&state, mode);
+        } else if (wlr_output->width > 0 && wlr_output->height > 0) {
+            wlr_output_state_set_custom_mode(
+                &state, wlr_output->width, wlr_output->height,
+                wlr_output->refresh
+            );
+        }
+
+        bool ok = wlr_output_commit_state(wlr_output, &state);
+        wlr_output_state_finish(&state);
+
+        if (!ok) {
+            log_err("Failed to commit initial state for %s", wlr_output->name);
+            return;
+        }
     }
 
     struct Output *out = calloc(1, sizeof(*out));
@@ -87,18 +127,7 @@ void output_create(struct wlr_output *wlr_output) {
         server.scene_layout, layout_out, out->scene_output
     );
 
-    struct wlr_box box;
-    wlr_output_layout_get_box(server.output_layout, wlr_output, &box);
-
-    out->pos_x = box.x;
-    out->pos_y = box.y;
-    out->width = box.width;
-    out->height = box.height;
-    out->area_x = out->pos_x;
-    out->area_y = out->pos_y;
-    out->area_width = out->width;
-    out->area_height = out->height;
-    out->area_set = true;
+    output_update_geometry(out);
 
     session_lock_update_geometry();
 
@@ -125,25 +154,7 @@ void output_create(struct wlr_output *wlr_output) {
         out->pos_x, out->pos_y
     );
 
-    struct wlr_output_state state;
-    wlr_output_state_init(&state);
-    wlr_output_state_set_enabled(&state, true);
-
-    struct wlr_output_mode *mode = wlr_output_preferred_mode(wlr_output);
-    if (mode != NULL) {
-        wlr_output_state_set_mode(&state, mode);
-    } else { // TODO
-        wlr_output_state_set_custom_mode(&state, 1920, 1080, 0);
-    }
-
-    if (!wlr_scene_output_build_state(out->scene_output, &state, NULL)) {
-        log_err("Failed to build initial state for %s", wlr_output->name);
-    } else if (!wlr_output_commit_state(wlr_output, &state)) {
-        log_err("Failed to commit initial state for %s", wlr_output->name);
-    }
-
     wm_mark_layout_dirty();
-    wlr_output_state_finish(&state);
 
 #ifdef XWAYLAND
     xwayland_primary_update();
@@ -182,8 +193,13 @@ static void output_handle_request_state(struct wl_listener *l, void *data) {
     (void)l;
 
     struct wlr_output_event_request_state *ev = data;
-    wlr_output_commit_state(ev->output, ev->state);
+    if (!wlr_output_commit_state(ev->output, ev->state)) return;
+
+    struct Output *out = output_from_wlr_output(ev->output);
+    if (out != NULL) output_update_geometry(out);
+
     session_lock_update_geometry();
+    wm_mark_layout_dirty();
 }
 
 static void output_handle_destroy(struct wl_listener *l, void *data) {

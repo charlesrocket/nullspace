@@ -14,6 +14,7 @@
 
 #include <fcntl.h>
 #include <signal.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,7 +36,21 @@
 #define VERSION "dirty"
 #endif
 
-#define LOG_TOPIC ""
+#define LOG_TOPIC       ""
+#define HEADLESS_WIDTH  1280
+#define HEADLESS_HEIGHT 720
+
+static void headless_size(unsigned int *w, unsigned int *h) {
+    *w = HEADLESS_WIDTH;
+    *h = HEADLESS_HEIGHT;
+
+    const char *s = getenv("NULLSPACE_HEADLESS_SIZE"); // "1920x1080"
+    unsigned int ww, hh;
+    if (s != NULL && sscanf(s, "%dx%d", &ww, &hh) == 2 && ww > 0 && hh > 0) {
+        *w = ww;
+        *h = hh;
+    }
+}
 
 static int on_term(int sig, void *data) {
     (void)sig;
@@ -67,10 +82,13 @@ static void create_default_output(struct wlr_backend *backend, void *data) {
             *done = true;
             return;
         }
+
         wlr_wl_output_create(backend);
         *done = true;
     } else if (wlr_backend_is_headless(backend)) {
-        wlr_headless_add_output(backend, 1920, 1080);
+        unsigned int w, h;
+        headless_size(&w, &h);
+        wlr_headless_add_output(backend, w, h);
         *done = true;
     }
 #if WLR_HAS_X11_BACKEND

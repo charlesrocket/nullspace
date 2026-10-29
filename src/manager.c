@@ -166,16 +166,15 @@ static void window_hide_offscreen(struct Window *window, int32_t dir) {
     window->has_target = false;
     window->space_hidden = true;
 
-    if (!wm.animations.enabled || dir == 0) {
+    struct Output *out = output_primary();
+    if (!wm.animations.enabled || dir == 0 || out == NULL) {
         window->anim.running = false;
         window->hide_dir = 0;
         window_set_position(window, HIDDEN_POS_X, window->y);
         return;
     }
 
-    struct Output *out = output_primary();
-    int32_t offset = (out != NULL && out->width > 0) ? out->width : 1920;
-    if (offset < 1) offset = 1;
+    int32_t offset = out->width;
 
     int32_t nw = (window->prop_valid && window->prop_w > 0)
                    ? window->prop_w
