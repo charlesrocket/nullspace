@@ -105,6 +105,7 @@ static struct wlr_scene_tree *ensure_blur_tree(struct BgEffectSurface *bg) {
 
     struct wlr_scene_tree *blur_tree =
         wlr_scene_tree_create(surface_node->parent);
+
     if (blur_tree == NULL) return NULL;
 
     wlr_scene_node_lower_to_bottom(&blur_tree->node);
@@ -154,6 +155,30 @@ static struct BgEffectRect *rect_create(
     return r;
 }
 
+static bool background_compute_effective_region(
+    int surface_w, int surface_h, pixman_region32_t *current_blur,
+    pixman_region32_t *opaque, pixman_region32_t *out
+) {
+    pixman_region32_init(out);
+
+    if (surface_w > 0 && surface_h > 0 && current_blur != NULL
+        && pixman_region32_not_empty(current_blur)) {
+        pixman_region32_t box;
+        pixman_region32_init_rect(
+            &box, 0, 0, (unsigned int)surface_w, (unsigned int)surface_h
+        );
+
+        pixman_region32_intersect(out, &box, current_blur);
+        pixman_region32_fini(&box);
+    }
+
+    if (opaque != NULL && pixman_region32_not_empty(out)) {
+        pixman_region32_subtract(out, out, opaque);
+    }
+
+    return pixman_region32_not_empty(out);
+}
+
 static void blur_nodes_update(struct BgEffectSurface *bg) {
     if (bg->surface == NULL) return;
 
@@ -161,25 +186,12 @@ static void blur_nodes_update(struct BgEffectSurface *bg) {
     int sh = bg->surface->current.height;
 
     pixman_region32_t region;
-    pixman_region32_init(&region);
 
-    if (sw > 0 && sh > 0 && pixman_region32_not_empty(&bg->current_blur)) {
-        pixman_region32_t box;
-        pixman_region32_init_rect(
-            &box, 0, 0, (unsigned int)sw, (unsigned int)sh
-        );
+    bool wanted = background_compute_effective_region(
+        bg->surface->current.width, bg->surface->current.height,
+        &bg->current_blur, &bg->surface->current.opaque, &region
+    );
 
-        pixman_region32_intersect(&region, &box, &bg->current_blur);
-        pixman_region32_fini(&box);
-    }
-
-    if (pixman_region32_not_empty(&region)) {
-        pixman_region32_subtract(
-            &region, &region, &bg->surface->current.opaque
-        );
-    }
-
-    bool wanted = pixman_region32_not_empty(&region);
     pixman_region32_fini(&region);
 
     if (!wanted) {
@@ -342,6 +354,7 @@ static void manager_handle_get_background_effect(
     struct wl_resource *res = wl_resource_create(
         client, &ext_background_effect_surface_v1_interface, 1, id
     );
+
     if (res == NULL) {
         free(bg);
         wl_client_post_no_memory(client);
