@@ -207,7 +207,7 @@ int server_init(struct wl_display *display) {
 
     server.xdg_shell = wlr_xdg_shell_create(display, 6);
     if (server.xdg_shell == NULL) {
-        log_err("failed to create xdg-shell");
+        log_err("Failed to create xdg-shell");
         return -1;
     }
 
@@ -228,7 +228,7 @@ int server_init(struct wl_display *display) {
 
     server.seat = wlr_seat_create(display, "default");
     if (server.seat == NULL) {
-        log_err("failed to create seat");
+        log_err("Failed to create seat");
         return -1;
     }
 
@@ -339,9 +339,11 @@ int server_init(struct wl_display *display) {
     activation_init(server.xdg_activation);
 
     if (!wlr_backend_start(server.backend)) {
-        log_err("failed to start wlroots backend");
+        log_err("Failed to start wlroots backend");
         return -1;
     }
+
+    log_info("Initialization completed");
 
     return 0;
 }

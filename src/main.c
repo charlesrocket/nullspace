@@ -36,7 +36,7 @@
 #define VERSION "dirty"
 #endif
 
-#define LOG_TOPIC       ""
+#define LOG_TOPIC       "compositor"
 #define HEADLESS_WIDTH  1280
 #define HEADLESS_HEIGHT 720
 
