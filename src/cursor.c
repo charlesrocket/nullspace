@@ -12,6 +12,7 @@
 #include "window.h"
 
 #include <dev/evdev/input-event-codes.h>
+#include <nullspace/layouts.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -156,6 +157,7 @@ static void focus_follow_on_motion(struct Window *under) {
 
     if (!config.focus_follow || under == NULL) return;
     if (server.locked || !layouts_is_tiled(wm.layout)) return;
+    if (wm.layout == LAYOUT_HORIZONTAL_MONOCLE) return;
     if (buttons_down > 0) return; // never switch focus mid-drag
 
     bool crossed = under != prev;
