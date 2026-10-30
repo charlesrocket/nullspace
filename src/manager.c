@@ -364,18 +364,18 @@ void wm_init(void) {
     wm.wallpaper.blur_passes = CFG_WALLPAPER_BLUR_PASSES;
 #endif
 
-    wm.libinput.tap_state = config.libinput_tap_state;
-    wm.libinput.natural_scroll = config.libinput_natural_scroll;
-    wm.libinput.left_handed = config.libinput_left_handed;
-    wm.libinput.middle_emulation = config.libinput_middle_emulation;
-    wm.libinput.dwt = config.libinput_dwt;
-    wm.libinput.drag = config.libinput_drag;
-    wm.libinput.drag_lock = config.libinput_drag_lock;
-    wm.libinput.three_finger_drag = config.libinput_three_finger_drag;
-    wm.libinput.accel_profile = config.libinput_accel_profile;
-    wm.libinput.accel_speed = config.libinput_accel_speed;
-    wm.libinput.click_method = config.libinput_click_method;
-    wm.libinput.scroll_method = config.libinput_scroll_method;
+    wm.libinput.tap_state = config.input_tap_state;
+    wm.libinput.natural_scroll = config.input_natural_scroll;
+    wm.libinput.left_handed = config.input_left_handed;
+    wm.libinput.middle_emulation = config.input_middle_emulation;
+    wm.libinput.dwt = config.input_dwt;
+    wm.libinput.drag = config.input_drag;
+    wm.libinput.drag_lock = config.input_drag_lock;
+    wm.libinput.three_finger_drag = config.input_three_finger_drag;
+    wm.libinput.accel_profile = config.input_accel_profile;
+    wm.libinput.accel_speed = config.input_accel_speed;
+    wm.libinput.click_method = config.input_click_method;
+    wm.libinput.scroll_method = config.input_scroll_method;
 
     wm.kb_layout = NULL;
 

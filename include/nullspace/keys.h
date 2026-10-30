@@ -120,52 +120,52 @@ struct IpcKeyMeta {
     )                                                                          \
                                                                                \
     K_INT(                                                                     \
-        "libinput_tap_state", IPC_A_RW, IPC_AFTER_LIBINPUT, "tap-to-click",    \
+        "input_tap_state", IPC_A_RW, IPC_AFTER_LIBINPUT, "tap-to-click",       \
         wm.libinput.tap_state, -1, 1                                           \
     )                                                                          \
     K_INT(                                                                     \
-        "libinput_natural_scroll", IPC_A_RW, IPC_AFTER_LIBINPUT,               \
+        "input_natural_scroll", IPC_A_RW, IPC_AFTER_LIBINPUT,                  \
         "natural scroll", wm.libinput.natural_scroll, -1, 1                    \
     )                                                                          \
     K_INT(                                                                     \
-        "libinput_left_handed", IPC_A_RW, IPC_AFTER_LIBINPUT,                  \
-        "left-handed mode", wm.libinput.left_handed, -1, 1                     \
+        "input_left_handed", IPC_A_RW, IPC_AFTER_LIBINPUT, "left-handed mode", \
+        wm.libinput.left_handed, -1, 1                                         \
     )                                                                          \
     K_INT(                                                                     \
-        "libinput_middle_emulation", IPC_A_RW, IPC_AFTER_LIBINPUT,             \
+        "input_middle_emulation", IPC_A_RW, IPC_AFTER_LIBINPUT,                \
         "middle button emulation", wm.libinput.middle_emulation, -1, 1         \
     )                                                                          \
     K_INT(                                                                     \
-        "libinput_dwt", IPC_A_RW, IPC_AFTER_LIBINPUT, "disable-while-typing",  \
+        "input_dwt", IPC_A_RW, IPC_AFTER_LIBINPUT, "disable-while-typing",     \
         wm.libinput.dwt, -1, 1                                                 \
     )                                                                          \
     K_INT(                                                                     \
-        "libinput_drag", IPC_A_RW, IPC_AFTER_LIBINPUT, "tap-and-drag",         \
+        "input_drag", IPC_A_RW, IPC_AFTER_LIBINPUT, "tap-and-drag",            \
         wm.libinput.drag, -1, 1                                                \
     )                                                                          \
     K_INT(                                                                     \
-        "libinput_drag_lock", IPC_A_RW, IPC_AFTER_LIBINPUT, "drag lock",       \
+        "input_drag_lock", IPC_A_RW, IPC_AFTER_LIBINPUT, "drag lock",          \
         wm.libinput.drag_lock, -1, 2                                           \
     )                                                                          \
     K_INT(                                                                     \
-        "libinput_three_finger_drag", IPC_A_RW, IPC_AFTER_LIBINPUT,            \
+        "input_three_finger_drag", IPC_A_RW, IPC_AFTER_LIBINPUT,               \
         "3-finger drag", wm.libinput.three_finger_drag, -1, 2                  \
     )                                                                          \
     K_INT(                                                                     \
-        "libinput_accel_profile", IPC_A_RW, IPC_AFTER_LIBINPUT,                \
+        "input_accel_profile", IPC_A_RW, IPC_AFTER_LIBINPUT,                   \
         "accel profile bits: 0 none, 1 flat, 2 adaptive, 4 custom",            \
         wm.libinput.accel_profile, -1, 4                                       \
     )                                                                          \
     K_FLOAT(                                                                   \
-        "libinput_accel_speed", IPC_A_RW, IPC_AFTER_LIBINPUT,                  \
+        "input_accel_speed", IPC_A_RW, IPC_AFTER_LIBINPUT,                     \
         "accel speed (-2 = skip)", wm.libinput.accel_speed, -2.0f, 1.0f        \
     )                                                                          \
     K_INT(                                                                     \
-        "libinput_click_method", IPC_A_RW, IPC_AFTER_LIBINPUT,                 \
+        "input_click_method", IPC_A_RW, IPC_AFTER_LIBINPUT,                    \
         "click method bits", wm.libinput.click_method, -1, 2                   \
     )                                                                          \
     K_INT(                                                                     \
-        "libinput_scroll_method", IPC_A_RW, IPC_AFTER_LIBINPUT,                \
+        "input_scroll_method", IPC_A_RW, IPC_AFTER_LIBINPUT,                   \
         "scroll method bits: 0 none, 1 two_finger, 2 edge, 4 button",          \
         wm.libinput.scroll_method, -1, 4                                       \
     )

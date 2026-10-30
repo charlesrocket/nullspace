@@ -106,7 +106,7 @@
 #define CFG_LIBINPUT_THREE_FINGER_DRAG -1
 // 0 none | 1 flat | 2 adaptive | 4 custom
 #define CFG_LIBINPUT_ACCEL_PROFILE     1
-// Valid range is (-1,1), (-2.0f) to skip
+// Valid range is (-1,1), (-2.0) to skip
 #define CFG_LIBINPUT_ACCEL_SPD         (-2.0f)
 // 0 none | 1 button_areas | 2 clickfinger
 #define CFG_LIBINPUT_CLICK_METHOD      -1
@@ -202,18 +202,12 @@ struct Config {
     char *kb_options, *kb_layouts;
     int kb_rate_hz, kb_delay_ms;
 
-    int libinput_tap_state;
-    int libinput_natural_scroll;
-    int libinput_left_handed;
-    int libinput_middle_emulation;
-    int libinput_dwt;
-    int libinput_drag;
-    int libinput_drag_lock;
-    int libinput_three_finger_drag;
-    int libinput_accel_profile;
-    float libinput_accel_speed;
-    int libinput_click_method;
-    int libinput_scroll_method;
+    int input_tap_state, input_natural_scroll, input_left_handed,
+        input_middle_emulation, input_dwt, input_drag, input_drag_lock,
+        input_three_finger_drag, input_accel_profile, input_click_method,
+        input_scroll_method;
+
+    float input_accel_speed;
 
     size_t bind_count;
 

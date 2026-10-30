@@ -102,19 +102,6 @@ static bool parse_int_in_range(
     return false;
 }
 
-static bool parse_float_in_range(
-    const char *key, const char *value, float min, float max, float *out
-) {
-    float f;
-    if (ns_parse_float(value, &f) && f >= min && f <= max) {
-        *out = f;
-        return true;
-    }
-
-    log_warn("Bad %s '%s'", key, value);
-    return false;
-}
-
 static size_t fmt_long(char *buf, size_t size, long v) {
     if (size < 2) return 0;
 
@@ -307,18 +294,18 @@ static void set_defaults(void) {
     config.kb_rate_hz = CFG_KB_RATE_HZ;
     config.kb_delay_ms = CFG_KB_DELAY_MS;
 
-    config.libinput_tap_state = CFG_LIBINPUT_TAP_STATE;
-    config.libinput_natural_scroll = CFG_LIBINPUT_NATURAL_SCROLL;
-    config.libinput_left_handed = CFG_LIBINPUT_LEFT_HANDED;
-    config.libinput_middle_emulation = CFG_LIBINPUT_MIDDLE_EMULATION;
-    config.libinput_dwt = CFG_LIBINPUT_DWT;
-    config.libinput_drag = CFG_LIBINPUT_DRAG;
-    config.libinput_drag_lock = CFG_LIBINPUT_DRAG_LOCK;
-    config.libinput_three_finger_drag = CFG_LIBINPUT_THREE_FINGER_DRAG;
-    config.libinput_accel_profile = CFG_LIBINPUT_ACCEL_PROFILE;
-    config.libinput_accel_speed = CFG_LIBINPUT_ACCEL_SPD;
-    config.libinput_click_method = CFG_LIBINPUT_CLICK_METHOD;
-    config.libinput_scroll_method = CFG_LIBINPUT_SCROLL_METHOD;
+    config.input_tap_state = CFG_LIBINPUT_TAP_STATE;
+    config.input_natural_scroll = CFG_LIBINPUT_NATURAL_SCROLL;
+    config.input_left_handed = CFG_LIBINPUT_LEFT_HANDED;
+    config.input_middle_emulation = CFG_LIBINPUT_MIDDLE_EMULATION;
+    config.input_dwt = CFG_LIBINPUT_DWT;
+    config.input_drag = CFG_LIBINPUT_DRAG;
+    config.input_drag_lock = CFG_LIBINPUT_DRAG_LOCK;
+    config.input_three_finger_drag = CFG_LIBINPUT_THREE_FINGER_DRAG;
+    config.input_accel_profile = CFG_LIBINPUT_ACCEL_PROFILE;
+    config.input_accel_speed = CFG_LIBINPUT_ACCEL_SPD;
+    config.input_click_method = CFG_LIBINPUT_CLICK_METHOD;
+    config.input_scroll_method = CFG_LIBINPUT_SCROLL_METHOD;
 
 #ifdef XWAYLAND
     config.xwayland = CFG_XWAYLAND;
@@ -585,42 +572,49 @@ parse_key(const char *key, const char *value, bool *seen_window_rule) {
     } else if (strcmp(key, "kb_delay_ms") == 0) {
         if (parse_int_in_range(key, value, 0, 10000, &l))
             config.kb_delay_ms = (int)l;
-    } else if (strcmp(key, "libinput_tap_state") == 0) {
+    } else if (strcmp(key, "input_tap_state") == 0) {
         if (parse_int_in_range(key, value, INT_MIN, INT_MAX, &l))
-            config.libinput_tap_state = (int)l;
-    } else if (strcmp(key, "libinput_natural_scroll") == 0) {
+            config.input_tap_state = (int)l;
+    } else if (strcmp(key, "input_natural_scroll") == 0) {
         if (parse_int_in_range(key, value, INT_MIN, INT_MAX, &l))
-            config.libinput_natural_scroll = (int)l;
-    } else if (strcmp(key, "libinput_left_handed") == 0) {
+            config.input_natural_scroll = (int)l;
+    } else if (strcmp(key, "input_left_handed") == 0) {
         if (parse_int_in_range(key, value, INT_MIN, INT_MAX, &l))
-            config.libinput_left_handed = (int)l;
-    } else if (strcmp(key, "libinput_middle_emulation") == 0) {
+            config.input_left_handed = (int)l;
+    } else if (strcmp(key, "input_middle_emulation") == 0) {
         if (parse_int_in_range(key, value, INT_MIN, INT_MAX, &l))
-            config.libinput_middle_emulation = (int)l;
-    } else if (strcmp(key, "libinput_dwt") == 0) {
+            config.input_middle_emulation = (int)l;
+    } else if (strcmp(key, "input_dwt") == 0) {
         if (parse_int_in_range(key, value, INT_MIN, INT_MAX, &l))
-            config.libinput_dwt = (int)l;
-    } else if (strcmp(key, "libinput_drag") == 0) {
+            config.input_dwt = (int)l;
+    } else if (strcmp(key, "input_drag") == 0) {
         if (parse_int_in_range(key, value, INT_MIN, INT_MAX, &l))
-            config.libinput_drag = (int)l;
-    } else if (strcmp(key, "libinput_drag_lock") == 0) {
+            config.input_drag = (int)l;
+    } else if (strcmp(key, "input_drag_lock") == 0) {
         if (parse_int_in_range(key, value, INT_MIN, INT_MAX, &l))
-            config.libinput_drag_lock = (int)l;
-    } else if (strcmp(key, "libinput_three_finger_drag") == 0) {
+            config.input_drag_lock = (int)l;
+    } else if (strcmp(key, "input_three_finger_drag") == 0) {
         if (parse_int_in_range(key, value, INT_MIN, INT_MAX, &l))
-            config.libinput_three_finger_drag = (int)l;
-    } else if (strcmp(key, "libinput_accel_profile") == 0) {
+            config.input_three_finger_drag = (int)l;
+    } else if (strcmp(key, "input_accel_profile") == 0) {
         if (parse_int_in_range(key, value, INT_MIN, INT_MAX, &l))
-            config.libinput_accel_profile = (int)l;
-    } else if (strcmp(key, "libinput_accel_speed") == 0) {
-        if (parse_float_in_range(key, value, -1.0f, 1.0f, &f))
-            config.libinput_accel_speed = f;
-    } else if (strcmp(key, "libinput_click_method") == 0) {
+            config.input_accel_profile = (int)l;
+    } else if (strcmp(key, "input_accel_speed") == 0) {
+        if (!ns_parse_float(value, &f)) {
+            log_warn("Bad input_accel_speed '%s'", value);
+        } else if (f >= -1.0f && f <= 1.0f) {
+            config.input_accel_speed = f;
+        } else if (f <= -2.0f) {
+            config.input_accel_speed = -2.0f;
+        } else {
+            log_warn("Bad input_accel_speed '%s'", value);
+        }
+    } else if (strcmp(key, "input_click_method") == 0) {
         if (parse_int_in_range(key, value, INT_MIN, INT_MAX, &l))
-            config.libinput_click_method = (int)l;
-    } else if (strcmp(key, "libinput_scroll_method") == 0) {
+            config.input_click_method = (int)l;
+    } else if (strcmp(key, "input_scroll_method") == 0) {
         if (parse_int_in_range(key, value, INT_MIN, INT_MAX, &l))
-            config.libinput_scroll_method = (int)l;
+            config.input_scroll_method = (int)l;
 #ifdef XWAYLAND
     } else if (strcmp(key, "xwayland") == 0) {
         if (parse_bool(key, value, &b)) config.xwayland = b;
@@ -746,38 +740,30 @@ static bool write_default_config(const char *path) {
     ok = ok && w_kv_long(fd, "kb_delay_ms", config.kb_delay_ms);
 
     ok = ok && w_str(fd, "\n");
-    ok = ok && w_kv_long(fd, "libinput_tap_state", config.libinput_tap_state);
+    ok = ok && w_kv_long(fd, "input_tap_state", config.input_tap_state);
+    ok = ok
+      && w_kv_long(fd, "input_natural_scroll", config.input_natural_scroll);
+
+    ok = ok && w_kv_long(fd, "input_left_handed", config.input_left_handed);
+    ok = ok
+      && w_kv_long(fd, "input_middle_emulation", config.input_middle_emulation);
+
+    ok = ok && w_kv_long(fd, "input_dwt", config.input_dwt);
+    ok = ok && w_kv_long(fd, "input_drag", config.input_drag);
+    ok = ok && w_kv_long(fd, "input_drag_lock", config.input_drag_lock);
     ok = ok
       && w_kv_long(
-             fd, "libinput_natural_scroll", config.libinput_natural_scroll
+             fd, "input_three_finger_drag", config.input_three_finger_drag
       );
 
-    ok = ok
-      && w_kv_long(fd, "libinput_left_handed", config.libinput_left_handed);
-    ok = ok
-      && w_kv_long(
-             fd, "libinput_middle_emulation", config.libinput_middle_emulation
-      );
-
-    ok = ok && w_kv_long(fd, "libinput_dwt", config.libinput_dwt);
-    ok = ok && w_kv_long(fd, "libinput_drag", config.libinput_drag);
-    ok = ok && w_kv_long(fd, "libinput_drag_lock", config.libinput_drag_lock);
-    ok = ok
-      && w_kv_long(
-             fd, "libinput_three_finger_drag", config.libinput_three_finger_drag
-      );
-
-    ok = ok
-      && w_kv_long(fd, "libinput_accel_profile", config.libinput_accel_profile);
+    ok = ok && w_kv_long(fd, "input_accel_profile", config.input_accel_profile);
     ok = ok
       && w_kv_float(
-             fd, "libinput_accel_speed", (double)config.libinput_accel_speed, 3
+             fd, "input_accel_speed", (double)config.input_accel_speed, 3
       );
 
-    ok = ok
-      && w_kv_long(fd, "libinput_click_method", config.libinput_click_method);
-    ok = ok
-      && w_kv_long(fd, "libinput_scroll_method", config.libinput_scroll_method);
+    ok = ok && w_kv_long(fd, "input_click_method", config.input_click_method);
+    ok = ok && w_kv_long(fd, "input_scroll_method", config.input_scroll_method);
 
     ok = ok && w_str(fd, "\n");
 #ifdef WALLPAPER
