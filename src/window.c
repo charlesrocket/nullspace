@@ -220,7 +220,16 @@ void window_set_fullscreen(struct Window *window, bool fullscreen) {
         );
     }
 
-    if (fullscreen) window_raise(window);
+    if (fullscreen) {
+        struct Output *o = output_primary();
+        if (o != NULL) {
+            window_apply_target(
+                window, o->pos_x, o->pos_y, o->width, o->height
+            );
+        }
+
+        window_raise(window);
+    }
 
     idle_update_inhibit();
     wm_mark_layout_dirty();
