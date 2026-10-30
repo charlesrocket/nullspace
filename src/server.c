@@ -423,10 +423,13 @@ static bool inhibitor_surface_visible(struct wlr_surface *surface) {
     }
 
     struct LayerSurface *ls = layer_surface_from_wlr_surface(root);
-    if (ls == NULL || !ls->mapped) return false;
+    if (ls != NULL) {
+        if (!ls->mapped) return false;
+        int lx = 0, ly = 0;
+        return wlr_scene_node_coords(&ls->scene_tree->node, &lx, &ly);
+    }
 
-    int lx = 0, ly = 0;
-    return wlr_scene_node_coords(&ls->scene_tree->node, &lx, &ly);
+    return true;
 }
 
 void idle_update_inhibit(void) {
