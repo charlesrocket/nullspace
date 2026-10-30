@@ -9,6 +9,7 @@ project(
   ],
 )
 
+prefix = get_option('prefix')
 cc = meson.get_compiler('c')
 add_project_arguments(cc.get_supported_arguments([
   '-DVERSION="@0@"'.format(meson.project_version()),
@@ -101,3 +102,6 @@ executable(
   include_directories: includes,
   install: true,
 )
+
+portal_install_dir = join_paths(prefix, 'share/xdg-desktop-portal')
+install_data('assets/nullspace-portals.conf', install_dir : portal_install_dir)
