@@ -49,6 +49,10 @@ static struct InteractiveOp interactive;
 static struct Window *hovered_window;
 static unsigned buttons_down;
 
+static struct Window *pointer_grab_window;
+static double pointer_grab_lx, pointer_grab_ly; // global cursor at press
+static double pointer_grab_sx, pointer_grab_sy; // surface at press
+
 static void interactive_apply(double cx, double cy) {
     struct InteractiveOp *g = &interactive;
     if (!g->active || g->window == NULL || g->window->closed) return;
@@ -140,6 +144,7 @@ void cursor_end_interactive_for(struct Window *window) {
 // Handles window's mid-drag destroy.
 void cursor_window_destroyed(struct Window *window) {
     if (hovered_window == window) hovered_window = NULL;
+    if (pointer_grab_window == window) pointer_grab_window = NULL;
     cursor_end_interactive_for(window);
 }
 
@@ -169,7 +174,29 @@ static void focus_follow_on_motion(struct Window *under) {
     focus_window(under);
 }
 
+static void send_grabbed_motion(void) {
+    if (pointer_grab_window == NULL || pointer_grab_window->closed
+        || pointer_grab_window->space_hidden || server.locked) {
+        return;
+    }
+
+    if (window_wlr_surface(pointer_grab_window) == NULL) return;
+
+    double dx = server.cursor->x - pointer_grab_lx;
+    double dy = server.cursor->y - pointer_grab_ly;
+
+    wlr_seat_pointer_notify_motion(
+        server.seat, (uint32_t)animation_now_ms(), pointer_grab_sx + dx,
+        pointer_grab_sy + dy
+    );
+}
+
 static void cursor_manage_focus(bool motion) {
+    if (buttons_down > 0 && !wlr_seat_pointer_has_grab(server.seat)) {
+        if (motion) { send_grabbed_motion(); }
+        return;
+    }
+
     struct wlr_surface *surface = NULL;
     double sx = 0, sy = 0;
 
@@ -307,6 +334,22 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
         focus_window(under);
     }
 
+    if (ev->state == WL_POINTER_BUTTON_STATE_PRESSED && buttons_down == 0) {
+        struct wlr_surface *surf = NULL;
+        double sx = 0, sy = 0;
+        struct Window *under =
+            window_at(server.cursor->x, server.cursor->y, &surf, &sx, &sy);
+
+        if (under != NULL && !under->closed && !under->space_hidden
+            && surf != NULL) {
+            pointer_grab_window = under;
+            pointer_grab_lx = server.cursor->x;
+            pointer_grab_ly = server.cursor->y;
+            pointer_grab_sx = sx;
+            pointer_grab_sy = sy;
+        }
+    }
+
     wlr_seat_pointer_notify_button(
         server.seat, ev->time_msec, ev->button, ev->state
     );
@@ -316,6 +359,7 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
         session_lock_click_focus();
     } else if (buttons_down > 0) {
         buttons_down--;
+        if (buttons_down == 0) pointer_grab_window = NULL;
     }
 
     cursor_update_focus();
