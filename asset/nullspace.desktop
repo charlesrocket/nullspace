@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Nullspace
+Comment=A tiling Wayland compositor
+Exec=nullspace
+Type=Application
+DesktopNames=nullspace;wlroots
