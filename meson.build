@@ -99,5 +99,11 @@ executable(
 
 desktop_install_dir = join_paths(prefix, 'share/wayland-sessions')
 portal_install_dir = join_paths(prefix, 'share/xdg-desktop-portal')
+
 install_data('asset/nullspace.desktop', install_dir : desktop_install_dir)
 install_data('asset/nullspace-portals.conf', install_dir : portal_install_dir)
+
+install_data('contrib/start', install_dir: join_paths(prefix, 'bin'),
+  rename: 'nullspace-start',
+  install_mode: ['rwxr-xr-x', 'root', 'wheel']
+)
