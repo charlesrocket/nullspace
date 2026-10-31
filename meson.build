@@ -44,7 +44,7 @@ xcb = dependency('xcb', required: get_option('xwayland'))
 xcb_randr = dependency('xcb-randr', required: get_option('xwayland'))
 libinput = dependency('libinput')
 pixman = dependency('pixman-1')
-spng = dependency('spng', required: get_option('wallpaper'))
+spng = dependency('spng')
 pthreads = dependency('threads')
 
 deps = [
@@ -64,12 +64,6 @@ build_xwayland = xcb.found() and xcb_randr.found()
 
 if build_xwayland
   add_project_arguments('-DXWAYLAND', language: 'c')
-endif
-
-build_wallpaper = spng.found()
-
-if build_wallpaper
-  add_project_arguments('-DWALLPAPER', language: 'c')
 endif
 
 inc_public = include_directories('include')

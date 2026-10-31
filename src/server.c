@@ -14,10 +14,8 @@
 #include "seat.h"
 #include "session.h"
 #include "space.h"
-#include "window.h"
-#ifdef WALLPAPER
 #include "wallpaper.h"
-#endif
+#include "window.h"
 
 #include <scenefx/render/fx_renderer/fx_renderer.h>
 #include <scenefx/types/fx/clipped_region.h>
@@ -383,9 +381,7 @@ void server_finish(void) {
     struct Output *out, *tmp;
     wl_list_for_each_safe(out, tmp, &server.outputs, link) output_destroy(out);
 
-#ifdef WALLPAPER
     wallpaper_finish();
-#endif
     background_effect_finish();
     ext_workspace_finish();
 

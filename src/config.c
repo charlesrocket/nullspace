@@ -55,9 +55,7 @@ static const struct {
     {       "cmd_f10",        &config.cmd_f10,        CFG_CMD_F10},
     {    "kb_options",     &config.kb_options,     CFG_KB_OPTIONS},
     {    "kb_layouts",     &config.kb_layouts,     CFG_KB_LAYOUTS},
-#ifdef WALLPAPER
     {"wallpaper_path", &config.wallpaper_path, CFG_WALLPAPER_PATH},
-#endif
 };
 
 static bool set_string(char **dst, const char *value) {
@@ -766,9 +764,7 @@ static bool write_default_config(const char *path) {
     ok = ok && w_kv_long(fd, "input_scroll_method", config.input_scroll_method);
 
     ok = ok && w_str(fd, "\n");
-#ifdef WALLPAPER
     ok = ok && w_kv_str(fd, "wallpaper_path", config.wallpaper_path);
-#endif
 #ifdef XWAYLAND
     ok = ok && w_kv_bool(fd, "xwayland", config.xwayland);
 #endif

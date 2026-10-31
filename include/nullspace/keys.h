@@ -170,7 +170,6 @@ struct IpcKeyMeta {
         wm.libinput.scroll_method, -1, 4                                       \
     )
 
-#ifdef WALLPAPER
 #define KEYS_TABLE_WALLPAPER(K_INT, K_FLOAT, K_BOOL, K_STR, K_SPECIAL)         \
     K_INT(                                                                     \
         "wallpaper_pattern_bg_r", IPC_A_RW, IPC_AFTER_WALLPAPER,               \
@@ -216,6 +215,3 @@ struct IpcKeyMeta {
         "wallpaper_blur_passes", IPC_A_RW, IPC_AFTER_WALLPAPER,                \
         "wallpaper blur passes", wm.wallpaper.blur_passes, 0, 16               \
     )
-#else
-#define KEYS_TABLE_WALLPAPER(K_INT, K_FLOAT, K_BOOL, K_STR, K_SPECIAL)
-#endif

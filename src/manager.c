@@ -9,13 +9,10 @@
 #include "seat.h"
 #include "server.h"
 #include "space.h"
+#include "wallpaper.h"
 #include "window.h"
 
 #include <nullspace/layouts.h>
-#ifdef WALLPAPER
-#include "wallpaper.h"
-#endif
-
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -284,7 +281,6 @@ void wm_move_window_to_space(struct Window *window, int space) {
     ipc_notify_window_meta(window);
 }
 
-#ifdef WALLPAPER
 bool wm_set_wallpaper_path(const char *path) {
     if (path == NULL || path[0] == '\0') return false;
 
@@ -315,7 +311,6 @@ bool wm_set_wallpaper_path(const char *path) {
 }
 
 void wm_invalidate_wallpaper(void) { wallpaper_invalidate_all(); }
-#endif
 
 void wm_init(void) {
     wl_list_init(&wm.windows);
@@ -346,7 +341,6 @@ void wm_init(void) {
     wm.animations.duration_close = CFG_ANIM_DURATION_CLOSE;
     wm.animations.duration_space = CFG_ANIM_DURATION_SPACE;
 
-#ifdef WALLPAPER
     wm.wallpaper.path = strdup(
         config.wallpaper_path ? config.wallpaper_path : CFG_WALLPAPER_PATH
     );
@@ -362,7 +356,6 @@ void wm_init(void) {
     wm.wallpaper.blur_enabled = CFG_WALLPAPER_BLUR_ENABLED;
     wm.wallpaper.blur_radius = CFG_WALLPAPER_BLUR_RADIUS;
     wm.wallpaper.blur_passes = CFG_WALLPAPER_BLUR_PASSES;
-#endif
 
     wm.libinput.tap_state = config.input_tap_state;
     wm.libinput.natural_scroll = config.input_natural_scroll;
@@ -400,8 +393,6 @@ void wm_finish(void) {
     free(wm.kb_layout);
     wm.kb_layout = NULL;
 
-#ifdef WALLPAPER
     free(wm.wallpaper.path);
     wm.wallpaper.path = NULL;
-#endif
 }

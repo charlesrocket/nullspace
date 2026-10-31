@@ -22,11 +22,8 @@ src_files = files(
   'keymap.c',
   'animation.c',
   'background.c',
+  'wallpaper.c',
 )
-
-if build_wallpaper
-  src_files += files('wallpaper.c')
-endif
 
 if build_xwayland
   src_files += files('xwayland.c')

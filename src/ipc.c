@@ -473,9 +473,7 @@ static void after_set(enum IpcAfter a) {
         case IPC_AFTER_MANAGE: wm_mark_layout_dirty(); break;
         case IPC_AFTER_LIBINPUT: libinput_reconfigure(); break;
         case IPC_AFTER_WALLPAPER:
-#ifdef WALLPAPER
             wm_invalidate_wallpaper();
-#endif
             wm_mark_layout_dirty();
             break;
     }
@@ -550,7 +548,6 @@ static const char *set_mfact(const char *value) {
     return NULL;
 }
 
-#ifdef WALLPAPER
 static const char *get_wallpaper(const char *arg, struct Value *out) {
     (void)arg;
     *out = v_str(wm.wallpaper.path);
@@ -564,7 +561,6 @@ static const char *set_wallpaper(const char *value) {
     emit_kv(NULL, "EVT", "wallpaper_path", v_str(wm.wallpaper.path));
     return NULL;
 }
-#endif
 
 static const struct SpecialOps {
     const char *name;
@@ -579,9 +575,7 @@ static const struct SpecialOps {
     {     "focused_title", false,      get_focused_title,              NULL},
     {    "focused_app_id", false,     get_focused_app_id,              NULL},
     {             "mfact",  true,              get_mfact,         set_mfact},
-#ifdef WALLPAPER
     {    "wallpaper_path",  true,          get_wallpaper,     set_wallpaper},
-#endif
 };
 
 static const struct SpecialOps *special_find(const char *name) {

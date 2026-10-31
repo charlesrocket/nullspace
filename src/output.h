@@ -14,10 +14,7 @@ struct Output {
     struct wl_listener frame;
     struct wl_listener request_state;
     struct wl_listener destroy;
-
-#ifdef WALLPAPER
     struct WallpaperOutput *wallpaper;
-#endif
 
     int32_t width;
     int32_t height;

@@ -1,11 +1,4 @@
 option(
-  'wallpaper',
-  type: 'feature',
-  value: 'auto',
-  description: 'Wallpaper module (requires spng)',
-)
-
-option(
   'xwayland',
   type: 'feature',
   value: 'auto',

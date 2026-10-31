@@ -5,9 +5,7 @@
 #include "manager.h"
 #include "server.h"
 #include "spawn.h"
-#ifdef WALLPAPER
 #include "wallpaper.h"
-#endif
 #ifdef XWAYLAND
 #include "xwayland.h"
 #endif
@@ -172,10 +170,8 @@ int main(int argc, char *argv[]) {
     ipc_init();
     ipc_attach_event_loop(server.event_loop);
 
-#ifdef WALLPAPER
     wallpaper_worker_init();
     wm_set_wallpaper_path(wm.wallpaper.path);
-#endif
 
     {
         bool created = false;

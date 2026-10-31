@@ -4,13 +4,10 @@
 #include "input.h"
 #include "layouts/layout.h"
 #include "seat.h"
+#include "wallpaper.h"
 #include "window.h"
 
 #include <nullspace/layouts.h>
-#ifdef WALLPAPER
-#include "wallpaper.h"
-#endif
-
 #include <stdbool.h>
 #include <stdint.h>
 #include <wayland-util.h>
@@ -25,9 +22,7 @@ struct WindowManager {
     struct wl_list layer_surfaces; // LayerSurface
 
     struct AnimationsConfig animations;
-#ifdef WALLPAPER
     struct WallpaperConfig wallpaper;
-#endif
     struct LibinputConfig libinput;
 
     enum Layout layout;
@@ -66,7 +61,5 @@ struct Window *wm_focus_stack_top(void);
 struct Window *wm_next_window(struct Window *window);
 struct Window *wm_focus_stack_top_except(struct Window *skip);
 
-#ifdef WALLPAPER
 bool wm_set_wallpaper_path(const char *path);
 void wm_invalidate_wallpaper(void);
-#endif

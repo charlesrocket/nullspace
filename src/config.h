@@ -89,67 +89,66 @@
 
 // grp:alt_shift_toggle | grp:alt_space_toggle | grp:ctrl_shift_toggle |
 // grp:win_space_toggle | grp:alt_caps_toggle
-#define CFG_KB_OPTIONS                 "grp:alt_space_toggle" // XKB options
-#define CFG_KB_LAYOUTS                 "us,no" // comma-separated layouts
-#define CFG_KB_RATE_HZ                 26      // repeats/sec
-#define CFG_KB_DELAY_MS                600
+#define CFG_KB_OPTIONS                     "grp:alt_space_toggle" // XKB options
+#define CFG_KB_LAYOUTS                     "us,no" // comma-separated layouts
+#define CFG_KB_RATE_HZ                     26      // repeats/sec
+#define CFG_KB_DELAY_MS                    600
 
-#define CFG_LIBINPUT_TAP_STATE         1
-#define CFG_LIBINPUT_NATURAL_SCROLL    1
-#define CFG_LIBINPUT_LEFT_HANDED       -1
-#define CFG_LIBINPUT_MIDDLE_EMULATION  -1
-#define CFG_LIBINPUT_DWT               -1 // disable-while-typing
-#define CFG_LIBINPUT_DRAG              -1
+#define CFG_LIBINPUT_TAP_STATE             1
+#define CFG_LIBINPUT_NATURAL_SCROLL        1
+#define CFG_LIBINPUT_LEFT_HANDED           -1
+#define CFG_LIBINPUT_MIDDLE_EMULATION      -1
+#define CFG_LIBINPUT_DWT                   -1 // disable-while-typing
+#define CFG_LIBINPUT_DRAG                  -1
 // -1/0 disabled | 1 timeout | 2 sticky
-#define CFG_LIBINPUT_DRAG_LOCK         -1
+#define CFG_LIBINPUT_DRAG_LOCK             -1
 // -1/0 disabled | 1 3fg | 2 4fg
-#define CFG_LIBINPUT_THREE_FINGER_DRAG -1
+#define CFG_LIBINPUT_THREE_FINGER_DRAG     -1
 // 0 none | 1 flat | 2 adaptive | 4 custom
-#define CFG_LIBINPUT_ACCEL_PROFILE     1
+#define CFG_LIBINPUT_ACCEL_PROFILE         1
 // Valid range is (-1,1), (-2.0) to skip
-#define CFG_LIBINPUT_ACCEL_SPD         (-2.0f)
+#define CFG_LIBINPUT_ACCEL_SPD             (-2.0f)
 // 0 none | 1 button_areas | 2 clickfinger
-#define CFG_LIBINPUT_CLICK_METHOD      -1
+#define CFG_LIBINPUT_CLICK_METHOD          -1
 // 0 no_scroll | 1 two_finger | 2 edge | 4 on_button_down
-#define CFG_LIBINPUT_SCROLL_METHOD     -1
+#define CFG_LIBINPUT_SCROLL_METHOD         -1
 
-#define CFG_ROUNDED_CORNERS_ENABLED    true
-#define CFG_ROUNDED_CORNERS_RADIUS     8 // minimum is 2
+#define CFG_ROUNDED_CORNERS_ENABLED        true
+#define CFG_ROUNDED_CORNERS_RADIUS         8 // minimum is 2
 
-#define CFG_ANIMATIONS_ENABLED         true
+#define CFG_ANIMATIONS_ENABLED             true
 
-#define CFG_ANIM_DURATION_MOVE         250
-#define CFG_ANIM_DURATION_OPEN         250
-#define CFG_ANIM_DURATION_CLOSE        250
-#define CFG_ANIM_DURATION_SPACE        250
+#define CFG_ANIM_DURATION_MOVE             250
+#define CFG_ANIM_DURATION_OPEN             250
+#define CFG_ANIM_DURATION_CLOSE            250
+#define CFG_ANIM_DURATION_SPACE            250
 
 // New window's vertical direction
 // (`true` slides new windows from above the screen).
-#define CFG_ANIM_OPEN_FROM_TOP         false
+#define CFG_ANIM_OPEN_FROM_TOP             false
 
 // Cubic bezier control points (x1, y1, x2, y2).
-#define CFG_ANIM_CURVE_MOVE            {0.25, 0.10, 0.25, 1.00}
-#define CFG_ANIM_CURVE_OPEN            {0.00, 0.00, 0.20, 1.00}
-#define CFG_ANIM_CURVE_CLOSE           {0.40, 0.00, 1.00, 1.00}
-#define CFG_ANIM_CURVE_SPACE           {0.25, 0.10, 0.25, 1.00}
+#define CFG_ANIM_CURVE_MOVE                {0.25, 0.10, 0.25, 1.00}
+#define CFG_ANIM_CURVE_OPEN                {0.00, 0.00, 0.20, 1.00}
+#define CFG_ANIM_CURVE_CLOSE               {0.40, 0.00, 1.00, 1.00}
+#define CFG_ANIM_CURVE_SPACE               {0.25, 0.10, 0.25, 1.00}
 
-#define CFG_BLUR_PASSES                2
-#define CFG_BLUR_RADIUS                7
-#define CFG_BLUR_NOISE                 0.03f
-#define CFG_BLUR_BRIGHTNESS            1.0f
-#define CFG_BLUR_CONTRAST              1.0f
-#define CFG_BLUR_SATURATION            1.0f
-#define CFG_BLUR_STRENGTH              0.9f
-#define CFG_BLUR_ALPHA                 1.0f
+#define CFG_BLUR_PASSES                    2
+#define CFG_BLUR_RADIUS                    7
+#define CFG_BLUR_NOISE                     0.03f
+#define CFG_BLUR_BRIGHTNESS                1.0f
+#define CFG_BLUR_CONTRAST                  1.0f
+#define CFG_BLUR_SATURATION                1.0f
+#define CFG_BLUR_STRENGTH                  0.9f
+#define CFG_BLUR_ALPHA                     1.0f
 
-#define CFG_POPUP_SHADOW_SIGMA         16.2f
-#define CFG_POPUP_SHADOW_SPREAD        22
-#define CFG_POPUP_SHADOW_OFFSET_X      0
-#define CFG_POPUP_SHADOW_OFFSET_Y      2
-#define CFG_POPUP_SHADOW_RADIUS        CFG_ROUNDED_CORNERS_RADIUS
-#define CFG_POPUP_SHADOW_OPACITY       0.64f
+#define CFG_POPUP_SHADOW_SIGMA             16.2f
+#define CFG_POPUP_SHADOW_SPREAD            22
+#define CFG_POPUP_SHADOW_OFFSET_X          0
+#define CFG_POPUP_SHADOW_OFFSET_Y          2
+#define CFG_POPUP_SHADOW_RADIUS            CFG_ROUNDED_CORNERS_RADIUS
+#define CFG_POPUP_SHADOW_OPACITY           0.64f
 
-#ifdef WALLPAPER
 #define CFG_WALLPAPER_PATH                 ".local/share/nullspace/wallpaper.ppm"
 
 #define CFG_WALLPAPER_PATTERN_BG_R         0x12
@@ -163,7 +162,6 @@
 #define CFG_WALLPAPER_BLUR_ENABLED         true
 #define CFG_WALLPAPER_BLUR_RADIUS          16
 #define CFG_WALLPAPER_BLUR_PASSES          2
-#endif
 
 #ifdef XWAYLAND
 #define CFG_XWAYLAND true // lazy
@@ -211,9 +209,7 @@ struct Config {
 
     size_t bind_count;
 
-#ifdef WALLPAPER
     char *wallpaper_path;
-#endif
 #ifdef XWAYLAND
     bool xwayland;
 #endif

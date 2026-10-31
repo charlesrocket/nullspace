@@ -6,15 +6,14 @@
 #include "server.h"
 #include "session.h"
 #include "space.h"
-#ifdef WALLPAPER
 #include "wallpaper.h"
-#endif
 #ifdef XWAYLAND
 #include "xwayland.h"
 #endif
 
 #include <stdlib.h>
 #include <string.h>
+#include <sys/_clock_id.h>
 #include <time.h>
 #include <wayland-server-core.h>
 #include <wayland-util.h>
@@ -140,10 +139,8 @@ void output_create(struct wlr_output *wlr_output) {
     out->destroy.notify = output_handle_destroy;
     wl_signal_add(&wlr_output->events.destroy, &out->destroy);
 
-#ifdef WALLPAPER
     out->wallpaper = wallpaper_output_create(out);
     wallpaper_update_output(out);
-#endif
 
     wl_list_insert(&server.outputs, &out->link);
 
@@ -169,9 +166,7 @@ static void output_handle_frame(struct wl_listener *l, void *data) {
     if (wm.layout_dirty) {
         wm.layout_dirty = false;
         layout_apply();
-#ifdef WALLPAPER
         wallpaper_update_all();
-#endif
     }
 
     wm_animation_tick_all();
@@ -213,12 +208,10 @@ void output_destroy(struct Output *out) {
     if (out->removed) return;
     out->removed = true;
 
-#ifdef WALLPAPER
     if (out->wallpaper != NULL) {
         wallpaper_output_destroy(out->wallpaper);
         out->wallpaper = NULL;
     }
-#endif
 
     wl_list_remove(&out->frame.link);
     wl_list_remove(&out->request_state.link);
