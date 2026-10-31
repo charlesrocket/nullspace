@@ -276,7 +276,15 @@ void seat_handle_new_input(struct wlr_input_device *device) {
             input_apply_pointer_config(device);
             break;
 
-        default: wlr_cursor_attach_input_device(server.cursor, device); break;
+        case WLR_INPUT_DEVICE_TOUCH:
+            wlr_cursor_attach_input_device(server.cursor, device);
+            break;
+
+        case WLR_INPUT_DEVICE_TABLET:
+            wlr_cursor_attach_input_device(server.cursor, device);
+            break;
+
+        default: break;
     }
 
     uint32_t caps = WL_SEAT_CAPABILITY_POINTER;
