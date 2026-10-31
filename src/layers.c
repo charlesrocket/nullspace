@@ -315,6 +315,7 @@ static void handle_commit(struct wl_listener *lst, void *data) {
     }
 
     arrange_layer_surface(ls);
+    update_output_usable_area(ls->output);
 }
 
 static void handle_destroy(struct wl_listener *lst, void *data) {
