@@ -147,7 +147,7 @@ void output_create(struct wlr_output *wlr_output) {
     ext_workspace_output_enter(out);
 
     log_info(
-        "Added %s (%dx%d @ %d,%d)", wlr_output->name, out->width, out->height,
+        "Added '%s' (%dx%d @ %d,%d)", wlr_output->name, out->width, out->height,
         out->pos_x, out->pos_y
     );
 
@@ -232,7 +232,7 @@ void output_destroy(struct Output *out) {
     session_lock_outputs_changed();
 
     wm_mark_layout_dirty();
-    log_info("Removed %s", out->wlr_output ? out->wlr_output->name : "?");
+    log_info("Removed '%s'", out->wlr_output ? out->wlr_output->name : "?");
 
     free(out);
 

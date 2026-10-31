@@ -164,7 +164,7 @@ int main(int argc, char *argv[]) {
     log_info("Display socket is '%s'", socket);
 
 #ifdef XWAYLAND
-    if (!xwayland_init(display)) { log_warn("XWayland is not ready"); }
+    if (!xwayland_init(display)) { log_warn("Xwayland is not ready"); }
 #endif
 
     ipc_init();

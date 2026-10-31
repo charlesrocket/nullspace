@@ -167,7 +167,7 @@ static void xwayland_primary_apply(void) {
 
         snprintf(applied_name, sizeof(applied_name), "%s", target_name);
         cache_refresh_attempted = false;
-        log_info("Primary output set to %s", applied_name);
+        log_info("Primary output set to '%s'", applied_name);
 
         xwayland_primary_disconnect();
         return;
