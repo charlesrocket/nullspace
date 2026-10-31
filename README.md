@@ -27,7 +27,7 @@ meson install -C build
 ## Usage
 
 ```
-nullspace
+nullspace-start
 ```
 
 ### IPC
