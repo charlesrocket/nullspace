@@ -11,8 +11,6 @@ fi
 
 if [ -n "$DBUS_SESSION_BUS_ADDRESS" ]; then
     exec nullspace
-elif command -v dbus-run-session >/dev/null 2>&1; then
-    exec dbus-run-session nullspace
 else
-    exec dbus-launch --exit-with-session nullspace
+    exec dbus-run-session nullspace
 fi
