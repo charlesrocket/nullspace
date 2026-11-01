@@ -6,6 +6,7 @@
 #include "server.h"
 #include "session.h"
 
+#include <scenefx/types/wlr_scene.h>
 #include <stdlib.h>
 #include <wayland-server-core.h>
 #include <wayland-util.h>
@@ -146,9 +147,11 @@ void popup_track(
 
     p->tree = tree;
 
+    int shadow_radius = CFG_POPUP_SHADOW_RADIUS;
+    if (shadow_radius < 24) { shadow_radius = 24; }
+
     p->shadow = wlr_scene_shadow_create(
-        tree, 0, 0, CFG_POPUP_SHADOW_RADIUS, CFG_POPUP_SHADOW_SIGMA,
-        popup_shadow_color
+        tree, 0, 0, shadow_radius, CFG_POPUP_SHADOW_SIGMA, popup_shadow_color
     );
 
     if (p->shadow == NULL) {
