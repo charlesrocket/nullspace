@@ -1,7 +1,6 @@
 #include "window.h"
 
 #include "animation.h"
-#include "config.h"
 #include "cursor.h"
 #include "decoration.h"
 #include "ipc.h"
@@ -38,52 +37,71 @@
 static void xw_unbind(struct Window *window);
 #endif
 
-struct CornerRadii {
-    int tl, tr, bl, br;
-};
+static int imin(int a, int b) { return a < b ? a : b; }
 
 static struct wlr_scene_tree *layer_for_layout(enum Layout layout) {
     return layouts_is_tiled(layout) ? server.tile_tree : server.float_tree;
 }
 
+struct CornerApply {
+    const struct wlr_surface *root;
+    struct fx_corner_radii radii;
+    int applied;
+};
+
 static void
 apply_radius(struct wlr_scene_buffer *buf, int sx, int sy, void *data) {
     (void)sx;
     (void)sy;
-    if (wlr_scene_surface_try_from_buffer(buf) == NULL) return;
 
-    struct fx_corner_radii *radii = data;
-    wlr_scene_buffer_set_corner_radii(buf, *radii);
+    struct CornerApply *ctx = data;
+    struct wlr_scene_surface *ss = wlr_scene_surface_try_from_buffer(buf);
+    if (ss == NULL) return;
+
+    // Only round the toplevel's own surface, not subsurfaces/popups.
+    if (ss->surface != ctx->root) return;
+
+    wlr_scene_buffer_set_corner_radii(buf, ctx->radii);
+    ctx->applied++;
+}
+
+static int corner_radius_for(const struct Window *window) {
+    if (!wm.rounded_corners || window->fullscreen) return 0;
+
+    int r = wm.rounded_corners_radius;
+    if (r < 0) r = 0;
+    if (r > UINT16_MAX) r = UINT16_MAX;
+
+    // Corners on the same edge must never overlap.
+    if (window->width > 0 && window->height > 0) {
+        r = imin(r, imin(window->width, window->height) / 2);
+    }
+
+    return r;
 }
 
 // TODO rewire to allow state changes (via IPC)
 void window_update_corners(struct Window *window) {
-    if (window == NULL || window->closed) return;
-    if (window->scene_tree == NULL) return;
+    if (window == NULL || window->closed || window->scene_tree == NULL) return;
 
-    int radius = CFG_ROUNDED_CORNERS_RADIUS;
-    if (radius <= 0) radius = 2; // lets cap the range for now
+    struct wlr_surface *root = window_wlr_surface(window);
+    if (root == NULL) return;
 
-    int tl = radius, tr = radius, bl = radius, br = radius;
+    int r = corner_radius_for(window);
 
-    if (window->fullscreen || !CFG_ROUNDED_CORNERS_ENABLED) {
-        tl = tr = bl = br = 0;
-    } else if (window->decoration != NULL) {
-        int32_t tab_w = window->decoration->tab_w;
-        int32_t tab_x = window->decoration->tab_x;
-        int32_t win_w = window->width;
+    int tl = r, tr = r, bl = r, br = r;
 
-        if (tab_x < radius)
-            tl = tab_x;
-        else
-            tl = radius;
+    const struct Decoration *deco = window->decoration;
+    if (r > 0 && deco != NULL && deco->tab != NULL) {
+        int win_w = window->width > 0 ? window->width : 1;
 
-        int32_t right_dist = win_w - (tab_x + tab_w);
-        if (right_dist < 0) right_dist = 0;
-        if (right_dist < radius)
-            tr = right_dist;
-        else
-            tr = radius;
+        int left_gap = deco->tab_x;
+        int right_gap = win_w - (deco->tab_x + deco->tab_w);
+        if (left_gap < 0) left_gap = 0;
+        if (right_gap < 0) right_gap = 0;
+
+        tl = imin(tl, left_gap);
+        tr = imin(tr, right_gap);
     }
 
     if (window->last_tl == tl && window->last_tr == tr && window->last_bl == bl
@@ -91,21 +109,28 @@ void window_update_corners(struct Window *window) {
         return;
     }
 
+    struct CornerApply ctx = {
+        .root = root,
+        .radii =
+            {
+                    .top_left = (uint16_t)tl,
+                    .top_right = (uint16_t)tr,
+                    .bottom_left = (uint16_t)bl,
+                    .bottom_right = (uint16_t)br,
+                    },
+        .applied = 0,
+    };
+
+    wlr_scene_node_for_each_buffer(
+        &window->scene_tree->node, apply_radius, &ctx
+    );
+
+    if (ctx.applied == 0) return;
+
     window->last_tl = tl;
     window->last_tr = tr;
     window->last_bl = bl;
     window->last_br = br;
-
-    struct fx_corner_radii radii = {
-        .top_left = (uint16_t)tl,
-        .top_right = (uint16_t)tr,
-        .bottom_left = (uint16_t)bl,
-        .bottom_right = (uint16_t)br,
-    };
-
-    wlr_scene_node_for_each_buffer(
-        &window->scene_tree->node, apply_radius, &radii
-    );
 }
 
 // May return NULL for X11 windows whose wl_surface is not associated yet.
@@ -484,10 +509,17 @@ static void window_handle_commit(struct wl_listener *l, void *data) {
     int32_t h = surf->geometry.height;
 
     if (w > 0 && h > 0) {
+        bool resized = window->width != w || window->height != h;
+
         window->width = w;
         window->height = h;
 
         if (!window->anim.running) window_clear_clip(window);
+
+        if (resized) {
+            deco_update_position(window);  // re-clamp tab + corners
+            window_update_corners(window); // tiled windows have no deco
+        }
     }
 
     if (!window->mapped && surf->surface->mapped) { window_do_map(window); }
@@ -858,6 +890,8 @@ void window_set_size(struct Window *window, int32_t w, int32_t h) {
 
         window->width = w;
         window->height = h;
+        deco_update_position(window);
+
         return;
     }
 #endif
@@ -1015,7 +1049,10 @@ static void xw_bind(struct Window *window) {
     wl_signal_add(&surface->events.map, &window->xw_map);
     window->xw_unmap.notify = xw_handle_unmap;
     wl_signal_add(&surface->events.unmap, &window->xw_unmap);
+
     window->xw_bound = true;
+    window->last_tl = window->last_tr = -1;
+    window->last_bl = window->last_br = -1;
 
     window_update_corners(window);
 

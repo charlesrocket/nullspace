@@ -66,13 +66,13 @@ static void handle_tree_destroy(struct wl_listener *l, void *data) {
     deco->btn_min = NULL;
 }
 
-static void update_tab_corners(struct Decoration *deco) {
+static void update_tab_corners(struct Decoration *deco, int32_t tab_w) {
     if (deco == NULL || deco->tab == NULL) return;
 
-    int radius = CFG_ROUNDED_CORNERS_RADIUS;
-    if (!CFG_ROUNDED_CORNERS_ENABLED) radius = 0;
+    int radius = wm.rounded_corners ? wm.rounded_corners_radius : 0;
     if (radius < 0) radius = 0;
-    if (radius > UINT16_MAX) radius = UINT16_MAX;
+    if (radius > tab_w / 2) radius = tab_w / 2;
+    if (radius > DECO_TAB_H) radius = DECO_TAB_H;
 
     uint16_t r = (uint16_t)radius;
     struct fx_corner_radii radii = {
@@ -109,6 +109,8 @@ static void layout_tab(struct Decoration *deco, int32_t tab_w) {
 
     wlr_scene_node_set_position(&deco->tab->node, bx, 0);
     wlr_scene_rect_set_size(deco->tab, tab_w, DECO_TAB_H);
+
+    update_tab_corners(deco, tab_w);
 
     wlr_scene_node_set_enabled(
         &deco->btn_close->node, tab_w >= DECO_TAB_MIN_CLOSE
@@ -174,7 +176,6 @@ void deco_create(struct Window *window) {
 
     window->decoration = deco;
 
-    update_tab_corners(deco);
     deco_update_position(window);
     deco_update_active(window, window == wm_focus_stack_top());
 }
@@ -193,6 +194,7 @@ void deco_destroy(struct Window *window) {
     }
 
     free(deco);
+    window_update_corners(window);
 }
 
 void deco_update_position(struct Window *window) {
