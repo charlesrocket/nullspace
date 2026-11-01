@@ -43,7 +43,8 @@ static void deco_apply_colors(struct Decoration *deco) {
     if (deco->btn_min != NULL) wlr_scene_rect_set_color(deco->btn_min, btn);
 
     float opacity = CFG_WINDOW_SHADOW_OPACITY;
-    if (!deco->active) { opacity *= (2.6f / 3.0f); }
+    if (!deco->active) opacity *= (2.6f / 3.0f);
+
     float color[4] = {0.0f, 0.0f, 0.0f, opacity};
 
     if (deco->shadow_win != NULL) {
@@ -291,6 +292,8 @@ void deco_update_position(struct Window *window) {
     wlr_scene_node_set_position(&deco->tree->node, 0, -DECO_TAB_H);
     layout_tab(deco, tab_w);
 
+    window_update_corners(window);
+
     const int sigma = (int)CFG_WINDOW_SHADOW_SIGMA;
 
     if (deco->shadow_win != NULL) {
@@ -302,6 +305,24 @@ void deco_update_position(struct Window *window) {
         );
 
         wlr_scene_node_set_position(&deco->shadow_win->node, -sigma, -sigma);
+
+        int tl = window->last_tl < 0 ? 0 : window->last_tl;
+        int tr = window->last_tr < 0 ? 0 : window->last_tr;
+        int bl = window->last_bl < 0 ? 0 : window->last_bl;
+        int br = window->last_br < 0 ? 0 : window->last_br;
+
+        struct clipped_region clip = {
+            .area = {.x = sigma, .y = sigma, .width = w, .height = h},
+            .corners =
+                {
+                     .top_left = (uint16_t)tl,
+                     .top_right = (uint16_t)tr,
+                     .bottom_left = (uint16_t)bl,
+                     .bottom_right = (uint16_t)br,
+                     },
+        };
+
+        wlr_scene_shadow_set_clipped_region(deco->shadow_win, clip);
     }
 
     if (deco->shadow_tab != NULL) {
@@ -312,9 +333,28 @@ void deco_update_position(struct Window *window) {
         wlr_scene_node_set_position(
             &deco->shadow_tab->node, deco->tab_x - sigma, -DECO_TAB_H - sigma
         );
-    }
 
-    window_update_corners(window);
+        int tab_r = 0;
+        if (wm.rounded_corners) {
+            tab_r = wm.rounded_corners_radius;
+            if (tab_r > tab_w / 2) tab_r = tab_w / 2;
+            if (tab_r > DECO_TAB_H) tab_r = DECO_TAB_H;
+        }
+
+        struct clipped_region clip = {
+            .area =
+                {.x = sigma, .y = sigma, .width = tab_w, .height = DECO_TAB_H},
+            .corners =
+                {
+                       .top_left = (uint16_t)tab_r,
+                       .top_right = (uint16_t)tab_r,
+                       .bottom_left = 0,
+                       .bottom_right = 0,
+                       },
+        };
+
+        wlr_scene_shadow_set_clipped_region(deco->shadow_tab, clip);
+    }
 }
 
 void deco_update_active(struct Window *window, bool active) {
