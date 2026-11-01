@@ -142,7 +142,7 @@ void window_apply_target(
     w->target_box = target;
     w->has_target = true;
 
-    if (!wm.animations.enabled) {
+    if (!wm.animations.enabled || wm.resizing) {
         w->anim.running = false;
         w->anim.current = target;
         window_set_position(w, nx, ny);
@@ -613,6 +613,7 @@ void window_create(struct wlr_xdg_toplevel *xdg_toplevel) {
     window->last_tr = -1;
     window->last_bl = -1;
     window->last_br = -1;
+    window->size_per = 1.0f;
 
     window->xdg_toplevel = xdg_toplevel;
     window->space = wm.current_space;
@@ -705,6 +706,7 @@ void window_destroy(struct Window *window) {
     if (window->xwayland_surface != NULL) window->xwayland_surface->data = NULL;
 
     cursor_window_destroyed(window);
+    seat_resize_mode_window_destroyed(window);
 
     if (window->focus_link.next != NULL
         && window->focus_link.next != &window->focus_link) {
@@ -1194,6 +1196,7 @@ void window_create_xwayland(struct wlr_xwayland_surface *xw) {
     window->last_tr = -1;
     window->last_bl = -1;
     window->last_br = -1;
+    window->size_per = 1.0f;
 
     window->is_xwayland = true;
     window->xwayland_surface = xw;

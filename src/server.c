@@ -389,6 +389,7 @@ void server_finish(void) {
     struct Output *out, *tmp;
     wl_list_for_each_safe(out, tmp, &server.outputs, link) output_destroy(out);
 
+    seat_finish();
     wallpaper_finish();
     background_effect_finish();
     ext_workspace_finish();

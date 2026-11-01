@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../window.h"
+
 #include <nullspace/layouts.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -35,3 +37,15 @@ size_t layouts_compute(
 typedef size_t (*LayoutCompute)(enum Layout, struct LayoutWindow *, size_t, const struct LayoutParams *);
 
 void layout_apply(void);
+
+static inline float
+layout_weight_sum(const struct LayoutWindow *lw, size_t start, size_t n) {
+    float s = 0.0f;
+    for (size_t i = start; i < start + n; i++) {
+        float w = lw[i].window->size_per;
+        if (w < 0.1f) w = 0.1f;
+        s += w;
+    }
+
+    return s > 0.0f ? s : (float)n;
+}

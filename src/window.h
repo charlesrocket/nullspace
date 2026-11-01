@@ -82,6 +82,8 @@ struct Window {
     int32_t fs_x, fs_y, fs_w, fs_h; // geometry to restore (floating)
     int32_t last_tl, last_tr, last_bl, last_br;
 
+    float size_per; // tiled size weight
+
     int space;
 
     char *title, *app_id;

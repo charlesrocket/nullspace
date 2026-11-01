@@ -1,5 +1,6 @@
 #include "vertical.h"
 
+#include "../window.h"
 #include "layout.h"
 
 #include <stddef.h>
@@ -16,25 +17,47 @@ effective_params(const struct LayoutParams *p, size_t n) {
     return e;
 }
 
-// Split a horizontal strip into `count` cells. The last cell absorbs the
-// rounding remainder so the strip ends exactly at x0 + width.
-static void strip_h(
+static float weight_of(const struct Window *w) {
+    if (w == NULL) { return 1.0f; }
+
+    float wp = w->size_per;
+    if (!(wp >= 0.1f)) { return 0.1f; }
+
+    return wp;
+}
+
+static void strip_h_weighted(
     struct LayoutWindow *lw, size_t start, size_t count, int32_t x0, int32_t y,
     int32_t width, int32_t height, int32_t gap
 ) {
     if (count == 0) { return; }
 
-    int32_t end = x0 + width;
+    float total = 0.0f;
+    for (size_t i = 0; i < count; i++) {
+        total += weight_of(lw[start + i].window);
+    }
+
+    if (total <= 0.0f) { total = (float)count; }
+
+    const int32_t end = x0 + width;
     int32_t x = x0;
+    float remaining = total;
 
     for (size_t i = 0; i < count; i++) {
+        const float wp = weight_of(lw[start + i].window);
         int32_t w;
+
         if (i == count - 1) {
             w = end - x;
         } else {
-            int32_t remaining_cells = (int32_t)(count - i);
-            int32_t avail = end - x - (remaining_cells - 1) * gap;
-            w = avail / remaining_cells;
+            int32_t avail_here = end - x - (int32_t)(count - i - 1) * gap;
+
+            if (avail_here < 1) { avail_here = 1; }
+
+            w = (int32_t)((float)avail_here * (wp / remaining));
+
+            int32_t min_rest = (int32_t)(count - i - 1);
+            if (w > avail_here - min_rest) { w = avail_here - min_rest; }
         }
 
         if (w < 1) { w = 1; }
@@ -45,6 +68,8 @@ static void strip_h(
         lw[start + i].h = height;
 
         x += w + gap;
+        remaining -= wp;
+        if (remaining < 0.0f) { remaining = 0.0f; }
     }
 }
 
@@ -75,7 +100,7 @@ void vertical_tile(
 
     if (master_h < 1) { master_h = 1; }
 
-    strip_h(
+    strip_h_weighted(
         lw, 0, nmasters, g.x + g.gap_outer_h, g.y + g.gap_outer_v, inner_w,
         master_h, g.gap_inner_h
     );
@@ -87,7 +112,7 @@ void vertical_tile(
 
     if (stack_h < 1) { stack_h = 1; }
 
-    strip_h(
+    strip_h_weighted(
         lw, nmasters, nstack, g.x + g.gap_outer_h, stack_y, inner_w, stack_h,
         g.gap_inner_h
     );
@@ -116,50 +141,66 @@ void vertical_grid(
 
     int32_t row_h =
         (inner_h - (int32_t)(rows - 1) * g.gap_inner_v) / (int32_t)rows;
+
     if (row_h < 1) { row_h = 1; }
-
-    int32_t base_col_w = 0;
-    if (base_cols > 0) {
-        base_col_w = (inner_w - (int32_t)(base_cols - 1) * g.gap_inner_h)
-                   / (int32_t)base_cols;
-        if (base_col_w < 1) { base_col_w = 1; }
-    }
-
-    int32_t max_col_w = 0;
-    if (max_cols > 0) {
-        max_col_w = (inner_w - (int32_t)(max_cols - 1) * g.gap_inner_h)
-                  / (int32_t)max_cols;
-        if (max_col_w < 1) { max_col_w = 1; }
-    }
 
     int32_t group_x = g.x + g.gap_outer_h;
     int32_t group_y = g.y + g.gap_outer_v;
     int32_t bottom = g.y + g.gap_outer_v + inner_h;
     int32_t right = g.x + g.gap_outer_h + inner_w;
 
-    for (size_t i = 0; i < n; i++) {
-        size_t row_idx, col_idx, cols_in_row;
-        int32_t col_w;
-
-        if (i < first_group_count) {
-            row_idx = i / base_cols;
-            col_idx = i % base_cols;
-            cols_in_row = base_cols;
-            col_w = base_col_w;
+    for (size_t r = 0; r < rows; r++) {
+        size_t start, count;
+        if (r < first_group_rows) {
+            start = r * base_cols;
+            count = base_cols;
         } else {
-            size_t offset = i - first_group_count;
-            row_idx = first_group_rows + offset / max_cols;
-            col_idx = offset % max_cols;
-            cols_in_row = max_cols;
-            col_w = max_col_w;
+            start = first_group_count + (r - first_group_rows) * max_cols;
+            count = max_cols;
         }
 
-        int32_t x = group_x + (int32_t)col_idx * (col_w + g.gap_inner_h);
-        int32_t y = group_y + (int32_t)row_idx * (row_h + g.gap_inner_v);
+        float total = 0.0f;
+        for (size_t k = 0; k < count; k++) {
+            total += weight_of(lw[start + k].window);
+        }
 
-        lw[i].x = x;
-        lw[i].y = y;
-        lw[i].w = (col_idx == cols_in_row - 1) ? (right - x) : col_w;
-        lw[i].h = (row_idx == rows - 1) ? (bottom - y) : row_h;
+        if (total <= 0.0f) { total = (float)count; }
+
+        int32_t row_y = group_y + (int32_t)r * (row_h + g.gap_inner_v);
+        int32_t rh = (r == rows - 1) ? (bottom - row_y) : row_h;
+
+        int32_t cell_x = group_x;
+        float remaining = total;
+
+        for (size_t k = 0; k < count; k++) {
+            size_t i = start + k;
+            float wp = weight_of(lw[i].window);
+            int32_t cw;
+
+            if (k == count - 1) {
+                cw = right - cell_x;
+            } else {
+                int32_t avail_here =
+                    right - cell_x - (int32_t)(count - k - 1) * g.gap_inner_h;
+
+                if (avail_here < 1) { avail_here = 1; }
+
+                cw = (int32_t)((float)avail_here * (wp / remaining));
+
+                int32_t min_rest = (int32_t)(count - k - 1);
+                if (cw > avail_here - min_rest) { cw = avail_here - min_rest; }
+            }
+
+            if (cw < 1) { cw = 1; }
+
+            lw[i].x = cell_x;
+            lw[i].y = row_y;
+            lw[i].w = cw;
+            lw[i].h = rh;
+
+            cell_x += cw + g.gap_inner_h;
+            remaining -= wp;
+            if (remaining < 0.0f) { remaining = 0.0f; }
+        }
     }
 }

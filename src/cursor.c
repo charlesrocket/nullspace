@@ -26,7 +26,8 @@
 #include <wlr/types/wlr_seat.h>
 #include <wlr/util/edges.h>
 
-#define LOG_TOPIC "cursor"
+#define LOG_TOPIC    "cursor"
+#define EDGE_GRAB_PX 6
 
 struct InteractiveOp {
     struct Window *window;
@@ -89,6 +90,18 @@ static void interactive_apply(double cx, double cy) {
         if (g->edges & WLR_EDGE_TOP) {
             nh -= dcy;
             ny += dcy;
+        }
+
+        if (nw < 1) {
+            nw = 1;
+            if (g->edges & WLR_EDGE_LEFT)
+                nx = g->window_start_x + g->window_start_w - 1;
+        }
+
+        if (nh < 1) {
+            nh = 1;
+            if (g->edges & WLR_EDGE_TOP)
+                ny = g->window_start_y + g->window_start_h - 1;
         }
 
         if (nw < 1) nw = 1;
@@ -192,6 +205,43 @@ static void send_grabbed_motion(void) {
     );
 }
 
+static uint32_t edge_zone(struct Window *w, double cx, double cy) {
+    if (w == NULL || w->closed || !w->mapped || w->space_hidden) return 0;
+    if (w->fullscreen || layouts_is_tiled(wm.layout)) return 0;
+    if (w->width <= 0 || w->height <= 0) return 0;
+
+    int32_t x0 = w->x, y0 = w->y;
+    int32_t x1 = x0 + w->width, y1 = y0 + w->height;
+
+    if (cx < x0 || cx > x1) return 0;
+    if (cy < y0 || cy > y1) return 0;
+
+    uint32_t edges = 0;
+    if (cx <= x0 + EDGE_GRAB_PX)
+        edges |= WLR_EDGE_LEFT;
+    else if (cx >= x1 - EDGE_GRAB_PX)
+        edges |= WLR_EDGE_RIGHT;
+    if (cy <= y0 + EDGE_GRAB_PX)
+        edges |= WLR_EDGE_TOP;
+    else if (cy >= y1 - EDGE_GRAB_PX)
+        edges |= WLR_EDGE_BOTTOM;
+    return edges;
+}
+
+static const char *xcursor_for_edges(uint32_t edges) {
+    switch (edges) {
+        case WLR_EDGE_LEFT | WLR_EDGE_TOP: return "nw-resize";
+        case WLR_EDGE_RIGHT | WLR_EDGE_TOP: return "ne-resize";
+        case WLR_EDGE_LEFT | WLR_EDGE_BOTTOM: return "sw-resize";
+        case WLR_EDGE_RIGHT | WLR_EDGE_BOTTOM: return "se-resize";
+        case WLR_EDGE_LEFT: return "w-resize";
+        case WLR_EDGE_RIGHT: return "e-resize";
+        case WLR_EDGE_TOP: return "n-resize";
+        case WLR_EDGE_BOTTOM: return "s-resize";
+        default: return NULL;
+    }
+}
+
 static void cursor_manage_focus(bool motion) {
     if (buttons_down > 0 && !wlr_seat_pointer_has_grab(server.seat)) {
         if (motion) { send_grabbed_motion(); }
@@ -216,6 +266,12 @@ static void cursor_manage_focus(bool motion) {
     wlr_seat_pointer_notify_motion(
         server.seat, (uint32_t)animation_now_ms(), sx, sy
     );
+
+    uint32_t edges = edge_zone(under, server.cursor->x, server.cursor->y);
+    const char *xc = xcursor_for_edges(edges);
+    if (xc != NULL) {
+        wlr_cursor_set_xcursor(server.cursor, server.cursor_mgr, xc);
+    }
 }
 
 static void cursor_update_focus(void) { cursor_manage_focus(false); }
@@ -345,13 +401,36 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
                 cursor_begin_interactive(under, SEAT_OP_MOVE, 0);
                 interactive.trigger_button = ev->button;
             } else if (pb->action == ACTION_RESIZE) {
-                cursor_begin_interactive(
-                    under, SEAT_OP_RESIZE, WLR_EDGE_BOTTOM | WLR_EDGE_RIGHT
-                );
+                int32_t w = under->width > 0 ? under->width : 1;
+                int32_t h = under->height > 0 ? under->height : 1;
+                double lx = server.cursor->x - under->x;
+                double ly = server.cursor->y - under->y;
 
+                uint32_t edges =
+                    (lx < w / 2.0 ? WLR_EDGE_LEFT : WLR_EDGE_RIGHT)
+                    | (ly < h / 2.0 ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM);
+
+                cursor_begin_interactive(under, SEAT_OP_RESIZE, edges);
                 interactive.trigger_button = ev->button;
             }
 
+            return;
+        }
+    }
+
+    // Plain left-click on a floating window's edge starts a resize.
+    if (ev->state == WL_POINTER_BUTTON_STATE_PRESSED && !server.locked
+        && ev->button == BTN_LEFT && mods == 0) {
+        struct wlr_surface *surf = NULL;
+        double sx = 0, sy = 0;
+        struct Window *under =
+            window_at(server.cursor->x, server.cursor->y, &surf, &sx, &sy);
+
+        uint32_t edges = edge_zone(under, server.cursor->x, server.cursor->y);
+        if (edges != 0) {
+            focus_window(under); // no-op if already focused
+            cursor_begin_interactive(under, SEAT_OP_RESIZE, edges);
+            interactive.trigger_button = ev->button;
             return;
         }
     }
