@@ -148,12 +148,16 @@
 #define CFG_BLUR_STRENGTH                  0.9f
 #define CFG_BLUR_ALPHA                     1.0f
 
-#define CFG_POPUP_SHADOW_SIGMA             14.2f
+#define CFG_WINDOW_SHADOW_SIGMA            14.2f
+#define CFG_WINDOW_SHADOW_RADIUS           CFG_ROUNDED_CORNERS_RADIUS
+#define CFG_WINDOW_SHADOW_OPACITY          0.82f
+
+#define CFG_POPUP_SHADOW_SIGMA             CFG_WINDOW_SHADOW_SIGMA
 #define CFG_POPUP_SHADOW_SPREAD            8
 #define CFG_POPUP_SHADOW_OFFSET_X          0
 #define CFG_POPUP_SHADOW_OFFSET_Y          1
-#define CFG_POPUP_SHADOW_RADIUS            CFG_ROUNDED_CORNERS_RADIUS
-#define CFG_POPUP_SHADOW_OPACITY           0.54f
+#define CFG_POPUP_SHADOW_RADIUS            CFG_WINDOW_SHADOW_RADIUS
+#define CFG_POPUP_SHADOW_OPACITY           CFG_WINDOW_SHADOW_OPACITY
 
 #define CFG_WALLPAPER_PATH                 ".local/share/nullspace/wallpaper.ppm"
 

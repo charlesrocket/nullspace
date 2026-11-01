@@ -11,15 +11,15 @@
 struct Window;
 struct wlr_scene_tree;
 struct wlr_scene_rect;
+struct wlr_scene_shadow;
 
 struct Decoration {
     struct Window *window;
     struct wlr_scene_tree *tree; // NULL once destroyed
-    struct wlr_scene_rect *tab;
-    struct wlr_scene_rect *btn_close;
-    struct wlr_scene_rect *btn_zoom;
-    struct wlr_scene_rect *btn_min;
-    struct wl_listener tree_destroy;
+    struct wlr_scene_rect *tab, *btn_close, *btn_zoom, *btn_min;
+
+    struct wlr_scene_shadow *shadow_win, *shadow_tab;
+    struct wl_listener shadow_win_destroy, shadow_tab_destroy, tree_destroy;
 
     int32_t tab_x, tab_w, slide_start_tab_x;
     double slide_start_x;
