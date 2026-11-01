@@ -2,8 +2,10 @@
 
 #include "animation.h"
 #include "config.h"
+#include "decoration.h"
 #include "ipc.h"
 #include "layouts/layout.h"
+#include "log.h"
 #include "output.h"
 #include "rules.h"
 #include "seat.h"
@@ -12,6 +14,7 @@
 #include "wallpaper.h"
 #include "window.h"
 
+#include <ns-util.h>
 #include <nullspace/layouts.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -140,6 +143,7 @@ void wm_set_layout(enum Layout layout) {
         if (w->closed) continue;
         window_reparent(w, !layouts_is_tiled(layout));
         window_set_tiled(w, layouts_is_tiled(layout));
+        deco_update_for_layout(w);
         w->prop_valid = false;
         w->has_target = false;
     }
@@ -333,6 +337,15 @@ void wm_init(void) {
 
     wm.rounded_corners = CFG_ROUNDED_CORNERS_ENABLED;
     wm.rounded_corners_radius = CFG_ROUNDED_CORNERS_RADIUS;
+
+    if (!ns_parse_hex_color(CFG_DECO_COLOR_ACTIVE, wm.deco_color_active))
+        log_warn("Bad default CFG_DECO_COLOR_ACTIVE");
+    if (!ns_parse_hex_color(CFG_DECO_COLOR_INACTIVE, wm.deco_color_inactive))
+        log_warn("Bad default CFG_DECO_COLOR_INACTIVE");
+    if (!ns_parse_hex_color(CFG_DECO_COLOR_BUTTON, wm.deco_color_button))
+        log_warn("Bad default CFG_DECO_COLOR_BUTTON");
+    if (!ns_parse_hex_color(CFG_DECO_COLOR_BUTTON_HL, wm.deco_color_button_hl))
+        log_warn("Bad default CFG_DECO_COLOR_BUTTON_HL");
 
     wm.animations.enabled = CFG_ANIMATIONS_ENABLED;
     wm.animations.open_from_top = CFG_ANIM_OPEN_FROM_TOP;

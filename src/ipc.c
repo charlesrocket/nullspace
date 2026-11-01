@@ -1,5 +1,6 @@
 #include "ipc.h"
 
+#include "decoration.h"
 #include "input.h"
 #include "layouts/layout.h"
 #include "log.h"
@@ -423,6 +424,7 @@ static void act_set_layout(int l) { wm_set_layout((enum Layout)l); }
 
 static void act_cycle_layout(int unused) {
     (void)unused;
+
     wm_set_layout((enum Layout)((wm.layout + 1) % ((int)LAYOUT_LAST + 1)));
 }
 
@@ -562,20 +564,62 @@ static const char *set_wallpaper(const char *value) {
     return NULL;
 }
 
+#define DEFINE_DECO_COLOR(keyname)                                             \
+    static const char *get_##keyname(const char *arg, struct Value *out) {     \
+        static char hex[10];                                                   \
+        (void)arg;                                                             \
+        *out = v_str(color_to_hex(wm.keyname, hex));                           \
+        return NULL;                                                           \
+    }                                                                          \
+    static const char *set_##keyname(const char *value) {                      \
+        if (!ns_parse_hex_color(value, wm.keyname)) return "bad color";        \
+        emit_kv(NULL, "EVT", #keyname, v_str(value));                          \
+        deco_refresh_colors();                                                 \
+        return NULL;                                                           \
+    }
+
+static const char *color_to_hex(const float c[4], char buf[10]) {
+    unsigned int r = (unsigned int)(c[0] * 255.0f + 0.5f);
+    unsigned int g = (unsigned int)(c[1] * 255.0f + 0.5f);
+    unsigned int b = (unsigned int)(c[2] * 255.0f + 0.5f);
+    unsigned int a = (unsigned int)(c[3] * 255.0f + 0.5f);
+
+    if (a == 255) {
+        snprintf(buf, 10, "#%02x%02x%02x", r, g, b);
+    } else {
+        snprintf(buf, 10, "#%02x%02x%02x%02x", r, g, b, a);
+    }
+
+    return buf;
+}
+
+DEFINE_DECO_COLOR(deco_color_active)
+DEFINE_DECO_COLOR(deco_color_inactive)
+DEFINE_DECO_COLOR(deco_color_button)
+DEFINE_DECO_COLOR(deco_color_button_hl)
+
+#undef DEFINE_DECO_COLOR
+
 static const struct SpecialOps {
     const char *name;
     bool dump;
     const char *(*get)(const char *arg, struct Value *out); // NULL: none
     const char *(*set)(const char *value);                  // NULL: none
 } special_ops[] = {
-    {            "layout",  true,             get_layout,        set_layout},
-    {     "current_space",  true,      get_current_space, set_current_space},
-    {      "space_urgent", false,       get_space_urgent,              NULL},
-    {"space_window_count", false, get_space_window_count,              NULL},
-    {     "focused_title", false,      get_focused_title,              NULL},
-    {    "focused_app_id", false,     get_focused_app_id,              NULL},
-    {             "mfact",  true,              get_mfact,         set_mfact},
-    {    "wallpaper_path",  true,          get_wallpaper,     set_wallpaper},
+    {              "layout",  true,               get_layout,set_layout                                                             },
+    {       "current_space",  true,        get_current_space,     set_current_space},
+    {        "space_urgent", false,         get_space_urgent,                  NULL},
+    {  "space_window_count", false,   get_space_window_count,                  NULL},
+    {       "focused_title", false,        get_focused_title,                  NULL},
+    {      "focused_app_id", false,       get_focused_app_id,                  NULL},
+    {               "mfact",  true,                get_mfact,             set_mfact},
+    {      "wallpaper_path",  true,            get_wallpaper,         set_wallpaper},
+    {   "deco_color_active",  true,    get_deco_color_active, set_deco_color_active},
+    { "deco_color_inactive",  true,  get_deco_color_inactive,
+     set_deco_color_inactive                                                       },
+    {   "deco_color_button",  true,    get_deco_color_button, set_deco_color_button},
+    {"deco_color_button_hl",  true, get_deco_color_button_hl,
+     set_deco_color_button_hl                                                      },
 };
 
 static const struct SpecialOps *special_find(const char *name) {

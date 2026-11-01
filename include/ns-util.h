@@ -75,3 +75,37 @@ static inline bool ns_parse_layout_name(const char *s, enum Layout *out) {
     }
     return false;
 }
+
+static inline unsigned int ns_hex_nibble(char c) {
+    if (c >= '0' && c <= '9') return (unsigned int)(c - '0');
+    if (c >= 'a' && c <= 'f') return (unsigned int)(c - 'a' + 10);
+    if (c >= 'A' && c <= 'F') return (unsigned int)(c - 'A' + 10);
+    return 0u;
+}
+
+// '#RRGGBB'/ '#RRGGBBAA' straight-alpha
+static inline bool ns_parse_hex_color(const char *s, float out[4]) {
+    if (s == NULL || out == NULL || s[0] != '#') return false;
+
+    const char *p = s + 1;
+    const size_t len = strlen(p);
+    if (len != 6 && len != 8) return false;
+
+    for (size_t i = 0; i < len; i++) {
+        char c = p[i];
+        bool ok = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')
+               || (c >= 'A' && c <= 'F');
+
+        if (!ok) return false;
+    }
+
+    out[0] = (float)(ns_hex_nibble(p[0]) * 16u + ns_hex_nibble(p[1])) / 255.0f;
+    out[1] = (float)(ns_hex_nibble(p[2]) * 16u + ns_hex_nibble(p[3])) / 255.0f;
+    out[2] = (float)(ns_hex_nibble(p[4]) * 16u + ns_hex_nibble(p[5])) / 255.0f;
+    out[3] =
+        (len == 8)
+            ? (float)(ns_hex_nibble(p[6]) * 16u + ns_hex_nibble(p[7])) / 255.0f
+            : 1.0f;
+
+    return true;
+}

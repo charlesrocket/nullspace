@@ -116,6 +116,11 @@
 #define CFG_ROUNDED_CORNERS_ENABLED        true
 #define CFG_ROUNDED_CORNERS_RADIUS         8 // minimum is 2
 
+#define CFG_DECO_COLOR_ACTIVE              "#cc0000"
+#define CFG_DECO_COLOR_INACTIVE            "#8c8c8c"
+#define CFG_DECO_COLOR_BUTTON              "#666666"
+#define CFG_DECO_COLOR_BUTTON_HL           "#b3b3b3"
+
 #define CFG_ANIMATIONS_ENABLED             true
 
 #define CFG_ANIM_DURATION_MOVE             250

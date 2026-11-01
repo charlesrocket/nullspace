@@ -3,6 +3,7 @@
 #include "actions.h"
 #include "animation.h"
 #include "config.h"
+#include "decoration.h"
 #include "input.h"
 #include "layouts/layout.h"
 #include "manager.h"
@@ -248,6 +249,10 @@ void cursor_handle_motion(struct wl_listener *l, void *data) {
         server.cursor, &ev->pointer->base, ev->delta_x, ev->delta_y
     );
 
+    if (deco_handle_motion(server.cursor->x, server.cursor->y)) {
+        return; // sliding consumes motion
+    }
+
     if (interactive.active) {
         interactive_apply(server.cursor->x, server.cursor->y);
         return;
@@ -264,6 +269,10 @@ void cursor_handle_motion_absolute(struct wl_listener *l, void *data) {
 
     wlr_cursor_warp_absolute(server.cursor, &ev->pointer->base, ev->x, ev->y);
 
+    if (deco_handle_motion(server.cursor->x, server.cursor->y)) {
+        return; // ditto
+    }
+
     if (interactive.active) {
         interactive_apply(server.cursor->x, server.cursor->y);
         return;
@@ -278,24 +287,45 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
     server_notify_activity();
     struct wlr_pointer_button_event *ev = data;
 
+    const bool pressed = ev->state == WL_POINTER_BUTTON_STATE_PRESSED;
+    const uint32_t mods = current_keyboard_modifiers();
+
+    // Release bookkeeping runs on every release.
+    const bool deco_release = !pressed && deco_handle_release(ev->button);
+
+    // Active interactive move/resize has priority.
     if (interactive.active) {
-        if (ev->state == WL_POINTER_BUTTON_STATE_RELEASED) {
-            if (interactive.trigger_button == 0
-                || ev->button == interactive.trigger_button) {
-                cursor_end_interactive();
-                buttons_down = 0;
-                // Re-acquire focus at the current cursor position.
-                cursor_update_focus();
-            }
+        if (!pressed
+            && (interactive.trigger_button == 0
+                || ev->button == interactive.trigger_button)) {
+            cursor_end_interactive();
+            buttons_down = 0;
+            cursor_update_focus();
         }
 
         return;
     }
 
-    uint32_t mods = current_keyboard_modifiers();
+    if (deco_release) {
+        cursor_update_focus();
+        return;
+    }
 
-    if (ev->state == WL_POINTER_BUTTON_STATE_PRESSED && !server.locked
-        && !layouts_is_tiled(wm.layout)) {
+    // Floating mode
+    if (pressed && !server.locked && !layouts_is_tiled(wm.layout)
+        && deco_handle_press(
+            server.cursor->x, server.cursor->y, ev->button, mods
+        )) {
+        if (interactive.active && interactive.trigger_button == 0) {
+            // A tab drag may have started a move—bind it to this button.
+            interactive.trigger_button = ev->button;
+        }
+
+        return;
+    }
+
+    // Pointer bindings (SUPER+click move/resize)
+    if (pressed && !server.locked && !layouts_is_tiled(wm.layout)) {
         for (size_t i = 0; i < cfg_pointer_binds_len; i++) {
             const struct PointerDef *pb = &cfg_pointer_binds[i];
 
@@ -306,6 +336,7 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
             double sx = 0, sy = 0;
             struct Window *under =
                 window_at(server.cursor->x, server.cursor->y, &surf, &sx, &sy);
+
             if (under == NULL || under->closed || under->space_hidden) break;
 
             focus_window(under);
@@ -325,6 +356,7 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
         }
     }
 
+    // On-press focus
     if (ev->state == WL_POINTER_BUTTON_STATE_PRESSED && !server.locked) {
         struct wlr_surface *surf = NULL;
         double sx = 0, sy = 0;
@@ -332,8 +364,14 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
             window_at(server.cursor->x, server.cursor->y, &surf, &sx, &sy);
 
         focus_window(under);
+
+        if (under != NULL && !under->closed && !under->space_hidden
+            && !layouts_is_tiled(wm.layout)) {
+            window_raise(under);
+        }
     }
 
+    // Save pointer origin
     if (ev->state == WL_POINTER_BUTTON_STATE_PRESSED && buttons_down == 0) {
         struct wlr_surface *surf = NULL;
         double sx = 0, sy = 0;

@@ -38,6 +38,9 @@ struct WindowManager {
 
     char *kb_layout;
 
+    float deco_color_active[4], deco_color_inactive[4], deco_color_button[4],
+        deco_color_button_hl[4];
+
     bool layout_dirty, rounded_corners, smart_gaps, center_overspread,
         center_when_single_stack, space_urgent[SPACE_COUNT];
 };

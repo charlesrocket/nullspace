@@ -1,6 +1,7 @@
 #pragma once
 
 #include "animation.h"
+#include "decoration.h"
 #include "server.h"
 
 #include <nullspace/layouts.h>
@@ -29,6 +30,7 @@ struct Window {
     struct wlr_foreign_toplevel_handle_v1 *wlr_handle;
 
     struct NodeTag node_tag;
+    struct Decoration *decoration; // ?NULL (floating/non‑fullscreen windows)
 
     struct Animation anim;
     struct AnimationBox target_box;
@@ -77,7 +79,8 @@ struct Window {
     int32_t width, height;
     int32_t prop_w, prop_h;
     int32_t reveal_dir, hide_dir;
-    int32_t fs_x, fs_y, fs_w, fs_h; // geometry to restore (floating layout)
+    int32_t fs_x, fs_y, fs_w, fs_h; // geometry to restore (floating)
+    int32_t last_tl, last_tr, last_bl, last_br;
 
     int space;
 
@@ -126,3 +129,4 @@ void window_clear_clip(struct Window *window);
 void window_close(struct Window *window);
 void window_raise(struct Window *window);
 void window_reparent(struct Window *window, bool to_float);
+void window_update_corners(struct Window *window);

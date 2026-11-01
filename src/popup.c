@@ -88,8 +88,6 @@ static void popup_unconstrain(struct Popup *p) {
             wlr_xdg_popup_unconstrain_from_box(p->xdg_popup, &box);
         }
     }
-
-    wlr_xdg_surface_schedule_configure(p->xdg_popup->base);
 }
 
 static void popup_handle_commit(struct wl_listener *l, void *data) {

@@ -2,6 +2,7 @@
 
 #include "actions.h"
 #include "config.h"
+#include "decoration.h"
 #include "input.h"
 #include "ipc.h"
 #include "keymap.h"
@@ -14,6 +15,7 @@
 #include <dev/evdev/input-event-codes.h>
 #include <fcntl.h>
 #include <nullspace/layouts.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,12 +25,34 @@
 #include <wayland-server-protocol.h>
 #include <wayland-util.h>
 #include <wlr/types/wlr_cursor.h>
+#include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include <xkbcommon/xkbcommon.h>
 
-#define LOG_TOPIC "seat"
+#define LOG_TOPIC        "seat"
+
+#define KEY_MODS_IGNORED ((uint32_t)(WLR_MODIFIER_CAPS | WLR_MODIFIER_MOD2))
+
+#define SWALLOWED_MAX    16
+static uint32_t swallowed_keys[SWALLOWED_MAX];
+static size_t swallowed_len;
+
+static void swallow_add(uint32_t keycode) {
+    if (swallowed_len < SWALLOWED_MAX)
+        swallowed_keys[swallowed_len++] = keycode;
+}
+
+static bool swallow_take(uint32_t keycode) {
+    for (size_t i = 0; i < swallowed_len; i++) {
+        if (swallowed_keys[i] != keycode) continue;
+        swallowed_keys[i] = swallowed_keys[--swallowed_len];
+        return true;
+    }
+
+    return false;
+}
 
 struct DeviceEntry {
     struct wlr_input_device *device;
@@ -79,7 +103,11 @@ static void seat_action(enum Action action, const void *arg) {
         case ACTION_FOCUS_NEXT:
             {
                 struct Window *next = wm_next_window(window_focused());
-                if (next != NULL) seat_focus(next);
+                if (next != NULL) {
+                    seat_focus(next);
+                    if (!layouts_is_tiled(wm.layout)) window_raise(next);
+                }
+
                 break;
             }
 
@@ -177,6 +205,11 @@ static void keyboard_handle_key(struct wl_listener *l, void *data) {
 
     wlr_seat_set_keyboard(server.seat, kb->wlr_keyboard);
 
+    if (ev->state == WL_KEYBOARD_KEY_STATE_RELEASED
+        && swallow_take(ev->keycode)) {
+        return;
+    }
+
     // xkb keycodes are evdev codes + 8.
     uint32_t keycode = ev->keycode + 8;
     const xkb_keysym_t *syms = NULL;
@@ -200,7 +233,8 @@ static void keyboard_handle_key(struct wl_listener *l, void *data) {
         }
     }
 
-    uint32_t mods = wlr_keyboard_get_modifiers(kb->wlr_keyboard);
+    uint32_t mods =
+        wlr_keyboard_get_modifiers(kb->wlr_keyboard) & ~KEY_MODS_IGNORED;
 
     bool handled = false;
 
@@ -217,7 +251,9 @@ static void keyboard_handle_key(struct wl_listener *l, void *data) {
         }
     }
 
-    if (!handled) {
+    if (handled) {
+        swallow_add(ev->keycode);
+    } else {
         wlr_seat_keyboard_notify_key(
             server.seat, ev->time_msec, ev->keycode, ev->state
         );
@@ -292,6 +328,24 @@ void seat_handle_new_input(struct wlr_input_device *device) {
     wlr_seat_set_capabilities(server.seat, caps);
 }
 
+static void seat_update_decorations(const struct Window *focused) {
+    struct Window *w;
+    wl_list_for_each(w, &wm.windows, link) {
+        if (w->closed) continue;
+        deco_update_active(w, w == focused); // no-op without a decoration
+    }
+}
+
+static struct Window *seat_window_for_surface(const struct wlr_surface *surface
+) {
+    struct Window *w;
+    wl_list_for_each(w, &wm.windows, link) {
+        if (!w->closed && window_wlr_surface(w) == surface) return w;
+    }
+
+    return NULL;
+}
+
 void seat_focus(struct Window *window) {
     if (server.locked) {
         if (window != NULL) {
@@ -308,19 +362,17 @@ void seat_focus(struct Window *window) {
     if (window != NULL && want == NULL) return;
 
     struct wlr_surface *prev = server.seat->keyboard_state.focused_surface;
-    if (prev == want) return;
-
-    if (prev != NULL) {
-        struct Window *w;
-        wl_list_for_each(w, &wm.windows, link) {
-            if (!w->closed && window_wlr_surface(w) == prev) {
-                window_set_activated(w, false);
-                break;
-            }
-        }
+    if (prev == want) {
+        seat_update_decorations(window);
+        return;
     }
 
-    if (window != NULL && want != NULL) {
+    if (prev != NULL) {
+        struct Window *pw = seat_window_for_surface(prev);
+        if (pw != NULL) window_set_activated(pw, false);
+    }
+
+    if (window != NULL) {
         window_set_activated(window, true);
 
         struct wlr_keyboard *kb = wlr_seat_get_keyboard(server.seat);
@@ -335,6 +387,7 @@ void seat_focus(struct Window *window) {
         wlr_seat_keyboard_clear_focus(server.seat);
     }
 
+    seat_update_decorations(window);
     ipc_notify_focus();
     wm_mark_layout_dirty();
 }

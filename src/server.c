@@ -175,7 +175,17 @@ int server_init(struct wl_display *display) {
     wlr_viewporter_create(display);
     wlr_relative_pointer_manager_v1_create(display);
     wlr_pointer_constraints_v1_create(display);
-    wlr_server_decoration_manager_create(display);
+
+    struct wlr_server_decoration_manager *kde_deco =
+        wlr_server_decoration_manager_create(display);
+    if (kde_deco != NULL) {
+        wlr_server_decoration_manager_set_default_mode(
+            kde_deco, WLR_SERVER_DECORATION_MANAGER_MODE_SERVER
+        );
+    } else {
+        log_warn("Server-side decorations unavailable");
+    }
+
     wlr_screencopy_manager_v1_create(display);
 
     server.foreign_toplevel_list =
@@ -264,8 +274,6 @@ int server_init(struct wl_display *display) {
         &server.seat->events.request_set_primary_selection,
         &server.request_set_primary_selection
     );
-
-    server.request_start_drag.notify = handle_request_start_drag;
 
     server.request_start_drag.notify = handle_request_start_drag;
     wl_signal_add(
@@ -534,20 +542,83 @@ static void handle_new_xdg_popup(struct wl_listener *l, void *data) {
     popup_track(popup, parent_tree);
 }
 
+struct XdgDecoration {
+    struct wlr_xdg_toplevel_decoration_v1 *decoration;
+    struct wl_listener request_mode;
+    struct wl_listener surface_commit;
+    struct wl_listener destroy;
+    bool commit_listening;
+};
+
+static void xdg_decoration_apply(struct XdgDecoration *d) {
+    if (!d->decoration->toplevel->base->initialized) return;
+
+    wlr_xdg_toplevel_decoration_v1_set_mode(
+        d->decoration, WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE
+    );
+}
+
+static void xdg_decoration_handle_commit(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct XdgDecoration *d = wl_container_of(l, d, surface_commit);
+    if (!d->decoration->toplevel->base->initialized) return;
+
+    wl_list_remove(&d->surface_commit.link);
+    d->commit_listening = false;
+    xdg_decoration_apply(d);
+}
+
+static void
+xdg_decoration_handle_request_mode(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct XdgDecoration *d = wl_container_of(l, d, request_mode);
+
+    // SSD-only policy.
+    // If the surface is not initialized yet, the commit hook applies it later.
+    xdg_decoration_apply(d);
+}
+
+static void xdg_decoration_handle_destroy(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct XdgDecoration *d = wl_container_of(l, d, destroy);
+
+    if (d->commit_listening) wl_list_remove(&d->surface_commit.link);
+    wl_list_remove(&d->request_mode.link);
+    wl_list_remove(&d->destroy.link);
+    free(d);
+}
+
 static void handle_new_xdg_decoration(struct wl_listener *l, void *data) {
     (void)l;
 
     struct wlr_xdg_toplevel_decoration_v1 *deco = data;
-    struct wlr_xdg_surface *surf = deco->toplevel->base;
 
-    if (!surf->initialized) { return; }
+    struct XdgDecoration *d = calloc(1, sizeof(*d));
+    if (d == NULL) {
+        log_err("xdg-decoration: OOM (mode will not be enforced)");
+        return;
+    }
 
-    enum wlr_xdg_toplevel_decoration_v1_mode mode =
-        layouts_is_tiled(wm.layout)
-            ? WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE
-            : WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_CLIENT_SIDE;
+    d->decoration = deco;
 
-    wlr_xdg_toplevel_decoration_v1_set_mode(deco, mode);
+    d->request_mode.notify = xdg_decoration_handle_request_mode;
+    wl_signal_add(&deco->events.request_mode, &d->request_mode);
+    d->destroy.notify = xdg_decoration_handle_destroy;
+    wl_signal_add(&deco->events.destroy, &d->destroy);
+
+    if (deco->toplevel->base->initialized) {
+        xdg_decoration_apply(d);
+    } else {
+        d->surface_commit.notify = xdg_decoration_handle_commit;
+        wl_signal_add(
+            &deco->toplevel->base->surface->events.commit, &d->surface_commit
+        );
+
+        d->commit_listening = true;
+    }
 }
 
 static void handle_request_set_selection(struct wl_listener *l, void *data) {

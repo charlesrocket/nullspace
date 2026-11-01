@@ -214,4 +214,18 @@ struct IpcKeyMeta {
     K_INT(                                                                     \
         "wallpaper_blur_passes", IPC_A_RW, IPC_AFTER_WALLPAPER,                \
         "wallpaper blur passes", wm.wallpaper.blur_passes, 0, 16               \
+    )                                                                          \
+    K_SPECIAL(                                                                 \
+        "deco_color_active", IPC_A_RW, "#rrggbb[aa]", "active tab color"       \
+    )                                                                          \
+    K_SPECIAL(                                                                 \
+        "deco_color_inactive", IPC_A_RW, "#rrggbb[aa]", "inactive tab color"   \
+    )                                                                          \
+    K_SPECIAL(                                                                 \
+        "deco_color_button", IPC_A_RW, "#rrggbb[aa]",                          \
+        "decoration button color"                                              \
+    )                                                                          \
+    K_SPECIAL(                                                                 \
+        "deco_color_button_hl", IPC_A_RW, "#rrggbb[aa]",                       \
+        "decoration button highlight color"                                    \
     )

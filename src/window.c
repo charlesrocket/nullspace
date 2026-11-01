@@ -3,6 +3,7 @@
 #include "animation.h"
 #include "config.h"
 #include "cursor.h"
+#include "decoration.h"
 #include "ipc.h"
 #include "layouts/layout.h"
 #include "log.h"
@@ -13,6 +14,7 @@
 #include "server.h"
 
 #include <nullspace/layouts.h>
+#include <scenefx/types/fx/clipped_region.h>
 #include <scenefx/types/wlr_scene.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -36,6 +38,10 @@
 static void xw_unbind(struct Window *window);
 #endif
 
+struct CornerRadii {
+    int tl, tr, bl, br;
+};
+
 static struct wlr_scene_tree *layer_for_layout(enum Layout layout) {
     return layouts_is_tiled(layout) ? server.tile_tree : server.float_tree;
 }
@@ -44,20 +50,62 @@ static void
 apply_radius(struct wlr_scene_buffer *buf, int sx, int sy, void *data) {
     (void)sx;
     (void)sy;
-
     if (wlr_scene_surface_try_from_buffer(buf) == NULL) return;
-    wlr_scene_buffer_set_corner_radius(buf, *(int *)data);
+
+    struct fx_corner_radii *radii = data;
+    wlr_scene_buffer_set_corner_radii(buf, *radii);
 }
 
 // TODO rewire to allow state changes (via IPC)
-static void window_update_corners(struct Window *window) {
-    if (window == NULL || window->closed || window->scene_tree == NULL) return;
+void window_update_corners(struct Window *window) {
+    if (window == NULL || window->closed) return;
+    if (window->scene_tree == NULL) return;
 
     int radius = CFG_ROUNDED_CORNERS_RADIUS;
     if (radius <= 0) radius = 2; // lets cap the range for now
 
-    int r = (CFG_ROUNDED_CORNERS_ENABLED && !window->fullscreen) ? radius : 0;
-    wlr_scene_node_for_each_buffer(&window->scene_tree->node, apply_radius, &r);
+    int tl = radius, tr = radius, bl = radius, br = radius;
+
+    if (window->fullscreen || !CFG_ROUNDED_CORNERS_ENABLED) {
+        tl = tr = bl = br = 0;
+    } else if (window->decoration != NULL) {
+        int32_t tab_w = window->decoration->tab_w;
+        int32_t tab_x = window->decoration->tab_x;
+        int32_t win_w = window->width;
+
+        if (tab_x < radius)
+            tl = tab_x;
+        else
+            tl = radius;
+
+        int32_t right_dist = win_w - (tab_x + tab_w);
+        if (right_dist < 0) right_dist = 0;
+        if (right_dist < radius)
+            tr = right_dist;
+        else
+            tr = radius;
+    }
+
+    if (window->last_tl == tl && window->last_tr == tr && window->last_bl == bl
+        && window->last_br == br) {
+        return;
+    }
+
+    window->last_tl = tl;
+    window->last_tr = tr;
+    window->last_bl = bl;
+    window->last_br = br;
+
+    struct fx_corner_radii radii = {
+        .top_left = (uint16_t)tl,
+        .top_right = (uint16_t)tr,
+        .bottom_left = (uint16_t)bl,
+        .bottom_right = (uint16_t)br,
+    };
+
+    wlr_scene_node_for_each_buffer(
+        &window->scene_tree->node, apply_radius, &radii
+    );
 }
 
 // May return NULL for X11 windows whose wl_surface is not associated yet.
@@ -169,7 +217,9 @@ void window_set_activated(struct Window *window, bool activated) {
     } else
 #endif
     {
-        wlr_xdg_toplevel_set_activated(window->xdg_toplevel, activated);
+        if (window->xdg_toplevel->base->initialized) {
+            wlr_xdg_toplevel_set_activated(window->xdg_toplevel, activated);
+        }
     }
 
     if (window->wlr_handle != NULL) {
@@ -210,6 +260,7 @@ void window_set_fullscreen(struct Window *window, bool fullscreen) {
     }
 
     window_update_corners(window);
+    deco_update_for_layout(window);
 
     window->has_target = false;
     window_reparent(window, !layouts_is_tiled(wm.layout));
@@ -358,6 +409,7 @@ static void window_do_map(struct Window *window) {
 
     window_update_corners(window);
     window_set_tiled(window, layouts_is_tiled(wm.layout));
+    deco_update_for_layout(window);
 
     if (window->space_hidden) {
         wl_list_remove(&window->focus_link);
@@ -381,8 +433,11 @@ static void window_do_unmap(struct Window *window) {
 
     wlr_handle_destroy(window);
     foreign_handle_destroy(window);
+
     wlr_scene_node_set_enabled(&window->scene_tree->node, false);
     wlr_scene_node_set_enabled(&window->popup_tree->node, false);
+
+    deco_set_visible(window, false);
 
     if (window->focus_link.next != NULL
         && window->focus_link.next != &window->focus_link) {
@@ -554,6 +609,11 @@ void window_create(struct wlr_xdg_toplevel *xdg_toplevel) {
     struct Window *window = calloc(1, sizeof(*window));
     if (window == NULL) return;
 
+    window->last_tl = -1;
+    window->last_tr = -1;
+    window->last_bl = -1;
+    window->last_br = -1;
+
     window->xdg_toplevel = xdg_toplevel;
     window->space = wm.current_space;
     window->node_tag.type = NODE_WINDOW;
@@ -705,6 +765,7 @@ void window_destroy(struct Window *window) {
         wl_list_init(&window->link);
     }
 
+    deco_destroy(window);
     wm_mark_layout_dirty();
     foreign_handle_destroy(window);
     idle_update_inhibit();
@@ -754,6 +815,8 @@ void window_set_position(struct Window *window, int32_t x, int32_t y) {
     window->y = y;
     window->pos_valid = true;
 
+    deco_update_position(window);
+
 #ifdef XWAYLAND
     if (window->is_xwayland && window->xwayland_surface != NULL
         && window->width > 0 && window->height > 0) {
@@ -800,6 +863,7 @@ void window_set_size(struct Window *window, int32_t w, int32_t h) {
     struct wlr_xdg_surface *surf = window->xdg_toplevel->base;
     if (!surf->initialized) { return; }
     wlr_xdg_toplevel_set_size(window->xdg_toplevel, w, h);
+    deco_update_position(window);
 }
 
 void window_set_tiled(struct Window *window, bool tiled) {
@@ -872,9 +936,11 @@ void window_close(struct Window *window) {
 
 void window_raise(struct Window *window) {
     wlr_scene_node_raise_to_top(&window->scene_tree->node);
+    deco_raise(window);
 
-    if (window->popup_tree != NULL)
+    if (window->popup_tree != NULL) {
         wlr_scene_node_raise_to_top(&window->popup_tree->node);
+    }
 }
 
 void window_reparent(struct Window *window, bool to_float) {
@@ -884,6 +950,9 @@ void window_reparent(struct Window *window, bool to_float) {
 
     if (window->scene_tree->node.parent == target) return;
     wlr_scene_node_reparent(&window->scene_tree->node, target);
+
+    // Restack the tab right above its window in the new parent.
+    deco_raise(window);
 }
 
 #ifdef XWAYLAND
@@ -1120,6 +1189,11 @@ void window_create_xwayland(struct wlr_xwayland_surface *xw) {
         wlr_xwayland_surface_close(xw);
         return;
     }
+
+    window->last_tl = -1;
+    window->last_tr = -1;
+    window->last_bl = -1;
+    window->last_br = -1;
 
     window->is_xwayland = true;
     window->xwayland_surface = xw;
