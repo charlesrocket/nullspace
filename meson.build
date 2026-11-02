@@ -37,14 +37,17 @@ endif
 
 wayland_server = dependency('wayland-server')
 wayland_proto = dependency('wayland-protocols')
-wlroots = dependency('wlroots-0.20')
-scenefx = dependency('scenefx-0.5')
+wlroots = dependency('wlroots-0.20', include_type: 'system')
+scenefx = dependency('scenefx-0.5', include_type: 'system')
 xkbcommon = dependency('xkbcommon')
 xcb = dependency('xcb', required: get_option('xwayland'))
 xcb_randr = dependency('xcb-randr', required: get_option('xwayland'))
 libinput = dependency('libinput')
 pixman = dependency('pixman-1')
 spng = dependency('spng')
+pango = dependency('pango')
+cairo = dependency('cairo')
+pangocairo = dependency('pangocairo')
 pthreads = dependency('threads')
 
 deps = [
@@ -57,6 +60,9 @@ deps = [
   libinput,
   pixman,
   spng,
+  pango,
+  cairo,
+  pangocairo,
   pthreads,
 ]
 

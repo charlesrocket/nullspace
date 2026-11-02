@@ -4,6 +4,7 @@
 #include "cursor.h"
 #include "layouts/layout.h"
 #include "manager.h"
+#include "node/text.h"
 #include "seat.h"
 #include "server.h"
 #include "window.h"
@@ -19,15 +20,26 @@
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_scene.h>
 
-#define DECO_TAB_W         200
 #define DECO_TAB_H         28
 #define DECO_BTN           12
 #define DECO_BTN_PAD       6
 
 #define DECO_TAB_MIN_CLOSE (DECO_BTN + 2 * DECO_BTN_PAD)
 #define DECO_TAB_MIN_ALL   (3 * DECO_BTN + 4 * DECO_BTN_PAD)
+#define DECO_TAB_CHROME    (3 * DECO_BTN + 5 * DECO_BTN_PAD)
 
-enum DecoPart { DECO_PART_TAB, DECO_PART_CLOSE, DECO_PART_ZOOM, DECO_PART_MIN };
+#define DECO_TAB_MIN_W     DECO_TAB_MIN_ALL
+#define DECO_TAB_TEXT_MAX  900
+#define DECO_TAB_MAX_W     (DECO_TAB_TEXT_MAX + DECO_TAB_CHROME)
+
+#define DECO_TITLE_FONT    "Hack Nerd Font 10"
+
+enum DecoPart {
+    DECO_PART_TAB,
+    DECO_PART_CLOSE,
+    DECO_PART_ZOOM,
+    DECO_PART_MIN,
+};
 
 static void deco_apply_colors(struct Decoration *deco) {
     if (deco == NULL) return;
@@ -120,7 +132,17 @@ static int32_t window_w(const struct Window *w) {
 
 static int32_t tab_width_for(const struct Window *w) {
     int32_t ww = window_w(w);
-    return ww < DECO_TAB_W ? ww : DECO_TAB_W;
+
+    int32_t natural = 0;
+    if (w->decoration != NULL && w->decoration->title_text != NULL) {
+        natural = text_node_natural_width(w->decoration->title_text);
+    }
+
+    int32_t wanted = natural > 0 ? natural + DECO_TAB_CHROME : DECO_TAB_MIN_W;
+    if (wanted < DECO_TAB_MIN_W) wanted = DECO_TAB_MIN_W;
+    if (wanted > DECO_TAB_MAX_W) wanted = DECO_TAB_MAX_W;
+
+    return wanted < ww ? wanted : ww;
 }
 
 static int32_t tab_x_max(const struct Window *w, int32_t tab_w) {
@@ -158,6 +180,35 @@ static void layout_tab(struct Decoration *deco, int32_t tab_w) {
     wlr_scene_node_set_position(
         &deco->btn_zoom->node, bx + tab_w - DECO_BTN - DECO_BTN_PAD, by
     );
+
+    if (deco->title_text != NULL && deco->title_text->buffer_node != NULL) {
+        int32_t avail = tab_w - DECO_TAB_CHROME;
+        if (avail < 0) avail = 0;
+
+        text_node_set_max_width(deco->title_text, avail);
+
+        if (avail == 0) {
+            wlr_scene_node_set_enabled(
+                &deco->title_text->buffer_node->node, false
+            );
+        } else {
+            wlr_scene_node_set_enabled(
+                &deco->title_text->buffer_node->node, true
+            );
+
+            int th = 0;
+            text_node_get_size(deco->title_text, NULL, &th);
+            if (th <= 0) th = DECO_BTN;
+
+            int32_t text_x = bx + 3 * DECO_BTN_PAD + 2 * DECO_BTN;
+            int32_t text_y = (DECO_TAB_H - th) / 2;
+            if (text_y < 0) text_y = 0;
+
+            wlr_scene_node_set_position(
+                &deco->title_text->buffer_node->node, text_x, text_y
+            );
+        }
+    }
 }
 
 void deco_create(struct Window *window) {
@@ -206,7 +257,7 @@ void deco_create(struct Window *window) {
     }
 
     deco->tab = wlr_scene_rect_create(
-        deco->tree, DECO_TAB_W, DECO_TAB_H, wm.deco_color_inactive
+        deco->tree, DECO_TAB_MAX_W, DECO_TAB_H, wm.deco_color_inactive
     );
 
     deco->btn_close = wlr_scene_rect_create(
@@ -243,6 +294,13 @@ void deco_create(struct Window *window) {
     deco->tree->node.data = &window->node_tag;
     wlr_scene_node_set_enabled(&deco->tree->node, window->mapped);
 
+    static const float title_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    deco->title_text =
+        text_node_create(deco->tree, DECO_TITLE_FONT, title_color, 1);
+    if (deco->title_text != NULL) {
+        text_node_set_text(deco->title_text, window->title);
+    }
+
     window->decoration = deco;
 
     deco_update_position(window);
@@ -274,6 +332,11 @@ void deco_destroy(struct Window *window) {
     if (deco->tree != NULL) {
         wl_list_remove(&deco->tree_destroy.link);
         wlr_scene_node_destroy(&deco->tree->node);
+    }
+
+    if (deco->title_text != NULL) {
+        text_node_destroy(deco->title_text);
+        deco->title_text = NULL;
     }
 
     free(deco);
@@ -382,6 +445,16 @@ void deco_update_for_layout(struct Window *window) {
     }
 }
 
+void deco_update_title(struct Window *window) {
+    if (window == NULL || window->decoration == NULL) return;
+
+    struct Decoration *deco = window->decoration;
+    if (deco->title_text == NULL) return;
+
+    text_node_set_text(deco->title_text, window->title);
+    deco_update_position(window);
+}
+
 void deco_set_visible(struct Window *window, bool visible) {
     struct Decoration *deco = window ? window->decoration : NULL;
     if (deco == NULL || deco->tree == NULL) return;
@@ -416,27 +489,39 @@ deco_pick(double lx, double ly, struct Decoration **out, enum DecoPart *part) {
         wlr_scene_node_at(&server.scene->tree.node, lx, ly, &nx, &ny);
 
     if (node == NULL) return false;
-    if (node->type != WLR_SCENE_NODE_RECT) return false;
 
     struct Window *w = window_from_scene_node(node);
     if (w == NULL || w->closed || w->decoration == NULL) return false;
 
     struct Decoration *deco = w->decoration;
-    if (deco->tab == NULL) return false;
 
-    if (node == &deco->btn_close->node)
-        *part = DECO_PART_CLOSE;
-    else if (node == &deco->btn_zoom->node)
-        *part = DECO_PART_ZOOM;
-    else if (node == &deco->btn_min->node)
-        *part = DECO_PART_MIN;
-    else if (node == &deco->tab->node)
+    if (node->type == WLR_SCENE_NODE_RECT) {
+        if (deco->tab == NULL) return false;
+
+        if (node == &deco->btn_close->node)
+            *part = DECO_PART_CLOSE;
+        else if (node == &deco->btn_zoom->node)
+            *part = DECO_PART_ZOOM;
+        else if (node == &deco->btn_min->node)
+            *part = DECO_PART_MIN;
+        else if (node == &deco->tab->node)
+            *part = DECO_PART_TAB;
+        else
+            return false;
+
+        *out = deco;
+        return true;
+    }
+
+    if (node->type == WLR_SCENE_NODE_BUFFER && deco->title_text != NULL
+        && deco->title_text->buffer_node != NULL
+        && node == &deco->title_text->buffer_node->node) {
         *part = DECO_PART_TAB;
-    else
-        return false;
+        *out = deco;
+        return true;
+    }
 
-    *out = deco;
-    return true;
+    return false;
 }
 
 static void focus_and_raise(struct Window *w) {

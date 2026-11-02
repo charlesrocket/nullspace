@@ -599,6 +599,7 @@ static void window_handle_set_title(struct wl_listener *l, void *data) {
     if (window->wlr_handle)
         wlr_foreign_toplevel_handle_v1_set_title(window->wlr_handle, new_title);
 
+    deco_update_title(window);
     foreign_handle_update(window);
     ipc_notify_window_meta(window);
 }
@@ -1191,6 +1192,7 @@ static void xw_handle_set_title(struct wl_listener *l, void *data) {
         wlr_foreign_toplevel_handle_v1_set_title(window->wlr_handle, new_title);
     }
 
+    deco_update_title(window);
     foreign_handle_update(window);
     ipc_notify_window_meta(window);
 }

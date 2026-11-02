@@ -6,6 +6,7 @@ src_files = files(
   'layouts/layout.c',
   'layouts/vertical.c',
   'layouts/horizontal.c',
+  'node/text.c',
   'activation.c',
   'ipc.c',
   'popup.c',
