@@ -114,7 +114,9 @@ static void layout_windows_apply(LayoutCompute compute) {
     free(lw);
 }
 
-static void floating_layout(struct LayoutWindow *lw, size_t n) {
+static void floating_layout(
+    struct LayoutWindow *lw, size_t n, const struct LayoutParams *p
+) {
     for (size_t i = 0; i < n; i++) {
         struct Window *w = lw[i].window;
 
@@ -126,6 +128,20 @@ static void floating_layout(struct LayoutWindow *lw, size_t n) {
             continue;
         }
 
+        int32_t ww = w->width > 0 ? w->width : 1;
+        int32_t wh = w->height > 0 ? w->height : 1;
+
+        if (!w->pos_valid) {
+            int32_t cw = ww < p->width ? ww : p->width;
+            int32_t ch = wh < p->height ? wh : p->height;
+
+            lw[i].x = p->x + (p->width - cw) / 2;
+            lw[i].y = p->y + (p->height - ch) / 2;
+            lw[i].w = ww;
+            lw[i].h = wh;
+            continue;
+        }
+
         if (w->anim.running) {
             lw[i].x = w->saved_x;
             lw[i].y = w->saved_y;
@@ -134,8 +150,8 @@ static void floating_layout(struct LayoutWindow *lw, size_t n) {
             lw[i].y = w->y;
         }
 
-        lw[i].w = w->width > 0 ? w->width : 1;
-        lw[i].h = w->height > 0 ? w->height : 1;
+        lw[i].w = ww;
+        lw[i].h = wh;
     }
 }
 
@@ -155,8 +171,7 @@ static size_t layouts_compute(
 
         case LAYOUT_HORIZONTAL_MONOCLE: horizontal_monocle(out, n, p); return n;
         case LAYOUT_HORIZONTAL_GRID: horizontal_grid(out, n, p); return n;
-
-        case LAYOUT_FLOATING: floating_layout(out, n); return n;
+        case LAYOUT_FLOATING: floating_layout(out, n, p); return n;
     }
 
     return 0;
