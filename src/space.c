@@ -98,7 +98,17 @@ bool ext_workspace_init(struct wl_display *display) {
 
         if (handle == NULL) {
             log_err("Failed to create ext-workspace handle %d", i);
-            goto fail;
+            for (int f = 0; f < SPACE_COUNT; f++) {
+                if (workspace_handles[f] != NULL) {
+                    wlr_ext_workspace_handle_v1_destroy(workspace_handles[f]);
+                    workspace_handles[f] = NULL;
+                }
+            }
+
+            wlr_ext_workspace_group_handle_v1_destroy(workspace_group);
+            workspace_group = NULL;
+            workspace_manager = NULL;
+            return false;
         }
 
         handle->data = (void *)(intptr_t)i;
@@ -130,19 +140,6 @@ bool ext_workspace_init(struct wl_display *display) {
 
     ext_workspace_update_states();
     return true;
-
-fail:
-    for (int i = 0; i < SPACE_COUNT; i++) {
-        if (workspace_handles[i] != NULL) {
-            wlr_ext_workspace_handle_v1_destroy(workspace_handles[i]);
-            workspace_handles[i] = NULL;
-        }
-    }
-
-    wlr_ext_workspace_group_handle_v1_destroy(workspace_group);
-    workspace_group = NULL;
-    workspace_manager = NULL;
-    return false;
 }
 
 void ext_workspace_output_enter(struct Output *out) {
