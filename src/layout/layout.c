@@ -1,5 +1,6 @@
 #include "layout.h"
 
+#include "../config.h"
 #include "../manager.h"
 #include "../output.h"
 #include "../window.h"
@@ -12,6 +13,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <wayland-util.h>
+
+static int32_t cascade_next_slot = 0;
 
 static void output_usable_area(
     struct Output *output, int32_t *x, int32_t *y, int32_t *w, int32_t *h
@@ -117,6 +120,16 @@ static void layout_windows_apply(LayoutCompute compute) {
 static void floating_layout(
     struct LayoutWindow *lw, size_t n, const struct LayoutParams *p
 ) {
+    bool occupied = false;
+    for (size_t i = 0; i < n; i++) {
+        if (lw[i].window->pos_valid) {
+            occupied = true;
+            break;
+        }
+    }
+
+    if (!occupied) cascade_next_slot = 0;
+
     for (size_t i = 0; i < n; i++) {
         struct Window *w = lw[i].window;
 
@@ -132,11 +145,16 @@ static void floating_layout(
         int32_t wh = w->height > 0 ? w->height : 1;
 
         if (!w->pos_valid) {
+            int32_t idx = cascade_next_slot % CFG_FLOATING_CASCADE_MAX;
+            cascade_next_slot++;
+
             int32_t cw = ww < p->width ? ww : p->width;
             int32_t ch = wh < p->height ? wh : p->height;
+            int32_t cx = p->x + (p->width - cw) / 2;
+            int32_t cy = p->y + (p->height - ch) / 2;
 
-            lw[i].x = p->x + (p->width - cw) / 2;
-            lw[i].y = p->y + (p->height - ch) / 2;
+            lw[i].x = cx + CFG_FLOATING_CASCADE_STEP * idx;
+            lw[i].y = cy + CFG_FLOATING_CASCADE_STEP * idx;
             lw[i].w = ww;
             lw[i].h = wh;
             continue;

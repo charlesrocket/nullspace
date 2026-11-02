@@ -58,6 +58,9 @@
 #define CFG_FOCUS_FOLLOW            true // focus follows the cursor
 #define CFG_FOCUS_ON_ACTIVATE       true
 
+#define CFG_FLOATING_CASCADE_STEP   12
+#define CFG_FLOATING_CASCADE_MAX    10
+
 #define CFG_BIND(MODS, KEY, ACTION) {MODS, KEY, ACTION, NULL},
 
 // Spaces key
