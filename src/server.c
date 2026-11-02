@@ -6,7 +6,7 @@
 #include "cursor.h"
 #include "input.h"
 #include "layers.h"
-#include "layouts/layout.h"
+#include "layout/layout.h"
 #include "log.h"
 #include "manager.h"
 #include "output.h"

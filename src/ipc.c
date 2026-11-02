@@ -2,7 +2,7 @@
 
 #include "decoration.h"
 #include "input.h"
-#include "layouts/layout.h"
+#include "layout/layout.h"
 #include "log.h"
 #include "manager.h"
 #include "output.h"

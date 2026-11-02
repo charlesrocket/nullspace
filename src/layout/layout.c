@@ -2,6 +2,7 @@
 
 #include "../manager.h"
 #include "../output.h"
+#include "../window.h"
 #include "horizontal.h"
 #include "vertical.h"
 
@@ -113,23 +114,6 @@ static void layout_windows_apply(LayoutCompute compute) {
     free(lw);
 }
 
-void layout_apply(void) { layout_windows_apply(layouts_compute); }
-
-bool layouts_is_tiled(enum Layout layout) {
-    switch (layout) {
-        case LAYOUT_VERTICAL_TILE:
-        case LAYOUT_VERTICAL_GRID:
-        case LAYOUT_HORIZONTAL_TILE:
-        case LAYOUT_HORIZONTAL_RIGHT_TILE:
-        case LAYOUT_HORIZONTAL_MONOCLE:
-        case LAYOUT_HORIZONTAL_GRID: return true;
-
-        case LAYOUT_FLOATING: return false;
-    }
-
-    return false;
-}
-
 static void floating_layout(struct LayoutWindow *lw, size_t n) {
     for (size_t i = 0; i < n; i++) {
         struct Window *w = lw[i].window;
@@ -155,7 +139,7 @@ static void floating_layout(struct LayoutWindow *lw, size_t n) {
     }
 }
 
-size_t layouts_compute(
+static size_t layouts_compute(
     enum Layout layout, struct LayoutWindow *out, size_t n,
     const struct LayoutParams *p
 ) {
@@ -176,4 +160,21 @@ size_t layouts_compute(
     }
 
     return 0;
+}
+
+void layout_apply(void) { layout_windows_apply(layouts_compute); }
+
+bool layouts_is_tiled(enum Layout layout) {
+    switch (layout) {
+        case LAYOUT_VERTICAL_TILE:
+        case LAYOUT_VERTICAL_GRID:
+        case LAYOUT_HORIZONTAL_TILE:
+        case LAYOUT_HORIZONTAL_RIGHT_TILE:
+        case LAYOUT_HORIZONTAL_MONOCLE:
+        case LAYOUT_HORIZONTAL_GRID: return true;
+
+        case LAYOUT_FLOATING: return false;
+    }
+
+    return false;
 }

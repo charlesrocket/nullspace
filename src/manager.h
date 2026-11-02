@@ -2,7 +2,7 @@
 
 #include "animation.h"
 #include "input.h"
-#include "layouts/layout.h"
+#include "layout/layout.h"
 #include "seat.h"
 #include "wallpaper.h"
 #include "window.h"

@@ -4,7 +4,7 @@
 #include "cursor.h"
 #include "decoration.h"
 #include "ipc.h"
-#include "layouts/layout.h"
+#include "layout/layout.h"
 #include "log.h"
 #include "manager.h"
 #include "output.h"

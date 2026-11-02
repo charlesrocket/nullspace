@@ -29,11 +29,6 @@ struct LayoutParams {
 
 bool layouts_is_tiled(enum Layout layout);
 
-size_t layouts_compute(
-    enum Layout layout, struct LayoutWindow *out, size_t n,
-    const struct LayoutParams *p
-);
-
 typedef size_t (*LayoutCompute)(enum Layout, struct LayoutWindow *, size_t, const struct LayoutParams *);
 
 void layout_apply(void);

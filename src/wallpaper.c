@@ -1,5 +1,6 @@
 #include "wallpaper.h"
 
+#include "layout/layout.h"
 #include "log.h"
 #include "manager.h"
 #include "output.h"

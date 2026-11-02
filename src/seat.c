@@ -6,7 +6,7 @@
 #include "input.h"
 #include "ipc.h"
 #include "keymap.h"
-#include "layouts/layout.h"
+#include "layout/layout.h"
 #include "manager.h"
 #include "output.h"
 #include "server.h"
