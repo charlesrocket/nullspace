@@ -1,14 +1,17 @@
 #include "ipc.h"
 
 #include "decoration.h"
+#include "icon.h"
 #include "input.h"
 #include "layout/layout.h"
 #include "log.h"
 #include "manager.h"
 #include "output.h"
+#include "seat.h"
 #include "server.h"
 #include "window.h"
 
+#include <drm_fourcc.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <ns-util.h>
@@ -36,6 +39,9 @@
 #define IPC_MAX_CLIENTS 64
 #define IPC_PENDING_MAX 1024
 
+#define ICON_CHUNK_RAW  (24 * 1024)
+#define ICON_MAX_WIRE   (200 * 1024) // total encoded budget per GETICON
+
 #define ARRAY_LEN(a)    (sizeof(a) / sizeof((a)[0]))
 
 struct IpcClient {
@@ -58,12 +64,12 @@ struct IpcClient {
     bool read_closed;
 };
 
-typedef void (*IpcAction)(int arg);
+typedef void (*IpcAction)(intptr_t arg);
 
 struct IpcPending {
     struct wl_list link;
     IpcAction action;
-    int arg;
+    intptr_t arg;
 };
 
 static struct wl_list ipc_clients = {&ipc_clients, &ipc_clients};
@@ -125,6 +131,16 @@ static bool parse_space(const char *s, int *out) {
     long v;
     if (!ns_parse_int(s, &v) || v < 0 || v >= SPACE_COUNT) return false;
     *out = (int)v;
+    return true;
+}
+
+static bool parse_u64(const char *s, uint64_t *out) {
+    if (s == NULL || *s == '\0' || *s == '-') return false;
+    char *end = NULL;
+    errno = 0;
+    unsigned long long v = strtoull(s, &end, 10);
+    if (errno != 0 || end == s || *end != '\0') return false;
+    *out = (uint64_t)v;
     return true;
 }
 
@@ -414,28 +430,43 @@ static const char *reply_value(struct IpcClient *c, struct Value v) {
     return NULL;
 }
 
-static void act_switch_space(int s) { wm_switch_space(s); }
+static void act_switch_space(intptr_t s) { wm_switch_space((int)s); }
 
-static void act_move_to_space(int s) {
-    wm_move_window_to_space(window_focused(), s);
+static void act_move_to_space(intptr_t s) {
+    wm_move_window_to_space(window_focused(), (int)s);
 }
 
-static void act_set_layout(int l) { wm_set_layout((enum Layout)l); }
+static void act_set_layout(intptr_t l) { wm_set_layout((enum Layout)l); }
 
-static void act_cycle_layout(int unused) {
+static void act_cycle_layout(intptr_t unused) {
     (void)unused;
 
     wm_set_layout((enum Layout)((wm.layout + 1) % ((int)LAYOUT_LAST + 1)));
 }
 
-static void act_close(int unused) {
+static void act_close(intptr_t unused) {
     (void)unused;
+
     struct Window *w = window_focused();
     if (w != NULL) window_close(w);
 }
 
+static void act_activate_window(intptr_t arg) {
+    struct Window *w = window_from_id((uint64_t)arg);
+    if (w == NULL) return;
+
+    if (w->space_hidden) wm_switch_space(w->space);
+    seat_focus(w);
+    if (!layouts_is_tiled(wm.layout)) window_raise(w);
+}
+
+static void act_close_window(intptr_t arg) {
+    struct Window *w = window_from_id((uint64_t)arg);
+    if (w != NULL) window_close(w);
+}
+
 // Returns NULL/error text
-static const char *queue_action(IpcAction action, int arg) {
+static const char *queue_action(IpcAction action, intptr_t arg) {
     if (server.locked) return "SESSION LOCKED";
     if (ipc_pending_count >= IPC_PENDING_MAX) return "BUSY";
 
@@ -454,7 +485,7 @@ static const char *queue_action(IpcAction action, int arg) {
 static const char *queue_space_action(IpcAction action, const char *arg) {
     int s;
     if (!parse_space(arg, &s)) return "bad space";
-    return queue_action(action, s);
+    return queue_action(action, (intptr_t)s);
 }
 
 void ipc_process_pending_commands(void) {
@@ -532,7 +563,7 @@ static const char *get_mfact(const char *arg, struct Value *out) {
 static const char *set_layout(const char *value) {
     enum Layout l;
     if (!ns_parse_layout_name(value, &l)) return "bad layout";
-    return queue_action(act_set_layout, (int)l);
+    return queue_action(act_set_layout, (intptr_t)l);
 }
 
 static const char *set_current_space(const char *value) {
@@ -819,9 +850,7 @@ static void verify_special_keys(void) {
 #undef IPC_KEY_SPECIAL
 }
 
-static uint64_t window_id(const struct Window *w) {
-    return (uint64_t)(uintptr_t)w;
-}
+static uint64_t window_id(const struct Window *w) { return w->id; }
 
 static int space_window_count(int space) {
     int n = 0;
@@ -850,6 +879,8 @@ static void emit_focus(struct IpcClient *to) {
 }
 
 static void emit_window(struct IpcClient *to, const struct Window *w) {
+    const struct Icon *ic = w->icon;
+
     line_printf(
         "EVT window %llu space %d title ", (unsigned long long)window_id(w),
         w->space
@@ -858,7 +889,21 @@ static void emit_window(struct IpcClient *to, const struct Window *w) {
     line_quoted(w->title);
     line_lit(" app_id ");
     line_quoted(w->app_id);
+    line_lit(" icon ");
+    line_quoted(ic ? ic->name : NULL);
+    line_printf(" icon_buffers %zu", ic ? ic->buffer_count : 0);
     line_send(to);
+
+    if (ic != NULL) {
+        for (size_t i = 0; i < ic->buffer_count; i++) {
+            line_printf(
+                "EVT icon_buf %llu %d %d", (unsigned long long)window_id(w),
+                ic->buffers[i].scale, ic->buffers[i].size
+            );
+
+            line_send(to);
+        }
+    }
 }
 
 static void emit_window_event(const char *name, const struct Window *w) {
@@ -1009,6 +1054,144 @@ static void cmd_set(struct IpcClient *c, char *args) {
     respond(c, set_key(args, value));
 }
 
+static void cmd_activate(struct IpcClient *c, char *args) {
+    uint64_t id;
+    if (!parse_u64(args, &id)) {
+        respond(c, "bad window id");
+        return;
+    }
+
+    if (window_from_id(id) == NULL) {
+        respond(c, "no such window");
+        return;
+    }
+
+    respond(c, queue_action(act_activate_window, (intptr_t)id));
+}
+
+static void cmd_window_close(struct IpcClient *c, char *args) {
+    uint64_t id;
+    if (!parse_u64(args, &id)) {
+        respond(c, "bad window id");
+        return;
+    }
+
+    if (window_from_id(id) == NULL) {
+        respond(c, "no such window");
+        return;
+    }
+
+    respond(c, queue_action(act_close_window, (intptr_t)id));
+}
+
+static void b64_encode(const uint8_t *src, size_t len, char *dst) {
+    size_t i = 0, j = 0;
+    for (; i + 3 <= len; i += 3) {
+        uint32_t v = ((uint32_t)src[i] << 16) | ((uint32_t)src[i + 1] << 8)
+                   | (uint32_t)src[i + 2];
+        dst[j++] = B64[(v >> 18) & 0x3f];
+        dst[j++] = B64[(v >> 12) & 0x3f];
+        dst[j++] = B64[(v >> 6) & 0x3f];
+        dst[j++] = B64[v & 0x3f];
+    }
+
+    size_t rem = len - i;
+    if (rem == 1) {
+        uint32_t v = (uint32_t)src[i] << 16;
+        dst[j++] = B64[(v >> 18) & 0x3f];
+        dst[j++] = B64[(v >> 12) & 0x3f];
+        dst[j++] = '=';
+        dst[j++] = '=';
+    } else if (rem == 2) {
+        uint32_t v = ((uint32_t)src[i] << 16) | ((uint32_t)src[i + 1] << 8);
+        dst[j++] = B64[(v >> 18) & 0x3f];
+        dst[j++] = B64[(v >> 12) & 0x3f];
+        dst[j++] = B64[(v >> 6) & 0x3f];
+        dst[j++] = '=';
+    }
+
+    dst[j] = '\0';
+}
+
+static const char *format_name(uint32_t fmt) {
+    switch (fmt) {
+        case DRM_FORMAT_ARGB8888: return "argb8888";
+        case DRM_FORMAT_XRGB8888: return "xrgb8888";
+        case DRM_FORMAT_ABGR8888: return "abgr8888";
+        case DRM_FORMAT_XBGR8888: return "xbgr8888";
+        default: return "unknown";
+    }
+}
+
+static void cmd_geticon(struct IpcClient *c, char *args) {
+    uint64_t id;
+    if (!parse_u64(args, &id)) {
+        respond(c, "bad window id");
+        return;
+    }
+
+    struct Window *w = window_from_id(id);
+    if (w == NULL) {
+        respond(c, "no such window");
+        return;
+    }
+
+    const struct Icon *ic = w->icon;
+    if (ic == NULL || ic->buffer_count == 0) {
+        line_lit("OK 0");
+        line_send(c);
+        return;
+    }
+
+    size_t total_enc = 0;
+    for (size_t i = 0; i < ic->buffer_count; i++) {
+        size_t sz =
+            (size_t)ic->buffers[i].size * (size_t)ic->buffers[i].size * 4u;
+        size_t chunks = (sz + ICON_CHUNK_RAW - 1) / ICON_CHUNK_RAW;
+        total_enc += b64_len(sz) + chunks * 128 + 64;
+    }
+
+    size_t pending = c->outlen - c->outoff;
+    if (total_enc > ICON_MAX_WIRE || pending + total_enc > IPC_OUTBUF_HARD) {
+        respond(c, "icon too large");
+        return;
+    }
+
+    line_printf("OK %zu", ic->buffer_count);
+    line_send(c);
+
+    for (size_t i = 0; i < ic->buffer_count && !c->dead; i++) {
+        const struct IconBuffer *b = &ic->buffers[i];
+        size_t raw = (size_t)b->size * (size_t)b->size * 4u;
+        size_t chunks = (raw + ICON_CHUNK_RAW - 1) / ICON_CHUNK_RAW;
+
+        for (size_t ci = 0; ci < chunks && !c->dead; ci++) {
+            size_t off = ci * ICON_CHUNK_RAW;
+            size_t rem = raw - off;
+            if (rem > ICON_CHUNK_RAW) rem = ICON_CHUNK_RAW;
+
+            size_t enc_len = b64_len(rem);
+            char *enc = malloc(enc_len + 1);
+            if (enc == NULL) {
+                c->dead = true;
+                break;
+            }
+
+            b64_encode(b->pixels + off, rem, enc);
+
+            line_printf(
+                "ICON %llu %d %d %s %zu %zu ", (unsigned long long)id, b->scale,
+                b->size, format_name(b->format), ci, chunks
+            );
+
+            line_put(enc, enc_len);
+            line_send(c);
+
+            free(enc);
+        }
+    }
+}
+
 static void cmd_dpms(struct IpcClient *c, char *args) {
     static const struct {
         const char *name;
@@ -1048,14 +1231,17 @@ static const struct Verb {
     const char *name;
     void (*handler)(struct IpcClient *, char *args);
 } verbs[] = {
-    {       "PING",        cmd_ping},
-    {       "QUIT",        cmd_quit},
-    {     "CONFIG",      cmd_config},
-    {  "SUBSCRIBE",   cmd_subscribe},
-    {"UNSUBSCRIBE", cmd_unsubscribe},
-    {        "GET",         cmd_get},
-    {        "SET",         cmd_set},
-    {       "DPMS",        cmd_dpms},
+    {        "PING",         cmd_ping},
+    {        "QUIT",         cmd_quit},
+    {      "CONFIG",       cmd_config},
+    {   "SUBSCRIBE",    cmd_subscribe},
+    { "UNSUBSCRIBE",  cmd_unsubscribe},
+    {         "GET",          cmd_get},
+    {         "SET",          cmd_set},
+    {    "ACTIVATE",     cmd_activate},
+    {"WINDOW_CLOSE", cmd_window_close},
+    {     "GETICON",      cmd_geticon},
+    {        "DPMS",         cmd_dpms},
 };
 
 static const struct QueuedVerb {

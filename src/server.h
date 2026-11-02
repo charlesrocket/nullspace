@@ -118,7 +118,7 @@ struct NodeTag {
     enum NodeType type;
 };
 
-struct NodeTag *node_tag_find(struct wlr_scene_node *node);
+struct NodeTag *node_tag_find(const struct wlr_scene_node *node);
 
 int server_init(struct wl_display *display);
 void server_detach_listeners(void);

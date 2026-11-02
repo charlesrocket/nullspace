@@ -27,10 +27,10 @@ struct WindowManager {
 
     enum Layout layout;
 
-    int32_t tiled_gap_outer_h, tiled_gap_outer_v, tiled_gap_inner_h,
-        tiled_gap_inner_v;
+    uint64_t next_window_id;
 
-    int32_t nmasters;
+    int32_t tiled_gap_outer_h, tiled_gap_outer_v, tiled_gap_inner_h,
+        tiled_gap_inner_v, nmasters;
 
     float mfact;
 

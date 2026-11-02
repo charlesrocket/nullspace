@@ -4,6 +4,7 @@
 #include "background.h"
 #include "config.h"
 #include "cursor.h"
+#include "icon.h"
 #include "input.h"
 #include "layers.h"
 #include "layout/layout.h"
@@ -339,6 +340,7 @@ int server_init(struct wl_display *display) {
     );
 
     seat_init();
+    if (!icon_manager_init(display)) log_warn("toplevel-icon unavailable");
 
     server.xdg_activation = wlr_xdg_activation_v1_create(display);
     if (server.xdg_activation == NULL) {
@@ -390,6 +392,7 @@ void server_finish(void) {
     wl_list_for_each_safe(out, tmp, &server.outputs, link) output_destroy(out);
 
     seat_finish();
+    icon_manager_finish();
     wallpaper_finish();
     background_effect_finish();
     ext_workspace_finish();
@@ -400,7 +403,7 @@ void server_finish(void) {
     if (server.scene) wlr_scene_node_destroy(&server.scene->tree.node);
 }
 
-struct NodeTag *node_tag_find(struct wlr_scene_node *node) {
+struct NodeTag *node_tag_find(const struct wlr_scene_node *node) {
     for (; node != NULL; node = node->parent ? &node->parent->node : NULL) {
         if (node->data != NULL) return node->data;
     }

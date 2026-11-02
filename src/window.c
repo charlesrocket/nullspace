@@ -3,6 +3,7 @@
 #include "animation.h"
 #include "cursor.h"
 #include "decoration.h"
+#include "icon.h"
 #include "ipc.h"
 #include "layout/layout.h"
 #include "log.h"
@@ -496,6 +497,7 @@ static void window_do_unmap(struct Window *window) {
 
 static void window_handle_map(struct wl_listener *l, void *data) {
     (void)data;
+
     struct Window *window = wl_container_of(l, window, map);
     window_do_map(window);
 }
@@ -505,6 +507,21 @@ static void window_handle_unmap(struct wl_listener *l, void *data) {
 
     struct Window *window = wl_container_of(l, window, unmap);
     window_do_unmap(window);
+}
+
+static void window_apply_pending_icon(struct Window *window) {
+    if (window->pending_icon == NULL && !window->pending_icon_cleared) return;
+
+    bool changed = window->icon != NULL || window->pending_icon != NULL;
+
+    icon_free(window->icon);
+    free(window->icon);
+
+    window->icon = window->pending_icon;
+    window->pending_icon = NULL;
+    window->pending_icon_cleared = false;
+
+    if (changed) ipc_notify_window_meta(window);
 }
 
 static void window_handle_commit(struct wl_listener *l, void *data) {
@@ -533,6 +550,8 @@ static void window_handle_commit(struct wl_listener *l, void *data) {
         if (!window->anim.running) window_clear_clip(window);
         if (resized) deco_update_position(window);
     }
+
+    window_apply_pending_icon(window);
 
     if (!window->mapped && surf->surface->mapped) window_do_map(window);
 
@@ -644,12 +663,36 @@ static void window_handle_set_app_id(struct wl_listener *l, void *data) {
     ipc_notify_window_meta(window);
 }
 
-struct Window *window_from_scene_node(struct wlr_scene_node *node) {
+struct Window *window_from_id(uint64_t id) {
+    if (id == 0) return NULL;
+    struct Window *w;
+    wl_list_for_each(w, &wm.windows, link) {
+        if (w->id == id && !w->closed) return w;
+    }
+
+    return NULL;
+}
+
+struct Window *window_from_scene_node(const struct wlr_scene_node *node) {
     struct NodeTag *tag = node_tag_find(node);
     if (tag == NULL || tag->type != NODE_WINDOW) return NULL;
 
     struct Window *w = wl_container_of(tag, w, node_tag);
     return w;
+}
+
+void window_icon_set_pending(struct Window *w, struct Icon *icon) {
+    if (w == NULL || w->closed) {
+        icon_free(icon);
+        free(icon);
+        return;
+    }
+
+    icon_free(w->pending_icon);
+    free(w->pending_icon);
+
+    w->pending_icon = icon;
+    w->pending_icon_cleared = (icon == NULL);
 }
 
 void window_create(struct wlr_xdg_toplevel *xdg_toplevel) {
@@ -662,6 +705,7 @@ void window_create(struct wlr_xdg_toplevel *xdg_toplevel) {
     window->last_br = -1;
     window->size_per = 1.0f;
 
+    window->id = ++wm.next_window_id;
     window->xdg_toplevel = xdg_toplevel;
     window->space = wm.current_space;
     window->node_tag.type = NODE_WINDOW;
@@ -751,6 +795,12 @@ void window_destroy(struct Window *window) {
     window->closed = true;
 
     if (window->xwayland_surface != NULL) window->xwayland_surface->data = NULL;
+
+    icon_free(window->icon);
+    free(window->icon);
+
+    icon_free(window->pending_icon);
+    free(window->pending_icon);
 
     cursor_window_destroyed(window);
     seat_resize_mode_window_destroyed(window);
@@ -1251,6 +1301,7 @@ void window_create_xwayland(struct wlr_xwayland_surface *xw) {
     window->last_br = -1;
     window->size_per = 1.0f;
 
+    window->id = ++wm.next_window_id;
     window->is_xwayland = true;
     window->xwayland_surface = xw;
     window->space = wm.current_space;

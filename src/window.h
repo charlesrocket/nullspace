@@ -2,6 +2,7 @@
 
 #include "animation.h"
 #include "decoration.h"
+#include "icon.h"
 #include "server.h"
 
 #include <nullspace/layouts.h>
@@ -21,8 +22,7 @@ struct Window {
     struct wlr_xwayland_surface *xwayland_surface;
 #endif
 
-    struct wlr_scene_tree *scene_tree;
-    struct wlr_scene_tree *popup_tree;
+    struct wlr_scene_tree *scene_tree, *popup_tree;
 
     struct wl_list link;       // WindowManager.windows
     struct wl_list focus_link; // WindowManager.focus_stack
@@ -31,42 +31,25 @@ struct Window {
 
     struct NodeTag node_tag;
     struct Decoration *decoration; // ?NULL (floating/non‑fullscreen windows)
+    struct Icon *icon;             // current, applied on commit
+    struct Icon *pending_icon;     // ?NULL
 
     struct Animation anim;
     struct AnimationBox target_box;
 
-    struct wl_listener wlr_request_activate;
-    struct wl_listener wlr_request_close;
+    struct wl_listener wlr_request_activate, wlr_request_close;
 
-    struct wl_listener map;
-    struct wl_listener unmap;
-    struct wl_listener commit;
-    struct wl_listener destroy;
-    struct wl_listener request_move;
-    struct wl_listener request_resize;
-    struct wl_listener request_maximize;
-    struct wl_listener request_fullscreen;
-    struct wl_listener request_minimize;
-    struct wl_listener set_title;
-    struct wl_listener set_app_id;
+    struct wl_listener map, unmap, commit, destroy, request_move,
+        request_resize, request_maximize, request_fullscreen, request_minimize,
+        set_title, set_app_id;
 
 #ifdef XWAYLAND
-    struct wl_listener xw_map;
-    struct wl_listener xw_unmap;
-    struct wl_listener xw_destroy;
-    struct wl_listener xw_request_configure;
-    struct wl_listener xw_request_move;
-    struct wl_listener xw_request_resize;
-    struct wl_listener xw_request_maximize;
-    struct wl_listener xw_request_fullscreen;
-    struct wl_listener xw_request_minimize;
-    struct wl_listener xw_request_activate;
-    struct wl_listener xw_request_close;
-    struct wl_listener xw_set_title;
-    struct wl_listener xw_set_class;
-    struct wl_listener xw_associate;
-    struct wl_listener xw_dissociate;
-    struct wl_listener xw_tree_destroy;
+    struct wl_listener xw_map, xw_unmap, xw_destroy, xw_request_configure,
+        xw_request_move, xw_request_resize, xw_request_maximize,
+        xw_request_fullscreen, xw_request_minimize, xw_request_activate,
+        xw_request_close, xw_set_title, xw_set_class, xw_associate,
+        xw_dissociate, xw_tree_destroy;
+
     struct wlr_scene_tree *xw_surface_tree;
 
     bool xw_bound; // `xw_map`/`xw_unmap` registered
@@ -74,11 +57,11 @@ struct Window {
 
     enum Layout decoration_state;
 
-    int32_t saved_x, saved_y;
-    int32_t x, y;
-    int32_t width, height;
-    int32_t prop_w, prop_h;
-    int32_t reveal_dir, hide_dir;
+    uint64_t id;
+
+    int32_t saved_x, saved_y, x, y, width, height, prop_w, prop_h, reveal_dir,
+        hide_dir;
+
     int32_t fs_x, fs_y, fs_w, fs_h; // geometry to restore (floating)
     int32_t last_tl, last_tr, last_bl, last_br;
 
@@ -88,25 +71,39 @@ struct Window {
 
     char *title, *app_id;
 
-    bool initial_configure_sent, rules_applied;
-    bool decoration_state_set;
-    bool prop_valid, pos_valid;
-    bool has_target, closed, mapped;
-    bool fullscreen, space_hidden;
+    bool initial_configure_sent, rules_applied, pending_icon_cleared,
+        decoration_state_set, prop_valid, pos_valid, has_target, closed, mapped,
+        fullscreen, space_hidden;
+
 #ifdef XWAYLAND
     bool is_xwayland;
 #endif
 };
 
 void window_create(struct wlr_xdg_toplevel *xdg_toplevel);
+void window_destroy(struct Window *window);
+void window_close(struct Window *window);
+void window_raise(struct Window *window);
+void window_reparent(struct Window *window, bool to_float);
+void window_update_corners(struct Window *window);
+void window_icon_set_pending(struct Window *w, struct Icon *icon);
+void window_set_fullscreen(struct Window *window, bool fullscreen);
+void window_set_position(struct Window *window, int32_t x, int32_t y);
+void window_set_size(struct Window *window, int32_t w, int32_t h);
+void window_set_tiled(struct Window *window, bool tiled);
+void window_set_clip(struct Window *window, int32_t w, int32_t h);
+void window_set_activated(struct Window *window, bool activated);
+void window_clear_clip(struct Window *window);
+void window_apply_target(
+    struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh
+);
 
 #ifdef XWAYLAND
 void window_create_xwayland(struct wlr_xwayland_surface *xw);
 #endif
 
-void window_destroy(struct Window *window);
-
-struct Window *window_from_scene_node(struct wlr_scene_node *node);
+struct Window *window_from_id(uint64_t id);
+struct Window *window_from_scene_node(const struct wlr_scene_node *node);
 struct Window *window_focused(void);
 struct Window *window_at(
     double lx, double ly, struct wlr_surface **surface, double *sx, double *sy
@@ -115,20 +112,3 @@ struct Window *window_at(
 struct wlr_surface *window_wlr_surface(const struct Window *window);
 const char *window_title(const struct Window *window);
 const char *window_app_id(const struct Window *window);
-
-void window_apply_target(
-    struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh
-);
-
-void window_set_fullscreen(struct Window *window, bool fullscreen);
-void window_set_position(struct Window *window, int32_t x, int32_t y);
-void window_set_size(struct Window *window, int32_t w, int32_t h);
-void window_set_tiled(struct Window *window, bool tiled);
-void window_set_clip(struct Window *window, int32_t w, int32_t h);
-void window_set_activated(struct Window *window, bool activated);
-void window_clear_clip(struct Window *window);
-
-void window_close(struct Window *window);
-void window_raise(struct Window *window);
-void window_reparent(struct Window *window, bool to_float);
-void window_update_corners(struct Window *window);

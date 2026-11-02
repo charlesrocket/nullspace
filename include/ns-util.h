@@ -6,9 +6,18 @@
 #include <nullspace/layouts.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+
+static const char B64[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+static inline size_t b64_len(size_t n) {
+    size_t groups = n / 3 + (n % 3 != 0);
+    return groups > SIZE_MAX / 4 ? SIZE_MAX : groups * 4;
+}
 
 static inline bool set_nosigpipe(int fd) {
     const int val = 1;
