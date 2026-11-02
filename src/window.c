@@ -23,6 +23,7 @@
 #include <wlr/types/wlr_ext_foreign_toplevel_list_v1.h>
 #include <wlr/types/wlr_foreign_toplevel_management_v1.h>
 #include <wlr/types/wlr_output.h>
+#include <wlr/types/wlr_subcompositor.h>
 #include <wlr/types/wlr_xdg_activation_v1.h>
 #include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/util/edges.h>
@@ -49,17 +50,32 @@ struct CornerApply {
     int applied;
 };
 
+static bool surface_is_under(
+    const struct wlr_surface *surface, const struct wlr_surface *root
+) {
+    while (surface != NULL) {
+        if (surface == root) return true;
+
+        struct wlr_subsurface *sub =
+            wlr_subsurface_try_from_wlr_surface((struct wlr_surface *)surface);
+
+        if (sub == NULL) break;
+
+        surface = sub->parent;
+    }
+
+    return false;
+}
+
 static void
 apply_radius(struct wlr_scene_buffer *buf, int sx, int sy, void *data) {
     (void)sx;
     (void)sy;
 
     struct CornerApply *ctx = data;
-    struct wlr_scene_surface *ss = wlr_scene_surface_try_from_buffer(buf);
-    if (ss == NULL) return;
-
-    // Only round the toplevel's own surface, not subsurfaces/popups.
-    if (ss->surface != ctx->root) return;
+    struct wlr_scene_surface *sc_surf = wlr_scene_surface_try_from_buffer(buf);
+    if (sc_surf == NULL) return;
+    if (!surface_is_under(sc_surf->surface, ctx->root)) return;
 
     wlr_scene_buffer_set_corner_radii(buf, ctx->radii);
     ctx->applied++;
@@ -515,18 +531,16 @@ static void window_handle_commit(struct wl_listener *l, void *data) {
         window->height = h;
 
         if (!window->anim.running) window_clear_clip(window);
-
-        if (resized) {
-            deco_update_position(window);  // re-clamp tab + corners
-            window_update_corners(window); // tiled windows have no deco
-        }
+        if (resized) deco_update_position(window);
     }
 
-    if (!window->mapped && surf->surface->mapped) { window_do_map(window); }
+    if (!window->mapped && surf->surface->mapped) window_do_map(window);
+
+    if (surf->surface->mapped) window_update_corners(window);
 
     if (!wl_list_empty(&surf->surface->current.frame_callback_list)) {
         struct Output *out = output_primary();
-        if (out != NULL) { wlr_output_schedule_frame(out->wlr_output); }
+        if (out != NULL) wlr_output_schedule_frame(out->wlr_output);
     }
 }
 
