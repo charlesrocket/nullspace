@@ -15,6 +15,7 @@
 #include <wayland-util.h>
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_scene.h>
+#include <wlr/xcursor.h>
 #include <wlr/xwayland.h>
 #include <xcb/randr.h>
 #include <xcb/xcb.h>
@@ -381,6 +382,21 @@ void xwayland_primary_update(void) {
 static void xw_handle_ready(struct wl_listener *l, void *data) {
     (void)l;
     (void)data;
+
+    wlr_xcursor_manager_load(server.cursor_mgr, 1);
+
+    struct wlr_xcursor *xcursor =
+        wlr_xcursor_manager_get_xcursor(server.cursor_mgr, "default", 1);
+
+    if (xcursor != NULL) {
+        struct wlr_xcursor_image *image = xcursor->images[0];
+        struct wlr_buffer *buffer = wlr_xcursor_image_get_buffer(image);
+
+        wlr_xwayland_set_cursor(
+            server.xwayland, buffer, (int32_t)image->hotspot_x,
+            (int32_t)image->hotspot_y
+        );
+    }
 
     if (server.xwayland->display_name) {
         setenv("DISPLAY", server.xwayland->display_name, 1);
