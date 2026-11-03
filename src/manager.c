@@ -230,6 +230,8 @@ void wm_switch_space_on(struct Output *out, int space) {
 
         if (window->space == space) { // reveal
             if (!window->space_hidden) continue;
+            if (window->minimized) continue;
+
             window->space_hidden = false;
 
             if (window->hide_dir != 0 && window->anim.running) {
@@ -267,6 +269,74 @@ void wm_switch_space_on(struct Output *out, int space) {
     ipc_notify_focus();
     wm_mark_layout_dirty();
     idle_update_inhibit();
+}
+
+void wm_minimize_window(struct Window *window) {
+    if (window == NULL || window->closed) return;
+    if (!window->mapped) return;
+    if (window->minimized) return;
+
+    window_hide_offscreen(window, 0);
+    window->minimized = true;
+
+    // Hand off the focus.
+    struct wlr_surface *surface = window_wlr_surface(window);
+    bool had_kbd_focus = surface != NULL && server.seat != NULL
+                      && server.seat->keyboard_state.focused_surface == surface;
+
+    wl_list_remove(&window->focus_link);
+    wl_list_init(&window->focus_link);
+
+    wl_list_insert(wm.minimized_windows.prev, &window->minimized_link);
+
+    if (had_kbd_focus) seat_focus(NULL);
+
+    ipc_notify_window_meta(window);
+    wm_mark_layout_dirty();
+    idle_update_inhibit();
+}
+
+void wm_restore_window(struct Window *window) {
+    if (window == NULL || window->closed) return;
+    if (!window->minimized) return;
+
+    struct Output *out = window->output;
+    if (out == NULL) out = output_focused();
+    if (out == NULL) return;
+
+    if (window->space != out->current_space) {
+        wm_switch_space_on(out, window->space);
+    }
+
+    window->minimized = false;
+    wl_list_remove(&window->minimized_link);
+    wl_list_init(&window->minimized_link);
+
+    if (window->space == out->current_space && window->space_hidden) {
+        window->space_hidden = false;
+        window->anim.running = false;
+        window->hide_dir = 0;
+        window->reveal_dir = 0;
+        window->has_target = false;
+        window_set_position(window, window->saved_x, window->saved_y);
+    }
+
+    seat_focus(window);
+    if (!layouts_is_tiled(wm.layout)) window_raise(window);
+
+    ipc_notify_window_meta(window);
+    wm_mark_layout_dirty();
+    idle_update_inhibit();
+}
+
+struct Window *wm_restore_last_minimized(void) {
+    if (wl_list_empty(&wm.minimized_windows)) return NULL;
+
+    struct Window *w =
+        wl_container_of(wm.minimized_windows.prev, w, minimized_link);
+
+    wm_restore_window(w);
+    return w;
 }
 
 void wm_switch_space(int space) { wm_switch_space_on(output_focused(), space); }
@@ -351,6 +421,7 @@ void wm_invalidate_wallpaper(void) { wallpaper_invalidate_all(); }
 void wm_init(void) {
     wl_list_init(&wm.windows);
     wl_list_init(&wm.focus_stack);
+    wl_list_init(&wm.minimized_windows);
     wl_list_init(&wm.layer_surfaces);
 
     wm.layout = config.default_layout;

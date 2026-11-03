@@ -25,8 +25,9 @@ struct Window {
 
     struct wlr_scene_tree *scene_tree, *popup_tree;
 
-    struct wl_list link;       // WindowManager.windows
-    struct wl_list focus_link; // WindowManager.focus_stack
+    struct wl_list link;           // WindowManager.windows
+    struct wl_list focus_link;     // WindowManager.focus_stack
+    struct wl_list minimized_link; // WindowManager.minimized_windows
     struct wlr_ext_foreign_toplevel_handle_v1 *foreign_handle;
     struct wlr_foreign_toplevel_handle_v1 *wlr_handle;
 
@@ -74,7 +75,7 @@ struct Window {
 
     bool initial_configure_sent, maximized, rules_applied, pending_icon_cleared,
         decoration_state_set, prop_valid, pos_valid, has_target, closed, mapped,
-        fullscreen, space_hidden;
+        fullscreen, space_hidden, minimized;
 
 #ifdef XWAYLAND
     bool is_xwayland;

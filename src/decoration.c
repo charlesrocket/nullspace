@@ -544,12 +544,12 @@ bool deco_handle_press(double lx, double ly, uint32_t button, uint32_t mods) {
 
     switch (part) {
         case DECO_PART_CLOSE: window_close(w); return true;
+        case DECO_PART_MIN: wm_minimize_window(w); return true;
         case DECO_PART_ZOOM:
             focus_and_raise(w);
             window_toggle_maximized(w);
             return true;
 
-        case DECO_PART_MIN: return true;
         case DECO_PART_TAB:
             focus_and_raise(w);
             if (mods & WLR_MODIFIER_SHIFT) {

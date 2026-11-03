@@ -30,21 +30,23 @@ struct CtlCommand {
 };
 
 static const struct CtlCommand COMMANDS[] = {
-    {          "get",                     "get <key>",           "query state keys"},
-    {          "set",             "set <key> <value>",  "set runtime config values"},
-    {       "config",                        "config",                 "dump state"},
-    { "switch-space",              "switch-space <n>",              "switch spaces"},
-    {"move-to-space",             "move-to-space <n>",       "move focused windows"},
-    { "cycle-layout",                  "cycle-layout",   "cycle to the next layout"},
-    {        "close",                         "close",   "close the focused window"},
-    {         "dpms", "dpms <on|off|toggle> [output]",        "change output state"},
-    {         "ping",                          "ping",    "check socket connection"},
-    {    "subscribe",                     "subscribe",       "stream states/events"},
-    {          "raw",                  "raw <string>",         "send raw IPC lines"},
-    {         "list",                 "list <string>",    "show available commands"},
-    {     "activate",                 "activate <id>",   "focus and raise a window"},
-    { "window-close",             "window-close <id>",    "close a specific window"},
-    {      "geticon",                  "geticon <id>", "fetch a window's icon data"},
+    {            "get",                     "get <key>",              "query state keys"},
+    {            "set",             "set <key> <value>",     "set runtime config values"},
+    {         "config",                        "config",                    "dump state"},
+    {   "switch-space",              "switch-space <n>",                 "switch spaces"},
+    {  "move-to-space",             "move-to-space <n>",          "move focused windows"},
+    {   "cycle-layout",                  "cycle-layout",      "cycle to the next layout"},
+    {          "close",                         "close",      "close the focused window"},
+    {           "dpms", "dpms <on|off|toggle> [output]",           "change output state"},
+    {           "ping",                          "ping",       "check socket connection"},
+    {      "subscribe",                     "subscribe",          "stream states/events"},
+    {            "raw",                  "raw <string>",            "send raw IPC lines"},
+    {           "list",                 "list <string>",       "show available commands"},
+    {"window-activate",          "window-activate <id>",      "focus and raise a window"},
+    {   "window-close",             "window-close <id>",                "close a window"},
+    {"window-minimize",          "window-minimize <id>",   "move a window to scratchpad"},
+    { "window-geticon",           "window-geticon <id>",    "fetch a window's icon data"},
+    {   "restore-last",                  "restore-last", "restore last minimized window"},
 };
 
 struct LayoutEntry {

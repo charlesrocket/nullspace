@@ -386,6 +386,8 @@ static void seat_action(enum Action action, const void *arg) {
 
         case ACTION_MOVE: break;
         case ACTION_RESIZE: resize_mode_toggle(); break;
+        case ACTION_MINIMIZE: wm_minimize_window(window_focused()); break;
+        case ACTION_RESTORE_MINIMIZED: wm_restore_last_minimized(); break;
         case ACTION_FULLSCREEN:
             {
                 struct Window *focused = window_focused();

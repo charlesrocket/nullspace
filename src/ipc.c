@@ -455,9 +455,24 @@ static void act_activate_window(intptr_t arg) {
     struct Window *w = window_from_id((uint64_t)arg);
     if (w == NULL) return;
 
+    if (w->minimized) {
+        wm_restore_window(w);
+        return;
+    }
+
     if (w->space_hidden) wm_switch_space(w->space);
     seat_focus(w);
     if (!layouts_is_tiled(wm.layout)) window_raise(w);
+}
+
+static void act_minimize_window(intptr_t arg) {
+    struct Window *w = window_from_id((uint64_t)arg);
+    if (w != NULL) wm_minimize_window(w);
+}
+
+static void act_restore_last_minimized(intptr_t unused) {
+    (void)unused;
+    wm_restore_last_minimized();
 }
 
 static void act_close_window(intptr_t arg) {
@@ -892,8 +907,8 @@ static void emit_window(struct IpcClient *to, const struct Window *w) {
     const struct Icon *ic = w->icon;
 
     line_printf(
-        "EVT window %llu space %d title ", (unsigned long long)window_id(w),
-        w->space
+        "EVT window %llu space %d minimized %d title ",
+        (unsigned long long)window_id(w), w->space, w->minimized ? 1 : 0
     );
 
     line_quoted(w->title);
@@ -1098,6 +1113,27 @@ static void cmd_window_close(struct IpcClient *c, char *args) {
     respond(c, queue_action(act_close_window, (intptr_t)id));
 }
 
+static void cmd_minimize(struct IpcClient *c, char *args) {
+    uint64_t id;
+    if (!parse_u64(args, &id)) {
+        respond(c, "bad window id");
+        return;
+    }
+
+    if (window_from_id(id) == NULL) {
+        respond(c, "no such window");
+        return;
+    }
+
+    respond(c, queue_action(act_minimize_window, (intptr_t)id));
+}
+
+static void cmd_restore_last(struct IpcClient *c, char *args) {
+    (void)args;
+
+    respond(c, queue_action(act_restore_last_minimized, 0));
+}
+
 static void b64_encode(const uint8_t *src, size_t len, char *dst) {
     size_t i = 0, j = 0;
     for (; i + 3 <= len; i += 3) {
@@ -1245,17 +1281,19 @@ static const struct Verb {
     const char *name;
     void (*handler)(struct IpcClient *, char *args);
 } verbs[] = {
-    {        "PING",         cmd_ping},
-    {        "QUIT",         cmd_quit},
-    {      "CONFIG",       cmd_config},
-    {   "SUBSCRIBE",    cmd_subscribe},
-    { "UNSUBSCRIBE",  cmd_unsubscribe},
-    {         "GET",          cmd_get},
-    {         "SET",          cmd_set},
-    {    "ACTIVATE",     cmd_activate},
-    {"WINDOW_CLOSE", cmd_window_close},
-    {     "GETICON",      cmd_geticon},
-    {        "DPMS",         cmd_dpms},
+    {           "PING",         cmd_ping},
+    {           "QUIT",         cmd_quit},
+    {         "CONFIG",       cmd_config},
+    {      "SUBSCRIBE",    cmd_subscribe},
+    {    "UNSUBSCRIBE",  cmd_unsubscribe},
+    {            "GET",          cmd_get},
+    {            "SET",          cmd_set},
+    {"WINDOW_ACTIVATE",     cmd_activate},
+    {"WINDOW_MINIMIZE",     cmd_minimize},
+    { "WINDOW_GETICON",      cmd_geticon},
+    {   "RESTORE_LAST", cmd_restore_last},
+    {   "WINDOW_CLOSE", cmd_window_close},
+    {           "DPMS",         cmd_dpms},
 };
 
 static const struct QueuedVerb {

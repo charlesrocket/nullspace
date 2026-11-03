@@ -589,6 +589,17 @@ static void window_do_unmap(struct Window *window) {
 
     window->mapped = false;
 
+    if (window->minimized) {
+        window->minimized = false;
+        wl_list_remove(&window->minimized_link);
+        wl_list_init(&window->minimized_link);
+
+        struct Output *out = window->output;
+        if (out == NULL) out = output_focused();
+        window->space_hidden =
+            (out != NULL && window->space != out->current_space);
+    }
+
     struct wlr_surface *surface = window_wlr_surface(window);
     bool had_focus = surface != NULL && server.seat != NULL
                   && server.seat->keyboard_state.focused_surface == surface;
@@ -909,6 +920,7 @@ void window_create(struct wlr_xdg_toplevel *xdg_toplevel) {
     wl_signal_add(&xdg_toplevel->events.set_app_id, &window->set_app_id);
 
     wl_list_init(&window->focus_link);
+    wl_list_init(&window->minimized_link);
     wl_list_insert(wm.windows.prev, &window->link);
 }
 
@@ -1471,6 +1483,7 @@ void window_create_xwayland(struct wlr_xwayland_surface *xw) {
     }
 
     wl_list_init(&window->focus_link);
+    wl_list_init(&window->minimized_link);
 
     window->xw_associate.notify = xw_handle_associate;
     wl_signal_add(&xw->events.associate, &window->xw_associate);

@@ -17,9 +17,10 @@
 #define HIDDEN_POS_Y (-1000000)
 
 struct WindowManager {
-    struct wl_list windows;        // Window, creation order
-    struct wl_list focus_stack;    // Window, most recently focused last
-    struct wl_list layer_surfaces; // LayerSurface
+    struct wl_list windows;           // Window, creation order
+    struct wl_list focus_stack;       // Window, most recently focused last
+    struct wl_list layer_surfaces;    // LayerSurface
+    struct wl_list minimized_windows; // Window, newest at .prev
 
     struct AnimationsConfig animations;
     struct WallpaperConfig wallpaper;
@@ -53,6 +54,8 @@ void wm_set_layout(enum Layout layout);
 void wm_switch_space(int space);
 void wm_switch_space_on(struct Output *out, int space);
 void wm_move_window_to_space(struct Window *window, int space);
+void wm_minimize_window(struct Window *window);
+void wm_restore_window(struct Window *window);
 void wm_assign_new_window_space(struct Window *window, int space);
 void wm_set_kb_layout(const char *layout);
 void wm_mark_layout_dirty(void);
@@ -68,3 +71,5 @@ struct Window *wm_focus_stack_top_except(struct Window *skip);
 
 bool wm_set_wallpaper_path(const char *path);
 void wm_invalidate_wallpaper(void);
+
+struct Window *wm_restore_last_minimized(void);

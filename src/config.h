@@ -77,6 +77,10 @@
     CFG_BIND(CFG_MOD_SUPER, XKB_KEY_l, ACTION_CYCLE_LAYOUT)                    \
     CFG_BIND(CFG_MOD_SUPER, XKB_KEY_r, ACTION_EXIT)                            \
     CFG_BIND(CFG_MOD_SUPER, XKB_KEY_m, ACTION_RESIZE)                          \
+    CFG_BIND(CFG_MOD_SUPER, XKB_KEY_h, ACTION_MINIMIZE)                        \
+    CFG_BIND(                                                                  \
+        CFG_MOD_SUPER | CFG_MOD_SHIFT, XKB_KEY_h, ACTION_RESTORE_MINIMIZED     \
+    )                                                                          \
     CFG_BIND(CFG_MOD_SUPER | CFG_MOD_SHIFT, XKB_KEY_f, ACTION_FULLSCREEN)      \
     CFG_SPACEKEY(XKB_KEY_1, 1)                                                 \
     CFG_SPACEKEY(XKB_KEY_2, 2)                                                 \
