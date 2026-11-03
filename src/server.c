@@ -126,6 +126,7 @@ static void handle_request_set_cursor_shape(struct wl_listener *l, void *data) {
     struct wlr_cursor_shape_manager_v1_request_set_shape_event *ev = data;
 
     if (s->seat->pointer_state.focused_client != ev->seat_client) return;
+    if (cursor_is_hidden()) return;
 
     wlr_cursor_set_xcursor(
         s->cursor, s->cursor_mgr, cursor_shape_name(ev->shape)
@@ -348,6 +349,7 @@ int server_init(struct wl_display *display) {
         return -1;
     }
 
+    cursor_hide_init(wl_display_get_event_loop(server.display));
     activation_init(server.xdg_activation);
 
     if (!wlr_backend_start(server.backend)) {
@@ -391,6 +393,7 @@ void server_finish(void) {
     struct Output *out, *tmp;
     wl_list_for_each_safe(out, tmp, &server.outputs, link) output_destroy(out);
 
+    cursor_hide_finish();
     seat_finish();
     icon_manager_finish();
     wallpaper_finish();
@@ -657,9 +660,10 @@ static void handle_request_set_cursor(struct wl_listener *l, void *data) {
     (void)l;
 
     struct wlr_seat_pointer_request_set_cursor_event *ev = data;
-    if (server.seat->pointer_state.focused_client == ev->seat_client) {
-        wlr_cursor_set_surface(
-            server.cursor, ev->surface, ev->hotspot_x, ev->hotspot_y
-        );
-    }
+    if (server.seat->pointer_state.focused_client != ev->seat_client) return;
+    if (cursor_is_hidden()) return;
+
+    wlr_cursor_set_surface(
+        server.cursor, ev->surface, ev->hotspot_x, ev->hotspot_y
+    );
 }

@@ -2,6 +2,7 @@
 
 #include "actions.h"
 #include "config.h"
+#include "cursor.h"
 #include "decoration.h"
 #include "input.h"
 #include "ipc.h"
@@ -442,6 +443,11 @@ static void keyboard_handle_modifiers(struct wl_listener *l, void *data) {
     keymap_notify_layout(kb->wlr_keyboard);
 }
 
+static bool is_modifier_sym(xkb_keysym_t s) {
+    return (s >= XKB_KEY_Shift_L && s <= XKB_KEY_Hyper_R)
+        || s == XKB_KEY_ISO_Level3_Shift || s == XKB_KEY_Mode_switch;
+}
+
 static void keyboard_handle_key(struct wl_listener *l, void *data) {
     server_notify_activity();
 
@@ -525,6 +531,11 @@ static void keyboard_handle_key(struct wl_listener *l, void *data) {
     if (handled) {
         swallow_add(ev->keycode);
     } else {
+        if (ev->state == WL_KEYBOARD_KEY_STATE_PRESSED
+            && !(nsyms > 0 && is_modifier_sym(syms[0]))) {
+            cursor_hide_now();
+        }
+
         wlr_seat_keyboard_notify_key(
             server.seat, ev->time_msec, ev->keycode, ev->state
         );

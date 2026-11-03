@@ -17,6 +17,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <sys/_clock_id.h>
+#include <time.h>
 #include <wayland-server-core.h>
 #include <wayland-server-protocol.h>
 #include <wayland-util.h>
@@ -27,7 +29,7 @@
 #include <wlr/util/edges.h>
 
 #define LOG_TOPIC    "cursor"
-#define EDGE_GRAB_PX 6
+#define EDGE_GRAB_PX 4
 
 struct InteractiveOp {
     struct Window *window;
@@ -54,6 +56,17 @@ static unsigned buttons_down;
 static struct Window *pointer_grab_window;
 static double pointer_grab_lx, pointer_grab_ly; // global cursor at press
 static double pointer_grab_sx, pointer_grab_sy; // surface at press
+
+static struct wl_event_source *hide_timer;
+static bool hide_timer_armed, hide_idle_on, hide_typing_on, cursor_hidden;
+static uint64_t last_activity_ms;
+
+bool cursor_is_hidden(void) { return cursor_hidden; }
+
+static void set_xcursor(const char *name) {
+    if (cursor_hidden) return;
+    wlr_cursor_set_xcursor(server.cursor, server.cursor_mgr, name);
+}
 
 static void interactive_apply(double cx, double cy) {
     struct InteractiveOp *g = &interactive;
@@ -103,9 +116,6 @@ static void interactive_apply(double cx, double cy) {
             if (g->edges & WLR_EDGE_TOP)
                 ny = g->window_start_y + g->window_start_h - 1;
         }
-
-        if (nw < 1) nw = 1;
-        if (nh < 1) nh = 1;
 
         window_set_size(v, nw, nh);
         window_set_position(v, nx, ny);
@@ -258,7 +268,7 @@ static void cursor_manage_focus(bool motion) {
 
     if (surface == NULL) {
         wlr_seat_pointer_clear_focus(server.seat);
-        wlr_cursor_set_xcursor(server.cursor, server.cursor_mgr, "default");
+        set_xcursor("default");
         return;
     }
 
@@ -269,9 +279,7 @@ static void cursor_manage_focus(bool motion) {
 
     uint32_t edges = edge_zone(under, server.cursor->x, server.cursor->y);
     const char *xc = xcursor_for_edges(edges);
-    if (xc != NULL) {
-        wlr_cursor_set_xcursor(server.cursor, server.cursor_mgr, xc);
-    }
+    if (xc != NULL) set_xcursor(xc);
 }
 
 static void cursor_update_focus(void) { cursor_manage_focus(false); }
@@ -295,10 +303,95 @@ static uint32_t current_keyboard_modifiers(void) {
     return mods;
 }
 
+static uint64_t now_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
+}
+
+static void arm_hide_timer(int ms) { // ms >= 1 (0 would disarm)
+    hide_timer_armed = true;
+    wl_event_source_timer_update(hide_timer, ms);
+}
+
+static void hide_cursor(void) {
+    if (cursor_hidden) return;
+    cursor_hidden = true;
+    wlr_cursor_unset_image(server.cursor);
+}
+
+static void show_cursor(void) {
+    cursor_hidden = false;
+    wlr_seat_pointer_clear_focus(server.seat);
+    set_xcursor("default");
+    cursor_refresh_focus();
+}
+
+static int hide_timer_cb(void *data) {
+    (void)data;
+
+    hide_timer_armed = false;
+
+    if (cursor_hidden) return 0;
+    if (buttons_down > 0 || interactive.active) return 0; // wake re-arms
+
+    uint64_t idle = now_ms() - last_activity_ms;
+    if (idle < CFG_CURSOR_HIDE_MS) {
+        arm_hide_timer((int)(CFG_CURSOR_HIDE_MS - idle)); // sleep the remainder
+        return 0;
+    }
+
+    hide_cursor();
+    return 0;
+}
+
+void cursor_hide_init(struct wl_event_loop *loop) {
+    hide_typing_on = CFG_CURSOR_HIDE_TYPING;
+    hide_idle_on = CFG_CURSOR_HIDE_IDLE;
+
+    if (!hide_idle_on || hide_timer != NULL) return;
+
+    hide_timer = wl_event_loop_add_timer(loop, hide_timer_cb, NULL);
+    if (hide_timer == NULL) {
+        hide_idle_on = false;
+        return;
+    }
+
+    last_activity_ms = now_ms();
+    arm_hide_timer(CFG_CURSOR_HIDE_MS * 2);
+}
+
+void cursor_hide_finish(void) {
+    if (hide_timer != NULL) {
+        wl_event_source_remove(hide_timer);
+        hide_timer = NULL;
+    }
+
+    hide_timer_armed = false;
+    hide_idle_on = hide_typing_on = false;
+    if (cursor_hidden) show_cursor();
+}
+
+void cursor_hide_now(void) {
+    if (!hide_typing_on) return;
+    if (buttons_down > 0 || interactive.active) return;
+    hide_cursor();
+}
+
+static void cursor_wake(void) {
+    if (hide_idle_on) {
+        last_activity_ms = now_ms();
+        if (!hide_timer_armed) arm_hide_timer(CFG_CURSOR_HIDE_MS);
+    }
+
+    if (cursor_hidden) show_cursor();
+}
+
 void cursor_handle_motion(struct wl_listener *l, void *data) {
     (void)l;
 
     server_notify_activity();
+    cursor_wake();
     struct wlr_pointer_motion_event *ev = data;
 
     wlr_cursor_move(
@@ -321,6 +414,7 @@ void cursor_handle_motion_absolute(struct wl_listener *l, void *data) {
     (void)l;
 
     server_notify_activity();
+    cursor_wake();
     struct wlr_pointer_motion_absolute_event *ev = data;
 
     wlr_cursor_warp_absolute(server.cursor, &ev->pointer->base, ev->x, ev->y);
@@ -341,6 +435,7 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
     (void)l;
 
     server_notify_activity();
+    cursor_wake();
     struct wlr_pointer_button_event *ev = data;
 
     const bool pressed = ev->state == WL_POINTER_BUTTON_STATE_PRESSED;
@@ -486,6 +581,7 @@ void cursor_handle_axis(struct wl_listener *l, void *data) {
     (void)l;
 
     server_notify_activity();
+    cursor_wake();
     if (interactive.active) return;
 
     struct wlr_pointer_axis_event *ev = data;

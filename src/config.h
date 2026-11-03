@@ -15,6 +15,9 @@
 
 #define CFG_CURSOR_SIZE              24
 #define CFG_CURSOR_THEME             NULL
+#define CFG_CURSOR_HIDE_IDLE         true
+#define CFG_CURSOR_HIDE_TYPING       true
+#define CFG_CURSOR_HIDE_MS           3000
 
 #define CFG_GAPS                     8
 #define CFG_SMART_GAPS               false
