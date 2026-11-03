@@ -578,12 +578,11 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
     if (ev->state == WL_POINTER_BUTTON_STATE_PRESSED) {
         buttons_down++;
         session_lock_click_focus();
+        cursor_update_focus();
     } else if (buttons_down > 0) {
         buttons_down--;
         if (buttons_down == 0) pointer_grab_window = NULL;
     }
-
-    cursor_update_focus();
 }
 
 void cursor_handle_axis(struct wl_listener *l, void *data) {
