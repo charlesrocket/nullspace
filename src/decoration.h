@@ -1,5 +1,6 @@
 #pragma once
 
+#include "config.h"
 #include "ipc.h"
 
 #include <ns-util.h>
@@ -13,6 +14,8 @@ struct text_node;
 struct wlr_scene_tree;
 struct wlr_scene_rect;
 struct wlr_scene_shadow;
+
+#define DECO_TAB_H CFG_DECO_SLIDER_HEIGHT // slider tab height
 
 struct Decoration {
     struct Window *window;

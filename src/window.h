@@ -12,6 +12,7 @@
 #include <wayland-server-core.h>
 #include <wayland-util.h>
 #include <wlr/types/wlr_xdg_shell.h>
+#include <wlr/util/box.h>
 
 struct wlr_xwayland_surface;
 
@@ -38,11 +39,10 @@ struct Window {
     struct Animation anim;
     struct AnimationBox target_box;
 
-    struct wl_listener wlr_request_activate, wlr_request_close;
-
     struct wl_listener map, unmap, commit, destroy, request_move,
-        request_resize, request_maximize, request_fullscreen, request_minimize,
-        set_title, set_app_id;
+        wlr_request_activate, wlr_request_close, request_resize,
+        request_maximize, request_fullscreen, request_minimize, set_title,
+        set_app_id;
 
 #ifdef XWAYLAND
     struct wl_listener xw_map, xw_unmap, xw_destroy, xw_request_configure,
@@ -60,11 +60,11 @@ struct Window {
 
     uint64_t id;
 
-    int32_t saved_x, saved_y, x, y, width, height, prop_w, prop_h, reveal_dir,
-        hide_dir;
+    int32_t max_saved_x, max_saved_y, max_saved_w, max_saved_h, saved_x,
+        saved_y, x, y, width, height, prop_w, prop_h, reveal_dir, hide_dir,
+        last_tl, last_tr, last_bl, last_br;
 
     int32_t fs_x, fs_y, fs_w, fs_h; // geometry to restore (floating)
-    int32_t last_tl, last_tr, last_bl, last_br;
 
     float size_per; // tiled size weight
 
@@ -72,7 +72,7 @@ struct Window {
 
     char *title, *app_id;
 
-    bool initial_configure_sent, rules_applied, pending_icon_cleared,
+    bool initial_configure_sent, maximized, rules_applied, pending_icon_cleared,
         decoration_state_set, prop_valid, pos_valid, has_target, closed, mapped,
         fullscreen, space_hidden;
 
@@ -94,9 +94,17 @@ void window_set_size(struct Window *window, int32_t w, int32_t h);
 void window_set_tiled(struct Window *window, bool tiled);
 void window_set_clip(struct Window *window, int32_t w, int32_t h);
 void window_set_activated(struct Window *window, bool activated);
+void window_set_maximized(struct Window *window, bool maximized);
+void window_toggle_maximized(struct Window *window);
 void window_clear_clip(struct Window *window);
 void window_apply_target(
     struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh
+);
+
+bool window_usable_area(const struct Window *w, struct wlr_box *out);
+int32_t window_visual_top_offset(const struct Window *w);
+void window_clamp_to_usable(
+    struct Window *w, int32_t *x, int32_t *y, int32_t *width, int32_t *height
 );
 
 #ifdef XWAYLAND

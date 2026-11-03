@@ -30,6 +30,7 @@
 #include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_seat.h>
+#include <wlr/util/box.h>
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include <xkbcommon/xkbcommon.h>
@@ -168,6 +169,7 @@ static void resize_mode_toggle(void) {
 
     struct Window *w = window_focused();
     if (w == NULL || w->closed || !w->mapped || w->space_hidden) return;
+    if (w->fullscreen) return;
 
     int32_t bw = w->prop_valid ? w->prop_w : w->width;
     int32_t bh = w->prop_valid ? w->prop_h : w->height;
@@ -265,16 +267,41 @@ static void resize_mode_adjust(int32_t dx, int32_t dy) {
         return;
     }
 
-    if (!layouts_is_tiled(wm.layout)) {
+    if (!layouts_is_tiled(wm.layout)) { // floating mode
         resize_mode.base_w += dx;
         resize_mode.base_h += dy;
 
         if (resize_mode.base_w < RESIZE_MIN_PX) {
             resize_mode.base_w = RESIZE_MIN_PX;
         }
-
         if (resize_mode.base_h < RESIZE_MIN_PX) {
             resize_mode.base_h = RESIZE_MIN_PX;
+        }
+
+        // Clamp to the usable area (content + decoration tab).
+        struct wlr_box ua;
+        if (window_usable_area(w, &ua)) {
+            const int32_t deco_top = window_visual_top_offset(w);
+
+            int32_t max_h = ua.height - deco_top;
+            if (max_h < 1) max_h = 1;
+
+            if (resize_mode.base_w > ua.width) {
+                resize_mode.base_w = ua.width;
+            }
+
+            int32_t avail_below = ua.y + ua.height - w->y;
+            if (avail_below < 1) avail_below = 1;
+            int32_t cap_h = max_h < avail_below ? max_h : avail_below;
+
+            if (resize_mode.base_h > cap_h) { resize_mode.base_h = cap_h; }
+
+            if (resize_mode.base_w < RESIZE_MIN_PX) {
+                resize_mode.base_w = RESIZE_MIN_PX;
+            }
+            if (resize_mode.base_h < RESIZE_MIN_PX) {
+                resize_mode.base_h = RESIZE_MIN_PX;
+            }
         }
 
         if (resize_mode.base_w != w->prop_w

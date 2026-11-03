@@ -27,6 +27,7 @@
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/types/wlr_xdg_activation_v1.h>
 #include <wlr/types/wlr_xdg_decoration_v1.h>
+#include <wlr/util/box.h>
 #include <wlr/util/edges.h>
 #include <wlr/util/log.h>
 #ifdef XWAYLAND
@@ -43,6 +44,69 @@ static int imin(int a, int b) { return a < b ? a : b; }
 
 static struct wlr_scene_tree *layer_for_layout(enum Layout layout) {
     return layouts_is_tiled(layout) ? server.tile_tree : server.float_tree;
+}
+
+bool window_usable_area(const struct Window *w, struct wlr_box *out) {
+    if (w == NULL || out == NULL) return false;
+
+    const struct Output *o = w->output;
+    if (o == NULL) o = output_primary();
+    if (o == NULL) return false;
+
+    if (o->area_set && o->area_width > 0 && o->area_height > 0) {
+        *out = (struct wlr_box){
+            .x = o->area_x,
+            .y = o->area_y,
+            .width = o->area_width,
+            .height = o->area_height,
+        };
+
+        return true;
+    }
+
+    if (o->width <= 0 || o->height <= 0) return false;
+
+    *out = (struct wlr_box){
+        .x = o->pos_x,
+        .y = o->pos_y,
+        .width = o->width,
+        .height = o->height,
+    };
+
+    return true;
+}
+
+int32_t window_visual_top_offset(const struct Window *w) {
+    if (w == NULL) return 0;
+    if (w->closed || w->decoration == NULL || w->decoration->tab == NULL) {
+        return 0;
+    }
+
+    return DECO_TAB_H;
+}
+
+void window_clamp_to_usable(
+    struct Window *w, int32_t *x, int32_t *y, int32_t *width, int32_t *height
+) {
+    if (x == NULL || y == NULL || width == NULL || height == NULL) return;
+
+    struct wlr_box ua;
+    if (!window_usable_area(w, &ua)) return;
+    if (ua.width <= 0 || ua.height <= 0) return;
+
+    const int32_t deco_top = window_visual_top_offset(w);
+    int32_t max_h = ua.height - deco_top;
+    if (max_h < 1) max_h = 1;
+
+    if (*width > ua.width) *width = ua.width;
+    if (*height > max_h) *height = max_h;
+
+    if (*x + *width > ua.x + ua.width) *x = ua.x + ua.width - *width;
+    if (*y + *height > ua.y + ua.height) *y = ua.y + ua.height - *height;
+    if (*x < ua.x) *x = ua.x;
+
+    const int32_t min_y = ua.y + deco_top;
+    if (*y < min_y) *y = min_y;
 }
 
 struct CornerApply {
@@ -172,6 +236,7 @@ void window_apply_target(
     if (w->space_hidden) return;
     if (nw < 1) nw = 1;
     if (nh < 1) nh = 1;
+    if (!w->fullscreen) { window_clamp_to_usable(w, &nx, &ny, &nw, &nh); }
 
     // Consume the reveal flag unconditionally
     int32_t reveal_dir = w->reveal_dir;
@@ -270,6 +335,58 @@ void window_set_activated(struct Window *window, bool activated) {
             window->wlr_handle, activated
         );
     }
+}
+
+void window_set_maximized(struct Window *window, bool maximized) {
+    if (window == NULL || window->closed) return;
+    if (window->fullscreen) return;
+    if (window->maximized == maximized) return;
+
+    if (maximized) {
+        if (window->pos_valid) {
+            window->max_saved_x = window->x;
+            window->max_saved_y = window->y;
+            window->max_saved_w = window->width;
+            window->max_saved_h = window->height;
+        } else if (window->has_target) {
+            window->max_saved_x = window->target_box.x;
+            window->max_saved_y = window->target_box.y;
+            window->max_saved_w = window->target_box.width;
+            window->max_saved_h = window->target_box.height;
+        } else {
+            window->max_saved_x = 0;
+            window->max_saved_y = 0;
+            window->max_saved_w = window->width > 0 ? window->width : 100;
+            window->max_saved_h = window->height > 0 ? window->height : 100;
+        }
+    }
+
+    window->maximized = maximized;
+
+    if (window->xdg_toplevel && window->xdg_toplevel->base->initialized) {
+        wlr_xdg_toplevel_set_maximized(window->xdg_toplevel, maximized);
+    }
+#ifdef XWAYLAND
+    if (window->is_xwayland && window->xwayland_surface) {
+        wlr_xwayland_surface_set_maximized(
+            window->xwayland_surface, maximized, maximized
+        );
+    }
+#endif
+
+    if (!maximized) {
+        window_apply_target(
+            window, window->max_saved_x, window->max_saved_y,
+            window->max_saved_w, window->max_saved_h
+        );
+    }
+
+    wm_mark_layout_dirty();
+}
+
+void window_toggle_maximized(struct Window *window) {
+    if (window == NULL || window->closed) return;
+    window_set_maximized(window, !window->maximized);
 }
 
 void window_set_fullscreen(struct Window *window, bool fullscreen) {
@@ -710,7 +827,7 @@ void window_create(struct wlr_xdg_toplevel *xdg_toplevel) {
     window->last_bl = -1;
     window->last_br = -1;
     window->size_per = 1.0f;
-
+    window->maximized = false;
     window->id = ++wm.next_window_id;
     window->xdg_toplevel = xdg_toplevel;
     window->output = output_focused();
@@ -1307,7 +1424,7 @@ void window_create_xwayland(struct wlr_xwayland_surface *xw) {
     window->last_bl = -1;
     window->last_br = -1;
     window->size_per = 1.0f;
-
+    window->maximized = false;
     window->id = ++wm.next_window_id;
     window->is_xwayland = true;
     window->xwayland_surface = xw;

@@ -137,6 +137,14 @@ static void floating_layout(
     for (size_t i = 0; i < n; i++) {
         struct Window *w = lw[i].window;
 
+        if (w->maximized) {
+            lw[i].x = p->x;
+            lw[i].y = p->y;
+            lw[i].w = p->width;
+            lw[i].h = p->height;
+            continue;
+        }
+
         if (w->anim.running && w->has_target) {
             lw[i].x = w->target_box.x;
             lw[i].y = w->target_box.y;
@@ -159,8 +167,8 @@ static void floating_layout(
 
             lw[i].x = cx + CFG_FLOATING_CASCADE_STEP * idx;
             lw[i].y = cy + CFG_FLOATING_CASCADE_STEP * idx;
-            lw[i].w = ww;
-            lw[i].h = wh;
+            lw[i].w = cw;
+            lw[i].h = ch;
             continue;
         }
 

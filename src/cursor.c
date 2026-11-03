@@ -80,6 +80,20 @@ static void interactive_apply(double cx, double cy) {
     if (g->op == SEAT_OP_MOVE) {
         int32_t nx = g->window_start_x + dcx;
         int32_t ny = g->window_start_y + dcy;
+
+        struct wlr_box ua;
+        if (window_usable_area(v, &ua)) {
+            const int32_t deco_top = window_visual_top_offset(v);
+
+            int32_t w = v->width > 0 ? v->width : 1;
+            int32_t h = v->height > 0 ? v->height : 1;
+
+            if (nx + w > ua.x + ua.width) nx = ua.x + ua.width - w;
+            if (ny + h > ua.y + ua.height) ny = ua.y + ua.height - h;
+            if (nx < ua.x) nx = ua.x;
+            if (ny < ua.y + deco_top) ny = ua.y + deco_top;
+        }
+
         window_set_position(v, nx, ny);
 
         v->saved_x = nx;
@@ -105,16 +119,27 @@ static void interactive_apply(double cx, double cy) {
             ny += dcy;
         }
 
-        if (nw < 1) {
-            nw = 1;
-            if (g->edges & WLR_EDGE_LEFT)
-                nx = g->window_start_x + g->window_start_w - 1;
-        }
+        struct wlr_box ua;
+        if (window_usable_area(v, &ua)) {
+            const int32_t deco_top = window_visual_top_offset(v);
+            int32_t max_h = ua.height - deco_top;
+            if (max_h < 1) max_h = 1;
 
-        if (nh < 1) {
-            nh = 1;
-            if (g->edges & WLR_EDGE_TOP)
-                ny = g->window_start_y + g->window_start_h - 1;
+            if (nw > ua.width) nw = ua.width;
+            if (nh > max_h) nh = max_h;
+
+            const int32_t min_y = ua.y + deco_top;
+            if (ny < min_y) {
+                nh -= (min_y - ny);
+                ny = min_y;
+            }
+
+            if (nx + nw > ua.x + ua.width) nw = ua.x + ua.width - nx;
+            if (ny + nh > ua.y + ua.height) nh = ua.y + ua.height - ny;
+            if (nx < ua.x) nx = ua.x;
+
+            if (nw < 1) nw = 1;
+            if (nh < 1) nh = 1;
         }
 
         window_set_size(v, nw, nh);
@@ -129,6 +154,7 @@ void cursor_begin_interactive(
 ) {
     if (server.locked || interactive.active) return;
     if (window == NULL || window->closed) return;
+    if (window->maximized || window->fullscreen) return;
 
     interactive.window = window;
     interactive.op = op;
@@ -158,6 +184,8 @@ void cursor_end_interactive(void) {
     interactive.window = NULL;
     interactive.op = SEAT_OP_NONE;
     interactive.edges = 0;
+
+    wm_mark_layout_dirty();
 }
 
 void cursor_end_interactive_for(struct Window *window) {
@@ -407,9 +435,8 @@ void cursor_handle_motion(struct wl_listener *l, void *data) {
         server.cursor, &ev->pointer->base, ev->delta_x, ev->delta_y
     );
 
-    if (deco_handle_motion(server.cursor->x, server.cursor->y)) {
+    if (deco_handle_motion(server.cursor->x, server.cursor->y))
         return; // sliding consumes motion
-    }
 
     if (interactive.active) {
         interactive_apply(server.cursor->x, server.cursor->y);
@@ -428,9 +455,7 @@ void cursor_handle_motion_absolute(struct wl_listener *l, void *data) {
 
     wlr_cursor_warp_absolute(server.cursor, &ev->pointer->base, ev->x, ev->y);
 
-    if (deco_handle_motion(server.cursor->x, server.cursor->y)) {
-        return; // ditto
-    }
+    if (deco_handle_motion(server.cursor->x, server.cursor->y)) return;
 
     if (interactive.active) {
         interactive_apply(server.cursor->x, server.cursor->y);
@@ -449,7 +474,6 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
 
     const bool pressed = ev->state == WL_POINTER_BUTTON_STATE_PRESSED;
     const uint32_t mods = current_keyboard_modifiers();
-
     // Release bookkeeping runs on every release.
     const bool deco_release = !pressed && deco_handle_release(ev->button);
 
@@ -554,7 +578,7 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
         }
     }
 
-    // Save pointer origin
+    // Store pointer origins
     if (ev->state == WL_POINTER_BUTTON_STATE_PRESSED && buttons_down == 0) {
         struct wlr_surface *surf = NULL;
         double sx = 0, sy = 0;

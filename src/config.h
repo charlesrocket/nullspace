@@ -127,6 +127,7 @@
 #define CFG_DECO_COLOR_INACTIVE            "#8c8c8c"
 #define CFG_DECO_COLOR_BUTTON              "#666666"
 #define CFG_DECO_COLOR_BUTTON_HL           "#b3b3b3"
+#define CFG_DECO_SLIDER_HEIGHT             28
 
 #define CFG_ANIMATIONS_ENABLED             true
 

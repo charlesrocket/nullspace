@@ -20,7 +20,6 @@
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_scene.h>
 
-#define DECO_TAB_H         28
 #define DECO_BTN           12
 #define DECO_BTN_PAD       6
 
@@ -545,14 +544,12 @@ bool deco_handle_press(double lx, double ly, uint32_t button, uint32_t mods) {
 
     switch (part) {
         case DECO_PART_CLOSE: window_close(w); return true;
-
         case DECO_PART_ZOOM:
             focus_and_raise(w);
-            window_set_fullscreen(w, !w->fullscreen);
+            window_toggle_maximized(w);
             return true;
 
         case DECO_PART_MIN: return true;
-
         case DECO_PART_TAB:
             focus_and_raise(w);
             if (mods & WLR_MODIFIER_SHIFT) {
