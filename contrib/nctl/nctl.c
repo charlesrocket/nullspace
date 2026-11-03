@@ -192,7 +192,7 @@ static void list_commands(const struct Style *st) {
     put_heading(st, "COMMANDS");
     for (size_t i = 0; i < nitems(COMMANDS); i++) {
         fputs("  ", stdout);
-        put_col(COMMANDS[i].usage, 22);
+        put_col(COMMANDS[i].usage, 31);
         fputs(COMMANDS[i].desc, stdout);
         putchar('\n');
     }
