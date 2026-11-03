@@ -3,6 +3,7 @@
 #include "animation.h"
 #include "input.h"
 #include "layout/layout.h"
+#include "output.h"
 #include "seat.h"
 #include "wallpaper.h"
 #include "window.h"
@@ -12,7 +13,6 @@
 #include <stdint.h>
 #include <wayland-util.h>
 
-#define SPACE_COUNT  10 // TODO aux spaces
 #define HIDDEN_POS_X (-1000000)
 #define HIDDEN_POS_Y (-1000000)
 
@@ -34,15 +34,14 @@ struct WindowManager {
 
     float mfact;
 
-    int current_space, rounded_corners_radius;
-
+    int rounded_corners_radius;
     char *kb_layout;
 
     float deco_color_active[4], deco_color_inactive[4], deco_color_button[4],
         deco_color_button_hl[4];
 
     bool layout_dirty, rounded_corners, resizing, smart_gaps, center_overspread,
-        center_when_single_stack, space_urgent[SPACE_COUNT];
+        center_when_single_stack;
 };
 
 extern struct WindowManager wm;
@@ -50,12 +49,15 @@ extern struct WindowManager wm;
 void wm_init(void);
 void wm_finish(void);
 void wm_set_layout(enum Layout layout);
+
 void wm_switch_space(int space);
+void wm_switch_space_on(struct Output *out, int space);
 void wm_move_window_to_space(struct Window *window, int space);
+void wm_assign_new_window_space(struct Window *window, int space);
 void wm_set_kb_layout(const char *layout);
 void wm_mark_layout_dirty(void);
 void wm_mark_space_urgent(int space);
-void wm_assign_new_window_space(struct Window *window, int space);
+void wm_mark_space_urgent_on(struct Output *out, int space);
 
 bool wm_animation_active(void);
 void wm_animation_tick_all(void);

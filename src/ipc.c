@@ -516,13 +516,16 @@ static int space_window_count(int space);
 
 static const char *get_layout(const char *arg, struct Value *out) {
     (void)arg;
+
     *out = v_str(ns_layout_name(wm.layout));
     return NULL;
 }
 
 static const char *get_current_space(const char *arg, struct Value *out) {
     (void)arg;
-    *out = v_int(wm.current_space);
+
+    struct Output *o = output_focused();
+    *out = v_int(o ? o->current_space : 0);
     return NULL;
 }
 
@@ -536,12 +539,14 @@ static const char *get_space_window_count(const char *arg, struct Value *out) {
 static const char *get_space_urgent(const char *arg, struct Value *out) {
     int s;
     if (!parse_space(arg, &s)) return "bad space";
-    *out = v_bool(wm.space_urgent[s]);
+    struct Output *o = output_focused();
+    *out = v_bool(o ? o->space_urgent[s] : false);
     return NULL;
 }
 
 static const char *get_focused_title(const char *arg, struct Value *out) {
     (void)arg;
+
     struct Window *w = window_focused();
     *out = v_str(w ? w->title : NULL);
     return NULL;
@@ -549,6 +554,7 @@ static const char *get_focused_title(const char *arg, struct Value *out) {
 
 static const char *get_focused_app_id(const char *arg, struct Value *out) {
     (void)arg;
+
     struct Window *w = window_focused();
     *out = v_str(w ? w->app_id : NULL);
     return NULL;
@@ -556,6 +562,7 @@ static const char *get_focused_app_id(const char *arg, struct Value *out) {
 
 static const char *get_mfact(const char *arg, struct Value *out) {
     (void)arg;
+
     *out = v_float(wm.mfact);
     return NULL;
 }
@@ -853,10 +860,13 @@ static void verify_special_keys(void) {
 static uint64_t window_id(const struct Window *w) { return w->id; }
 
 static int space_window_count(int space) {
+    struct Output *o = output_focused();
+    if (o == NULL) return 0;
+
     int n = 0;
     struct Window *w;
     wl_list_for_each(w, &wm.windows, link) {
-        if (!w->closed && w->mapped && w->space == space) n++;
+        if (!w->closed && w->mapped && w->output == o && w->space == space) n++;
     }
 
     return n;
@@ -945,7 +955,11 @@ void ipc_notify_layout(void) {
 
 void ipc_notify_space(void) {
     if (!ipc_initialized) return;
-    emit_kv(NULL, "EVT", "current_space", v_int(wm.current_space));
+    struct Output *o = output_focused();
+    if (o != NULL) {
+        emit_kv(NULL, "EVT", "current_space", v_int(o->current_space));
+    }
+
     emit_space_counts(NULL);
 }
 

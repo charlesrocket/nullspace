@@ -3,10 +3,13 @@
 #include "layout/layout.h"
 #include "log.h"
 #include "manager.h"
+#include "output.h"
+#include "seat.h"
 #include "server.h"
 #include "session.h"
 #include "space.h"
 #include "wallpaper.h"
+#include "window.h"
 #ifdef XWAYLAND
 #include "xwayland.h"
 #endif
@@ -26,6 +29,26 @@
 static void output_handle_frame(struct wl_listener *l, void *data);
 static void output_handle_request_state(struct wl_listener *l, void *data);
 static void output_handle_destroy(struct wl_listener *l, void *data);
+
+struct Output *output_focused(void) {
+    struct Window *w = window_focused();
+    if (w != NULL && w->output != NULL && !w->output->removed) {
+        return w->output;
+    }
+
+    if (server.cursor != NULL && server.output_layout != NULL) {
+        struct wlr_output *wo = wlr_output_layout_output_at(
+            server.output_layout, server.cursor->x, server.cursor->y
+        );
+
+        if (wo != NULL) {
+            struct Output *o = output_from_wlr_output(wo);
+            if (o != NULL && !o->removed) return o;
+        }
+    }
+
+    return output_primary();
+}
 
 bool output_set_enabled(struct wlr_output *wlr_output, bool on) {
     if (wlr_output->enabled == on) return true;
@@ -75,6 +98,48 @@ static void output_update_geometry(struct Output *out) {
     out->area_set = true;
 }
 
+static void output_reassign_windows(struct Output *dying) {
+    struct Output *new_home = NULL;
+    struct Output *it;
+    wl_list_for_each(it, &server.outputs, link) {
+        if (it != dying && !it->removed) {
+            new_home = it;
+            break;
+        }
+    }
+
+    struct Window *w;
+    wl_list_for_each(w, &wm.windows, link) {
+        if (w->closed || w->output != dying) continue;
+
+        w->output = new_home;
+        w->pos_valid = false;
+        w->has_target = false;
+
+        bool want_visible = (new_home != NULL) && w->mapped
+                         && (w->space == new_home->current_space);
+
+        if (want_visible && w->space_hidden) {
+            w->space_hidden = false;
+            w->anim.running = false;
+            w->hide_dir = 0;
+            w->reveal_dir = 0;
+            if (w->saved_x != 0 || w->saved_y != 0) {
+                window_set_position(w, w->saved_x, w->saved_y);
+            }
+        } else if (!want_visible && !w->space_hidden) {
+            w->anim.running = false;
+            w->hide_dir = 0;
+            w->reveal_dir = 0;
+            w->space_hidden = true;
+            window_set_position(w, HIDDEN_POS_X, w->y);
+        }
+    }
+
+    // Keyboard focus may have been on a now-hidden surface.
+    seat_focus(NULL);
+}
+
 void output_create(struct wlr_output *wlr_output) {
     if (!wlr_output_init_render(
             wlr_output, server.allocator, server.renderer
@@ -112,6 +177,7 @@ void output_create(struct wlr_output *wlr_output) {
     if (out == NULL) return;
 
     out->wlr_output = wlr_output;
+    out->current_space = 1; // DEFAULT
     out->scene_output = wlr_scene_output_create(server.scene, wlr_output);
     if (out->scene_output == NULL) {
         log_warn("Failed to create scene output");
@@ -143,6 +209,15 @@ void output_create(struct wlr_output *wlr_output) {
     wallpaper_update_output(out);
 
     wl_list_insert(&server.outputs, &out->link);
+
+    { // adopt windows created before any output existed
+        struct Window *w;
+        wl_list_for_each(w, &wm.windows, link) {
+            if (w->closed || w->output != NULL) continue;
+            w->output = out;
+            w->space_hidden = (w->space != out->current_space);
+        }
+    }
 
     ext_workspace_output_enter(out);
 
@@ -207,6 +282,7 @@ static void output_handle_destroy(struct wl_listener *l, void *data) {
 void output_destroy(struct Output *out) {
     if (out->removed) return;
     out->removed = true;
+    output_reassign_windows(out);
 
     if (out->wallpaper != NULL) {
         wallpaper_output_destroy(out->wallpaper);

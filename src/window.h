@@ -29,6 +29,7 @@ struct Window {
     struct wlr_ext_foreign_toplevel_handle_v1 *foreign_handle;
     struct wlr_foreign_toplevel_handle_v1 *wlr_handle;
 
+    struct Output *output;
     struct NodeTag node_tag;
     struct Decoration *decoration; // ?NULL (floating/non‑fullscreen windows)
     struct Icon *icon;             // current, applied on commit

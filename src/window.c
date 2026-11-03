@@ -200,7 +200,8 @@ void window_apply_target(
     if (first && (reveal_dir != 0 || !w->pos_valid)) {
         if (reveal_dir != 0) {
             // Horizontal space slide across the whole output.
-            struct Output *out = output_primary();
+            struct Output *out = w->output;
+            if (out == NULL) out = output_primary();
             int32_t offset = (out != NULL && out->width > 0) ? out->width : nw;
             if (offset < 1) offset = 1;
             from = target;
@@ -314,7 +315,8 @@ void window_set_fullscreen(struct Window *window, bool fullscreen) {
     }
 
     if (fullscreen) {
-        struct Output *o = output_primary();
+        struct Output *o = window->output;
+        if (o == NULL) o = output_primary();
         if (o != NULL) {
             window_apply_target(
                 window, o->pos_x, o->pos_y, o->width, o->height
@@ -361,8 +363,8 @@ static void wlr_handle_create(struct Window *window) {
         window->wlr_handle, window_app_id(window)
     );
 
-    struct Output *o = output_primary();
-    if (o != NULL) {
+    struct Output *o = window->output;
+    if (o != NULL && o->wlr_output != NULL) {
         wlr_foreign_toplevel_handle_v1_output_enter(
             window->wlr_handle, o->wlr_output
         );
@@ -438,8 +440,9 @@ static void window_do_map(struct Window *window) {
 
     window_apply_rules(window);
 
-    if (!window->space_hidden && window->space != wm.current_space) {
-        wm_switch_space(window->space);
+    if (window->output != NULL && !window->space_hidden
+        && window->space != window->output->current_space) {
+        wm_switch_space_on(window->output, window->space);
     }
 
     wlr_handle_create(window);
@@ -558,8 +561,11 @@ static void window_handle_commit(struct wl_listener *l, void *data) {
     if (surf->surface->mapped) window_update_corners(window);
 
     if (!wl_list_empty(&surf->surface->current.frame_callback_list)) {
-        struct Output *out = output_primary();
-        if (out != NULL) wlr_output_schedule_frame(out->wlr_output);
+        struct Output *out = window->output;
+        if (out == NULL) out = output_primary();
+        if (out != NULL && out->wlr_output != NULL) {
+            wlr_output_schedule_frame(out->wlr_output);
+        }
     }
 }
 
@@ -707,7 +713,8 @@ void window_create(struct wlr_xdg_toplevel *xdg_toplevel) {
 
     window->id = ++wm.next_window_id;
     window->xdg_toplevel = xdg_toplevel;
-    window->space = wm.current_space;
+    window->output = output_focused();
+    window->space = window->output ? window->output->current_space : 1;
     window->node_tag.type = NODE_WINDOW;
 
     struct wlr_scene_tree *parent = layer_for_layout(wm.layout);
@@ -1304,7 +1311,8 @@ void window_create_xwayland(struct wlr_xwayland_surface *xw) {
     window->id = ++wm.next_window_id;
     window->is_xwayland = true;
     window->xwayland_surface = xw;
-    window->space = wm.current_space;
+    window->output = output_focused();
+    window->space = window->output ? window->output->current_space : 1;
     window->node_tag.type = NODE_WINDOW;
 
     struct wlr_scene_tree *parent = layer_for_layout(wm.layout);

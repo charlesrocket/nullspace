@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <wayland-util.h>
+#include <wlr/types/wlr_seat.h>
 
 #define LOG_TOPIC "wm"
 
@@ -29,17 +30,23 @@ struct WindowManager wm;
 void wm_mark_layout_dirty(void) {
     wm.layout_dirty = true;
     struct Output *o;
-    wl_list_for_each(o, &server.outputs, link)
-        wlr_output_schedule_frame(o->wlr_output);
+    wl_list_for_each(o, &server.outputs, link) {
+        if (!o->removed) wlr_output_schedule_frame(o->wlr_output);
+    }
+}
+
+void wm_mark_space_urgent_on(struct Output *out, int space) {
+    if (out == NULL || out->removed) return;
+    if (space < 0 || space >= SPACE_COUNT) return;
+    if (space == out->current_space) return;
+    if (out->space_urgent[space]) return;
+
+    out->space_urgent[space] = true;
+    ext_workspace_update_states();
 }
 
 void wm_mark_space_urgent(int space) {
-    if (space < 0 || space >= SPACE_COUNT) return;
-    if (space == wm.current_space) return;
-    if (wm.space_urgent[space]) return;
-
-    wm.space_urgent[space] = true;
-    ext_workspace_update_states();
+    wm_mark_space_urgent_on(output_focused(), space);
 }
 
 bool wm_animation_active(void) {
@@ -125,7 +132,6 @@ struct Window *wm_next_window(struct Window *window) {
 
 void wm_set_kb_layout(const char *layout) {
     if (layout == NULL) return;
-
     if (wm.kb_layout != NULL && strcmp(wm.kb_layout, layout) == 0) return;
 
     free(wm.kb_layout);
@@ -167,8 +173,10 @@ static void window_hide_offscreen(struct Window *window, int32_t dir) {
     window->has_target = false;
     window->space_hidden = true;
 
-    struct Output *out = output_primary();
-    if (!wm.animations.enabled || dir == 0 || out == NULL) {
+    struct Output *out = window->output;
+    if (out == NULL) out = output_primary();
+
+    if (!wm.animations.enabled || dir == 0 || out == NULL || out->width <= 0) {
         window->anim.running = false;
         window->hide_dir = 0;
         window_set_position(window, HIDDEN_POS_X, window->y);
@@ -208,39 +216,18 @@ static void window_hide_offscreen(struct Window *window, int32_t dir) {
     );
 }
 
-void wm_assign_new_window_space(struct Window *window, int space) {
-    if (window == NULL || window->closed) return;
+void wm_switch_space_on(struct Output *out, int space) {
+    if (out == NULL || out->removed) return;
     if (space < 0 || space >= SPACE_COUNT) return;
+    if (space == out->current_space) return;
 
-    window->space = space;
-
-    if (space != wm.current_space) {
-        wm_switch_space(space);
-        return;
-    }
-
-    if (window->space_hidden) {
-        window->anim.running = false;
-        window->hide_dir = 0;
-        window->reveal_dir = 0;
-        window->has_target = false;
-        window->space_hidden = false;
-
-        window_set_position(window, window->saved_x, window->saved_y);
-        wm_mark_layout_dirty();
-        idle_update_inhibit();
-    }
-}
-
-void wm_switch_space(int space) {
-    if (space < 0 || space >= SPACE_COUNT) return;
-    if (space == wm.current_space) return;
-
-    const int32_t dir = (space > wm.current_space) ? +1 : -1;
+    const int32_t dir = (space > out->current_space) ? +1 : -1;
 
     struct Window *window;
     wl_list_for_each(window, &wm.windows, link) {
         if (window->closed || !window->mapped) continue;
+        if (window->output != out) continue;
+
         if (window->space == space) { // reveal
             if (!window->space_hidden) continue;
             window->space_hidden = false;
@@ -260,12 +247,20 @@ void wm_switch_space(int space) {
         }
     }
 
-    wm.current_space = space;
-    wm.space_urgent[space] = false;
+    out->current_space = space;
+    out->space_urgent[space] = false;
 
     ext_workspace_update_states();
 
-    struct Window *top = wm_focus_stack_top();
+    struct Window *top = NULL;
+    struct Window *w;
+    wl_list_for_each_reverse(w, &wm.focus_stack, focus_link) {
+        if (w->closed || !w->mapped || w->space_hidden) continue;
+        if (w->output != out) continue;
+        top = w;
+        break;
+    }
+
     seat_focus(top);
 
     ipc_notify_space();
@@ -274,15 +269,52 @@ void wm_switch_space(int space) {
     idle_update_inhibit();
 }
 
+void wm_switch_space(int space) { wm_switch_space_on(output_focused(), space); }
+
 void wm_move_window_to_space(struct Window *window, int space) {
     if (space < 0 || space >= SPACE_COUNT) return;
     if (window == NULL || window->closed || window->space_hidden) return;
     if (window->space == space) return;
+    if (window->output == NULL) return;
+
+    window->space = space;
+    wm_switch_space_on(window->output, space);
+    ipc_notify_window_meta(window);
+}
+
+void wm_assign_new_window_space(struct Window *window, int space) {
+    if (window == NULL || window->closed) return;
+    if (space < 0 || space >= SPACE_COUNT) return;
+
+    struct Output *out = window->output;
+    if (out == NULL) {
+        out = output_focused();
+        if (out == NULL) {
+            window->space = space;
+            return;
+        }
+
+        window->output = out;
+    }
 
     window->space = space;
 
-    wm_switch_space(space);
-    ipc_notify_window_meta(window);
+    if (space != out->current_space) {
+        wm_switch_space_on(out, space);
+        return;
+    }
+
+    if (window->space_hidden) {
+        window->anim.running = false;
+        window->hide_dir = 0;
+        window->reveal_dir = 0;
+        window->has_target = false;
+        window->space_hidden = false;
+
+        window_set_position(window, window->saved_x, window->saved_y);
+        wm_mark_layout_dirty();
+        idle_update_inhibit();
+    }
 }
 
 bool wm_set_wallpaper_path(const char *path) {
@@ -321,7 +353,6 @@ void wm_init(void) {
     wl_list_init(&wm.focus_stack);
     wl_list_init(&wm.layer_surfaces);
 
-    wm.current_space = 1;
     wm.layout = config.default_layout;
 
     wm.tiled_gap_outer_h = config.gaps;

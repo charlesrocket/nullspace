@@ -25,15 +25,18 @@ static int workspace_space(struct wlr_ext_workspace_handle_v1 *handle) {
 }
 
 void ext_workspace_update_states(void) {
+    struct Output *out = output_focused();
+    if (out == NULL) return;
+
     for (int i = 0; i < SPACE_COUNT; i++) {
         struct wlr_ext_workspace_handle_v1 *handle = workspace_handles[i];
-        if (handle == NULL) { continue; }
+        if (handle == NULL) continue;
 
-        bool active = (i == wm.current_space);
+        bool active = (i == out->current_space);
         wlr_ext_workspace_handle_v1_set_active(handle, active);
         // All nullspace workspaces are visible
         wlr_ext_workspace_handle_v1_set_hidden(handle, false);
-        wlr_ext_workspace_handle_v1_set_urgent(handle, wm.space_urgent[i]);
+        wlr_ext_workspace_handle_v1_set_urgent(handle, out->space_urgent[i]);
     }
 }
 

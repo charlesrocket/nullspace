@@ -758,7 +758,7 @@ bool wallpaper_blur_wanted(void) {
         if (w->closed) continue;
         if (!w->mapped) continue;
         if (w->space_hidden) continue;
-        if (w->space != wm.current_space) continue;
+        if (w->output == NULL || w->output->removed) continue;
         return true;
     }
 

@@ -3,6 +3,7 @@
 #include "config.h"
 #include "log.h"
 #include "manager.h"
+#include "output.h"
 #include "seat.h"
 #include "server.h"
 #include "window.h"
@@ -131,21 +132,24 @@ static void handle_request_activate(struct wl_listener *l, void *data) {
                 wm_assign_new_window_space(window, ctx->space);
             }
         } else if (config.focus_on_activate) {
-            if (window->space != wm.current_space) {
-                wm_switch_space(window->space);
+            if (window->output != NULL
+                && window->space != window->output->current_space) {
+                wm_switch_space_on(window->output, window->space);
             }
 
             seat_focus(window);
         } else {
-            if (window->space != wm.current_space) {
-                wm_mark_space_urgent(window->space);
+            if (window->output != NULL
+                && window->space != window->output->current_space) {
+                wm_mark_space_urgent_on(window->output, window->space);
             }
 
             log_debug("Suppressed by config");
         }
     } else if (window != NULL && !window->closed && window->mapped
-               && window->space != wm.current_space) {
-        wm_mark_space_urgent(window->space);
+               && window->output != NULL
+               && window->space != window->output->current_space) {
+        wm_mark_space_urgent_on(window->output, window->space);
     }
 
     ev->token->data = NULL;
@@ -162,7 +166,9 @@ static void handle_new_token(struct wl_listener *l, void *data) {
     if (ctx == NULL) return;
 
     ctx->token = token;
-    ctx->space = wm.current_space;
+
+    struct Output *out = output_focused();
+    ctx->space = out ? out->current_space : 0;
     ctx->is_compositor = false;
 
     ctx->origin_focus =
@@ -220,7 +226,8 @@ const char *activation_mint_spawn_token(void) {
     }
 
     ctx->token = token;
-    ctx->space = wm.current_space;
+    struct Output *out = output_focused();
+    ctx->space = out ? out->current_space : 0;
     ctx->is_compositor = true;
 
     token->seat = server.seat;
