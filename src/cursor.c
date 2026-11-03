@@ -29,7 +29,7 @@
 #include <wlr/util/edges.h>
 
 #define LOG_TOPIC    "cursor"
-#define EDGE_GRAB_PX 4
+#define EDGE_GRAB_PX 6
 
 struct InteractiveOp {
     struct Window *window;
@@ -56,10 +56,10 @@ static unsigned buttons_down;
 static struct Window *pointer_grab_window;
 static double pointer_grab_lx, pointer_grab_ly; // global cursor at press
 static double pointer_grab_sx, pointer_grab_sy; // surface at press
-
-static struct wl_event_source *hide_timer;
-static bool hide_timer_armed, hide_idle_on, hide_typing_on, cursor_hidden;
 static uint64_t last_activity_ms;
+static struct wl_event_source *hide_timer;
+static bool hide_timer_armed, hide_idle_on, hide_typing_on, cursor_hidden,
+    edge_cursor_active;
 
 bool cursor_is_hidden(void) { return cursor_hidden; }
 
@@ -269,17 +269,26 @@ static void cursor_manage_focus(bool motion) {
     if (surface == NULL) {
         wlr_seat_pointer_clear_focus(server.seat);
         set_xcursor("default");
+        edge_cursor_active = false;
         return;
+    }
+
+    uint32_t edges = edge_zone(under, server.cursor->x, server.cursor->y);
+    const char *xc = xcursor_for_edges(edges);
+
+    if (xc != NULL) {
+        set_xcursor(xc);
+        edge_cursor_active = true;
+    } else if (edge_cursor_active) {
+        edge_cursor_active = false;
+        wlr_seat_pointer_clear_focus(server.seat);
+        set_xcursor("default");
     }
 
     wlr_seat_pointer_notify_enter(server.seat, surface, sx, sy);
     wlr_seat_pointer_notify_motion(
         server.seat, (uint32_t)animation_now_ms(), sx, sy
     );
-
-    uint32_t edges = edge_zone(under, server.cursor->x, server.cursor->y);
-    const char *xc = xcursor_for_edges(edges);
-    if (xc != NULL) set_xcursor(xc);
 }
 
 static void cursor_update_focus(void) { cursor_manage_focus(false); }
