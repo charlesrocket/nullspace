@@ -212,6 +212,8 @@ void window_update_corners(struct Window *window) {
     window->last_tr = tr;
     window->last_bl = bl;
     window->last_br = br;
+
+    deco_update_blur(window);
 }
 
 // May return NULL for X11 windows whose wl_surface is not associated yet.

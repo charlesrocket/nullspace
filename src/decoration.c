@@ -10,15 +10,21 @@
 #include "window.h"
 
 #include <dev/evdev/input-event-codes.h>
+#include <libdrm/drm_fourcc.h>
+#include <math.h>
 #include <scenefx/types/fx/clipped_region.h>
 #include <scenefx/types/wlr_scene.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/_clock_id.h>
+#include <time.h>
 #include <wayland-server-core.h>
 #include <wayland-util.h>
+#include <wlr/interfaces/wlr_buffer.h>
+#include <wlr/types/wlr_buffer.h>
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_scene.h>
 
@@ -45,6 +51,12 @@
 
 #define DECO_X_DOTS        (DECO_GLYPH_SIZE - DECO_STROKE + 1)
 #define DECO_X_PARTS       (2 * DECO_X_DOTS)
+
+// Gaussian standard deviation of the pre-rendered shadow.
+#define SHADOW_STD         (CFG_WINDOW_SHADOW_SIGMA * 0.5f)
+
+// Anti-aliasing/calibration
+#define SHADOW_CUT_GROW    0.0f // .2-.75 test cases
 
 struct DecoStrip {
     int32_t x, y, w, h, r;
@@ -77,6 +89,10 @@ enum DecoPart {
     DECO_PART_TAB,
 };
 
+static int32_t window_w(const struct Window *w);
+static int32_t window_h(const struct Window *w);
+static int32_t tab_corner_radius(int32_t tab_w);
+
 static float clamp01(float v) {
     return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
 }
@@ -101,6 +117,21 @@ static float ease_out_cubic(float t) {
 
 static void lerp4(float *out, const float *a, const float *b, float t) {
     for (int i = 0; i < 4; i++) out[i] = lerpf(a[i], b[i], t);
+}
+
+// `wlr_scene_rect` wants premultiplied values.
+static void premul_copy(float *out, const float *in) {
+    out[0] = in[0] * in[3];
+    out[1] = in[1] * in[3];
+    out[2] = in[2] * in[3];
+    out[3] = in[3];
+}
+
+static void lerp4_premul(float *out, const float *a, const float *b, float t) {
+    float pa[4], pb[4];
+    premul_copy(pa, a);
+    premul_copy(pb, b);
+    lerp4(out, pa, pb, t);
 }
 
 static uint64_t now_ms(void) {
@@ -243,8 +274,10 @@ static void deco_apply_visuals(struct Decoration *deco) {
     const float p = clamp01(deco->progress);
 
     float tab[4], btn[4];
-    lerp4(tab, wm.deco_color_inactive, wm.deco_color_active, p);
-    lerp4(btn, wm.deco_color_button_inactive, wm.deco_color_button_active, p);
+    lerp4_premul(tab, wm.deco_color_inactive, wm.deco_color_active, p);
+    lerp4_premul(
+        btn, wm.deco_color_button_inactive, wm.deco_color_button_active, p
+    );
 
     if (deco->tab != NULL) wlr_scene_rect_set_color(deco->tab, tab);
 
@@ -263,16 +296,11 @@ static void deco_apply_visuals(struct Decoration *deco) {
         }
     }
 
-    const float opacity =
-        CFG_WINDOW_SHADOW_OPACITY * lerpf(DECO_INACTIVE_SHADOW_SCALE, 1.0f, p);
-    const float shadow[4] = {0.0f, 0.0f, 0.0f, opacity};
+    if (deco->shadow != NULL) {
+        float opacity = CFG_WINDOW_SHADOW_OPACITY
+                      * lerpf(DECO_INACTIVE_SHADOW_SCALE, 1.0f, p);
 
-    if (deco->shadow_win != NULL) {
-        wlr_scene_shadow_set_color(deco->shadow_win, shadow);
-    }
-
-    if (deco->shadow_tab != NULL) {
-        wlr_scene_shadow_set_color(deco->shadow_tab, shadow);
+        wlr_scene_buffer_set_opacity(deco->shadow, clamp01(opacity));
     }
 
     if (deco->title_text != NULL) {
@@ -450,56 +478,310 @@ static void handle_tree_destroy(struct wl_listener *l, void *data) {
     wl_list_remove(&deco->tree_destroy.link);
     deco->tree = NULL;
     deco->tab = NULL;
-    deco->title_text = NULL;
 
-    for (int k = 0; k < DECO_BTN_COUNT; k++) {
+    for (int k = 0; k < DECO_BTN_COUNT; k++)
         deco->btn[k] = (struct DecoButton){0};
-    }
 
     deco->animating = false;
 }
 
-static void handle_shadow_win_destroy(struct wl_listener *l, void *data) {
-    (void)data;
+struct ShadowBuf {
+    struct wlr_buffer base;
+    uint32_t *data;
+};
 
-    struct Decoration *deco = wl_container_of(l, deco, shadow_win_destroy);
-    wl_list_remove(&deco->shadow_win_destroy.link);
-    deco->shadow_win = NULL;
+static void shadowbuf_destroy(struct wlr_buffer *b) {
+    struct ShadowBuf *s = wl_container_of(b, s, base);
+    free(s->data);
+    free(s);
 }
 
-static void handle_shadow_tab_destroy(struct wl_listener *l, void *data) {
-    (void)data;
+static bool shadowbuf_begin(
+    struct wlr_buffer *b, uint32_t flags, void **data, uint32_t *fmt,
+    size_t *stride
+) {
+    (void)flags;
 
-    struct Decoration *deco = wl_container_of(l, deco, shadow_tab_destroy);
-    wl_list_remove(&deco->shadow_tab_destroy.link);
-    deco->shadow_tab = NULL;
+    struct ShadowBuf *s = wl_container_of(b, s, base);
+    *data = s->data;
+    *fmt = DRM_FORMAT_ARGB8888;
+    *stride = (size_t)b->width * 4;
+    return true;
 }
 
-static struct wlr_scene_shadow *shadow_create(
+static void shadowbuf_end(struct wlr_buffer *b) { (void)b; }
+
+static const struct wlr_buffer_impl shadowbuf_impl = {
+    .destroy = shadowbuf_destroy,
+    .begin_data_ptr_access = shadowbuf_begin,
+    .end_data_ptr_access = shadowbuf_end,
+};
+
+// Never steal pointer events from windows behind the shadow.
+static bool
+shadow_no_input(struct wlr_scene_buffer *b, double *sx, double *sy) {
+    (void)b;
+    (void)sx;
+    (void)sy;
+    return false;
+}
+
+static int shadow_margin(void) {
+    int m = (int)ceilf(3.0f * SHADOW_STD);
+    return m < 1 ? 1 : m;
+}
+
+// Coverage of a Gaussian-blurred 1D box (lo, hi) at position p.
+static float box_cov(float p, float lo, float hi, float inv) {
+    return 0.5f * (erff((p - lo) * inv) - erff((p - hi) * inv));
+}
+
+// Antialiased coverage of a rounded rectangle (per-corner radii).
+static float rrect_cover(
+    float x, float y, float rx, float ry, float rw, float rh, float tl,
+    float tr, float br, float bl, float grow
+) {
+    const float m = fmaxf(fmaxf(tl, tr), fmaxf(br, bl)) + 1.0f;
+
+    if (x < rx - 2 || x > rx + rw + 2 || y < ry - 2 || y > ry + rh + 2) {
+        return 0.0f;
+    }
+
+    if ((x > rx + m && x < rx + rw - m && y > ry + 1 && y < ry + rh - 1)
+        || (x > rx + 1 && x < rx + rw - 1 && y > ry + m && y < ry + rh - m)) {
+        return 1.0f;
+    }
+
+    const float qx = x - (rx + rw * 0.5f), qy = y - (ry + rh * 0.5f);
+    const float r = qx < 0 ? (qy < 0 ? tl : bl) : (qy < 0 ? tr : br);
+    const float dx = fabsf(qx) - (rw * 0.5f - r);
+    const float dy = fabsf(qy) - (rh * 0.5f - r);
+    const float ox = fmaxf(dx, 0.0f), oy = fmaxf(dy, 0.0f);
+    const float sd = sqrtf(ox * ox + oy * oy) + fminf(fmaxf(dx, dy), 0.0f) - r;
+
+    return fminf(fmaxf(0.5f + grow - sd, 0.0f), 1.0f);
+}
+
+void deco_update_shadow(struct Window *window) {
+    struct Decoration *deco = window ? window->decoration : NULL;
+    if (deco == NULL || deco->tree == NULL || deco->shadow == NULL) return;
+
+    const int32_t w = window_w(window), h = window_h(window);
+    const int32_t tab_x = deco->tab_x, tab_w = deco->tab_w;
+    if (tab_w <= 0) return;
+
+    const int tl = window->last_tl < 0 ? 0 : window->last_tl;
+    const int tr = window->last_tr < 0 ? 0 : window->last_tr;
+    const int bl = window->last_bl < 0 ? 0 : window->last_bl;
+    const int br = window->last_br < 0 ? 0 : window->last_br;
+    const int tab_r = tab_corner_radius(tab_w);
+
+    const int32_t key[9] = {w, h, tab_x, tab_w, tl, tr, bl, br, tab_r};
+    if (deco->shadow_key_valid
+        && memcmp(key, deco->shadow_key, sizeof key) == 0) {
+        return;
+    }
+
+    const int M = shadow_margin();
+    const int cw = w + 2 * M, ch = h + DECO_TAB_H + 2 * M;
+
+    struct ShadowBuf *sb = calloc(1, sizeof(*sb));
+    if (sb == NULL) return;
+
+    sb->data = calloc((size_t)cw * (size_t)ch, sizeof(uint32_t));
+    if (sb->data == NULL) {
+        free(sb);
+        return;
+    }
+
+    float *tbl = malloc(sizeof(float) * (2 * (size_t)cw + 2 * (size_t)ch));
+    if (tbl == NULL) {
+        free(sb->data);
+        free(sb);
+        return;
+    }
+
+    float *wx = tbl, *tx = wx + cw, *wy = tx + cw, *ty = wy + ch;
+
+    float s = SHADOW_STD;
+    if (s < 0.5f) s = 0.5f;
+    const float inv = 1.0f / (s * 1.41421356f);
+
+    // Buffer x maps to window x = i - M; buffer y maps to window y =
+    // j - M - DECO_TAB_H (the tab lives at y in [-DECO_TAB_H, 0)).
+    for (int i = 0; i < cw; i++) {
+        const float x = (float)(i - M) + 0.5f;
+        wx[i] = box_cov(x, 0.0f, (float)w, inv);
+        tx[i] = box_cov(x, (float)tab_x, (float)(tab_x + tab_w), inv);
+    }
+
+    for (int j = 0; j < ch; j++) {
+        const float y = (float)(j - M - DECO_TAB_H) + 0.5f;
+        wy[j] = box_cov(y, 0.0f, (float)h, inv);
+        ty[j] = box_cov(y, (float)-DECO_TAB_H, 0.0f, inv);
+    }
+
+    for (int j = 0; j < ch; j++) {
+        const float y = (float)(j - M - DECO_TAB_H) + 0.5f;
+        uint32_t *row = sb->data + (size_t)j * (size_t)cw;
+
+        for (int i = 0; i < cw; i++) {
+            const float a = wx[i] * wy[j], b = tx[i] * ty[j];
+            float alpha = 1.0f - (1.0f - a) * (1.0f - b);
+            if (alpha < 0.002f) continue;
+
+            const float x = (float)(i - M) + 0.5f;
+
+            const float cut = fmaxf(
+                rrect_cover(
+                    x, y, 0.0f, 0.0f, (float)w, (float)h, (float)tl, (float)tr,
+                    (float)br, (float)bl, SHADOW_CUT_GROW
+                ),
+                rrect_cover(
+                    x, y, (float)tab_x, (float)-DECO_TAB_H, (float)tab_w,
+                    (float)DECO_TAB_H, (float)tab_r, (float)tab_r, 0.0f, 0.0f,
+                    SHADOW_CUT_GROW
+                )
+            );
+
+            alpha *= 1.0f - cut;
+            // Premultiplied black (only the alpha channel is set).
+            row[i] = (uint32_t)(alpha * 255.0f + 0.5f) << 24;
+        }
+    }
+
+    free(tbl);
+
+    wlr_buffer_init(&sb->base, &shadowbuf_impl, cw, ch);
+    wlr_scene_buffer_set_buffer(deco->shadow, &sb->base);
+    wlr_buffer_drop(&sb->base);
+    wlr_scene_buffer_set_dest_size(deco->shadow, cw, ch);
+    wlr_scene_node_set_position(&deco->shadow->node, -M, -DECO_TAB_H - M);
+
+    memcpy(deco->shadow_key, key, sizeof key);
+    deco->shadow_key_valid = true;
+}
+
+static void handle_shadow_destroy(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Decoration *deco = wl_container_of(l, deco, shadow_destroy);
+    wl_list_remove(&deco->shadow_destroy.link);
+    deco->shadow = NULL;
+}
+
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunreachable-code"
+#endif
+static void shadow_node_create(struct Decoration *deco, struct Window *window) {
+    if (!(CFG_WINDOW_SHADOW_OPACITY > 0.0f)) return;
+
+    deco->shadow = wlr_scene_buffer_create(window->scene_tree, NULL);
+    if (deco->shadow == NULL) return;
+
+    deco->shadow->point_accepts_input = shadow_no_input;
+    wlr_scene_node_lower_to_bottom(&deco->shadow->node);
+
+    deco->shadow_destroy.notify = handle_shadow_destroy;
+    wl_signal_add(&deco->shadow->node.events.destroy, &deco->shadow_destroy);
+    deco->shadow_key_valid = false;
+}
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+
+static void shadow_node_destroy(struct Decoration *deco) {
+    if (deco->shadow == NULL) return;
+
+    wl_list_remove(&deco->shadow_destroy.link);
+    wlr_scene_node_destroy(&deco->shadow->node);
+    deco->shadow = NULL;
+}
+
+static void handle_blur_win_destroy(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Decoration *deco = wl_container_of(l, deco, blur_win_destroy);
+    wl_list_remove(&deco->blur_win_destroy.link);
+    deco->blur_win = NULL;
+}
+
+static void handle_blur_tab_destroy(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Decoration *deco = wl_container_of(l, deco, blur_tab_destroy);
+    wl_list_remove(&deco->blur_tab_destroy.link);
+    deco->blur_tab = NULL;
+}
+
+static struct wlr_scene_blur *blur_create(
     struct wlr_scene_tree *parent, struct wl_listener *listener,
     wl_notify_func_t notify
 ) {
-    const float color[4] = {0.0f, 0.0f, 0.0f, CFG_WINDOW_SHADOW_OPACITY};
+    struct wlr_scene_blur *b = wlr_scene_blur_create(parent, 1, 1);
+    if (b == NULL) return NULL;
 
-    struct wlr_scene_shadow *s = wlr_scene_shadow_create(
-        parent, 1, 1, CFG_WINDOW_SHADOW_RADIUS, CFG_WINDOW_SHADOW_SIGMA, color
-    );
+    wlr_scene_blur_set_strength(b, CFG_BLUR_STRENGTH);
+    wlr_scene_blur_set_alpha(b, CFG_BLUR_ALPHA);
 
-    if (s == NULL) return NULL;
-
-    wlr_scene_node_lower_to_bottom(&s->node);
+    wlr_scene_node_lower_to_bottom(&b->node);
     listener->notify = notify;
-    wl_signal_add(&s->node.events.destroy, listener);
-    return s;
+    wl_signal_add(&b->node.events.destroy, listener);
+    return b;
 }
 
 static void
-shadow_destroy(struct wlr_scene_shadow **shadow, struct wl_listener *listener) {
-    if (*shadow == NULL) return;
+blur_destroy(struct wlr_scene_blur **blur, struct wl_listener *listener) {
+    if (*blur == NULL) return;
 
+    struct wlr_scene_blur *b = *blur;
+
+    *blur = NULL;
     wl_list_remove(&listener->link);
-    wlr_scene_node_destroy(&(*shadow)->node);
-    *shadow = NULL;
+    wlr_scene_node_destroy(&b->node);
+}
+
+void deco_update_blur(struct Window *window) {
+    struct Decoration *deco = window ? window->decoration : NULL;
+    if (deco == NULL || deco->blur_win == NULL) return;
+
+    if (deco->blur_win != NULL) {
+        wlr_scene_blur_set_size(
+            deco->blur_win, window_w(window), window_h(window)
+        );
+
+        wlr_scene_node_set_position(&deco->blur_win->node, 0, 0);
+
+        struct fx_corner_radii radii = {
+            .top_left = (uint16_t)(window->last_tl < 0 ? 0 : window->last_tl),
+            .top_right = (uint16_t)(window->last_tr < 0 ? 0 : window->last_tr),
+            .bottom_left =
+                (uint16_t)(window->last_bl < 0 ? 0 : window->last_bl),
+            .bottom_right =
+                (uint16_t)(window->last_br < 0 ? 0 : window->last_br),
+        };
+
+        wlr_scene_blur_set_corner_radii(deco->blur_win, radii);
+    }
+
+    if (deco->blur_tab != NULL && deco->tab_w > 0) {
+        const uint16_t tab_r = (uint16_t)tab_corner_radius(deco->tab_w);
+
+        wlr_scene_blur_set_size(deco->blur_tab, deco->tab_w, DECO_TAB_H);
+        wlr_scene_node_set_position(
+            &deco->blur_tab->node, deco->tab_x, -DECO_TAB_H
+        );
+
+        struct fx_corner_radii radii = {
+            .top_left = tab_r,
+            .top_right = tab_r,
+            .bottom_left = 0,
+            .bottom_right = 0,
+        };
+
+        wlr_scene_blur_set_corner_radii(deco->blur_tab, radii);
+    }
 }
 
 static int32_t tab_corner_radius(int32_t tab_w) {
@@ -629,10 +911,12 @@ static bool button_create(
 
     b->tree->node.data = &window->node_tag;
 
+    float initial[4];
+    premul_copy(initial, wm.deco_color_button_inactive);
+
     const size_t count = part_count(kind);
     for (size_t i = 0; i < count && i < DECO_BTN_MAX_PARTS; i++) {
-        b->parts[i] =
-            wlr_scene_rect_create(b->tree, 1, 1, wm.deco_color_button_inactive);
+        b->parts[i] = wlr_scene_rect_create(b->tree, 1, 1, initial);
 
         if (b->parts[i] == NULL) return false;
         b->n_parts = i + 1;
@@ -660,16 +944,23 @@ void deco_create(struct Window *window) {
         return;
     }
 
-    deco->shadow_win = shadow_create(
-        window->scene_tree, &deco->shadow_win_destroy, handle_shadow_win_destroy
+    shadow_node_create(deco, window);
+
+    if (CFG_BLUR_WINDOW) {
+        deco->blur_win = blur_create(
+            window->scene_tree, &deco->blur_win_destroy, handle_blur_win_destroy
+        );
+    }
+
+    deco->blur_tab = blur_create(
+        window->scene_tree, &deco->blur_tab_destroy, handle_blur_tab_destroy
     );
 
-    deco->shadow_tab = shadow_create(
-        window->scene_tree, &deco->shadow_tab_destroy, handle_shadow_tab_destroy
-    );
+    float tab_initial[4];
+    premul_copy(tab_initial, wm.deco_color_inactive);
 
     deco->tab = wlr_scene_rect_create(
-        deco->tree, DECO_TAB_MAX_W, DECO_TAB_H, wm.deco_color_inactive
+        deco->tree, DECO_TAB_MAX_W, DECO_TAB_H, tab_initial
     );
 
     bool ok = deco->tab != NULL;
@@ -678,8 +969,9 @@ void deco_create(struct Window *window) {
     }
 
     if (!ok) {
-        shadow_destroy(&deco->shadow_win, &deco->shadow_win_destroy);
-        shadow_destroy(&deco->shadow_tab, &deco->shadow_tab_destroy);
+        shadow_node_destroy(deco);
+        blur_destroy(&deco->blur_win, &deco->blur_win_destroy);
+        blur_destroy(&deco->blur_tab, &deco->blur_tab_destroy);
 
         wlr_scene_node_destroy(&deco->tree->node);
         free(deco);
@@ -730,8 +1022,9 @@ void deco_destroy(struct Window *window) {
         deco->title_text = NULL;
     }
 
-    shadow_destroy(&deco->shadow_win, &deco->shadow_win_destroy);
-    shadow_destroy(&deco->shadow_tab, &deco->shadow_tab_destroy);
+    shadow_node_destroy(deco);
+    blur_destroy(&deco->blur_win, &deco->blur_win_destroy);
+    blur_destroy(&deco->blur_tab, &deco->blur_tab_destroy);
 
     if (deco->tree != NULL) {
         wl_list_remove(&deco->tree_destroy.link);
@@ -757,62 +1050,8 @@ void deco_update_position(struct Window *window) {
 
     window_update_corners(window);
 
-    const int sigma = (int)CFG_WINDOW_SHADOW_SIGMA;
-
-    if (deco->shadow_win != NULL) {
-        const int32_t w = window_w(window);
-        const int32_t h = window_h(window);
-
-        wlr_scene_shadow_set_size(
-            deco->shadow_win, w + 2 * sigma, h + 2 * sigma
-        );
-
-        wlr_scene_node_set_position(&deco->shadow_win->node, -sigma, -sigma);
-
-        const int tl = window->last_tl < 0 ? 0 : window->last_tl;
-        const int tr = window->last_tr < 0 ? 0 : window->last_tr;
-        const int bl = window->last_bl < 0 ? 0 : window->last_bl;
-        const int br = window->last_br < 0 ? 0 : window->last_br;
-
-        struct clipped_region clip = {
-            .area = {.x = sigma, .y = sigma, .width = w, .height = h},
-            .corners =
-                {
-                     .top_left = (uint16_t)tl,
-                     .top_right = (uint16_t)tr,
-                     .bottom_left = (uint16_t)bl,
-                     .bottom_right = (uint16_t)br,
-                     },
-        };
-
-        wlr_scene_shadow_set_clipped_region(deco->shadow_win, clip);
-    }
-
-    if (deco->shadow_tab != NULL) {
-        wlr_scene_shadow_set_size(
-            deco->shadow_tab, tab_w + 2 * sigma, DECO_TAB_H + 2 * sigma
-        );
-
-        wlr_scene_node_set_position(
-            &deco->shadow_tab->node, deco->tab_x - sigma, -DECO_TAB_H - sigma
-        );
-
-        const uint16_t tab_r = (uint16_t)tab_corner_radius(tab_w);
-
-        struct clipped_region clip = {
-            .area =
-                {.x = sigma, .y = sigma, .width = tab_w, .height = DECO_TAB_H},
-            .corners =
-                {
-                       .top_left = tab_r,
-                       .top_right = tab_r,
-                       .bottom_left = 0,
-                       .bottom_right = 0,
-                       },
-        };
-
-        wlr_scene_shadow_set_clipped_region(deco->shadow_tab, clip);
-    }
+    deco_update_blur(window);
+    deco_update_shadow(window);
 }
 
 void deco_update_active(struct Window *window, bool active) {
@@ -843,7 +1082,8 @@ void deco_update_for_layout(struct Window *window) {
 
     struct Decoration *deco = window->decoration;
     if (deco != NULL && deco->tree != NULL) {
-        wlr_scene_node_set_enabled(&deco->tree->node, window->mapped);
+        // Also re-enables the shadow and blur nodes that unmap disabled.
+        deco_set_visible(window, window->mapped);
         deco_update_position(window);
     }
 }
@@ -865,12 +1105,16 @@ void deco_set_visible(struct Window *window, bool visible) {
     if (!visible && sliding_deco == deco) sliding_deco = NULL;
     wlr_scene_node_set_enabled(&deco->tree->node, visible);
 
-    if (deco->shadow_win != NULL) {
-        wlr_scene_node_set_enabled(&deco->shadow_win->node, visible);
+    if (deco->shadow != NULL) {
+        wlr_scene_node_set_enabled(&deco->shadow->node, visible);
     }
 
-    if (deco->shadow_tab != NULL) {
-        wlr_scene_node_set_enabled(&deco->shadow_tab->node, visible);
+    if (deco->blur_win != NULL) {
+        wlr_scene_node_set_enabled(&deco->blur_win->node, visible);
+    }
+
+    if (deco->blur_tab != NULL) {
+        wlr_scene_node_set_enabled(&deco->blur_tab->node, visible);
     }
 
     if (!visible && deco->animating) anim_snap(deco, deco->anim_to);

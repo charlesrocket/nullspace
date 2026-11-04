@@ -32,20 +32,22 @@ struct Decoration {
     struct DecoButton btn[DECO_BTN_COUNT];
     struct wlr_scene_tree *tree; // NULL once destroyed
     struct wlr_scene_rect *tab, *btn_close, *btn_zoom, *btn_min;
+    struct wlr_scene_blur *blur_win, *blur_tab;
+    struct wlr_scene_buffer *shadow;
+    struct wl_listener blur_win_destroy, shadow_destroy, blur_tab_destroy,
+        tree_destroy;
+
     struct text_node *title_text; // ?NULL (only when disabled / short tab)
 
-    struct wlr_scene_shadow *shadow_win, *shadow_tab;
-    struct wl_listener shadow_win_destroy, shadow_tab_destroy, tree_destroy;
-
-    float progress; // 0 inactive, 1 active
-    float anim_from, anim_to;
     uint64_t anim_start_ms;
     uint32_t anim_dur_ms;
-    bool animating;
+    int32_t shadow_key[9], tab_x, tab_w, slide_start_tab_x;
 
-    int32_t tab_x, tab_w, slide_start_tab_x;
+    float progress, // 0 inactive, 1 active
+        anim_from, anim_to;
+
     double slide_start_x;
-    bool active;
+    bool active, shadow_key_valid, animating;
 };
 
 void deco_create(struct Window *window);
@@ -54,6 +56,7 @@ void deco_update_position(struct Window *window);
 void deco_update_active(struct Window *window, bool active);
 void deco_update_for_layout(struct Window *window);
 void deco_update_title(struct Window *window);
+void deco_update_blur(struct Window *window);
 void deco_refresh_colors(void);
 
 void deco_set_visible(struct Window *window, bool visible);

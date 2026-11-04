@@ -129,9 +129,9 @@
 
 #define CFG_DECO_COLOR_FONT_ACTIVE         "#d5d5d5"
 #define CFG_DECO_COLOR_FONT_INACTIVE       "#2b2b2b"
-#define CFG_DECO_COLOR_ACTIVE              "#b40000"
-#define CFG_DECO_COLOR_INACTIVE            "#767676"
-#define CFG_DECO_COLOR_BUTTON_INACTIVE     "#343434"
+#define CFG_DECO_COLOR_ACTIVE              "#b4000082" /// SYNC `82`
+#define CFG_DECO_COLOR_INACTIVE            "#76767682" /// SYNC `82`
+#define CFG_DECO_COLOR_BUTTON_INACTIVE     "#34343482" /// SYNC `82`
 #define CFG_DECO_COLOR_BUTTON_ACTIVE       CFG_DECO_COLOR_FONT_ACTIVE
 #define CFG_DECO_SLIDER_HEIGHT             28
 #define CFG_DECO_FONT                      "Hack Nerd Font Bold 10"
@@ -161,10 +161,12 @@
 #define CFG_BLUR_SATURATION                1.0f
 #define CFG_BLUR_STRENGTH                  0.9f
 #define CFG_BLUR_ALPHA                     1.0f
+#define CFG_BLUR_WINDOW                    true
+#define CFG_BLUR_WALLPAPER                 true
 
 #define CFG_WINDOW_SHADOW_SIGMA            14.2f
 #define CFG_WINDOW_SHADOW_RADIUS           CFG_ROUNDED_CORNERS_RADIUS
-#define CFG_WINDOW_SHADOW_OPACITY          0.82f
+#define CFG_WINDOW_SHADOW_OPACITY          0.82f /// SYNC `82`
 
 #define CFG_POPUP_SHADOW_SIGMA             CFG_WINDOW_SHADOW_SIGMA
 #define CFG_POPUP_SHADOW_SPREAD            8
@@ -183,7 +185,6 @@
 #define CFG_WALLPAPER_PATTERN_DOT_B        0x5e
 #define CFG_WALLPAPER_PATTERN_GRID_SPACING 24
 #define CFG_WALLPAPER_PATTERN_DOT_RADIUS   1
-#define CFG_WALLPAPER_BLUR_ENABLED         true
 #define CFG_WALLPAPER_BLUR_RADIUS          16
 #define CFG_WALLPAPER_BLUR_PASSES          2
 
