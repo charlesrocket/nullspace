@@ -435,8 +435,7 @@ void cursor_handle_motion(struct wl_listener *l, void *data) {
         server.cursor, &ev->pointer->base, ev->delta_x, ev->delta_y
     );
 
-    if (deco_handle_motion(server.cursor->x, server.cursor->y))
-        return; // sliding consumes motion
+    if (deco_handle_motion(server.cursor->x)) return; // sliding consumes motion
 
     if (interactive.active) {
         interactive_apply(server.cursor->x, server.cursor->y);
@@ -455,7 +454,7 @@ void cursor_handle_motion_absolute(struct wl_listener *l, void *data) {
 
     wlr_cursor_warp_absolute(server.cursor, &ev->pointer->base, ev->x, ev->y);
 
-    if (deco_handle_motion(server.cursor->x, server.cursor->y)) return;
+    if (deco_handle_motion(server.cursor->x)) return;
 
     if (interactive.active) {
         interactive_apply(server.cursor->x, server.cursor->y);

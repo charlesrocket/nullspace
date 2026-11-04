@@ -33,13 +33,12 @@ struct WindowManager {
     int32_t tiled_gap_outer_h, tiled_gap_outer_v, tiled_gap_inner_h,
         tiled_gap_inner_v, nmasters;
 
-    float mfact;
-
     int rounded_corners_radius;
     char *kb_layout;
 
-    float deco_color_active[4], deco_color_inactive[4], deco_color_button[4],
-        deco_color_button_hl[4];
+    float deco_color_active[4], deco_color_font_active[4],
+        deco_color_font_inactive[4], deco_color_inactive[4],
+        deco_color_button_active[4], deco_color_button_inactive[4], mfact;
 
     bool layout_dirty, rounded_corners, resizing, smart_gaps, center_overspread,
         center_when_single_stack;

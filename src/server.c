@@ -4,6 +4,7 @@
 #include "background.h"
 #include "config.h"
 #include "cursor.h"
+#include "decoration.h"
 #include "icon.h"
 #include "input.h"
 #include "layers.h"
@@ -349,6 +350,7 @@ int server_init(struct wl_display *display) {
         return -1;
     }
 
+    deco_anim_init(wl_display_get_event_loop(server.display));
     cursor_hide_init(wl_display_get_event_loop(server.display));
     activation_init(server.xdg_activation);
 
@@ -393,6 +395,7 @@ void server_finish(void) {
     struct Output *out, *tmp;
     wl_list_for_each_safe(out, tmp, &server.outputs, link) output_destroy(out);
 
+    deco_anim_finish();
     cursor_hide_finish();
     seat_finish();
     icon_manager_finish();

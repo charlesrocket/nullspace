@@ -5,6 +5,7 @@
 
 #include <ns-util.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <wayland-server-core.h>
 #include <wayland-util.h>
@@ -15,16 +16,32 @@ struct wlr_scene_tree;
 struct wlr_scene_rect;
 struct wlr_scene_shadow;
 
-#define DECO_TAB_H CFG_DECO_SLIDER_HEIGHT // slider tab height
+#define DECO_TAB_H         CFG_DECO_SLIDER_HEIGHT // slider tab height
+#define DECO_BTN_COUNT     2                      // close/minimize
+#define DECO_BTN_MAX_PARTS 14
+
+struct DecoButton {
+    struct wlr_scene_tree *tree;
+    struct wlr_scene_rect *hit;
+    struct wlr_scene_rect *parts[DECO_BTN_MAX_PARTS];
+    size_t n_parts;
+};
 
 struct Decoration {
     struct Window *window;
+    struct DecoButton btn[DECO_BTN_COUNT];
     struct wlr_scene_tree *tree; // NULL once destroyed
     struct wlr_scene_rect *tab, *btn_close, *btn_zoom, *btn_min;
     struct text_node *title_text; // ?NULL (only when disabled / short tab)
 
     struct wlr_scene_shadow *shadow_win, *shadow_tab;
     struct wl_listener shadow_win_destroy, shadow_tab_destroy, tree_destroy;
+
+    float progress; // 0 inactive, 1 active
+    float anim_from, anim_to;
+    uint64_t anim_start_ms;
+    uint32_t anim_dur_ms;
+    bool animating;
 
     int32_t tab_x, tab_w, slide_start_tab_x;
     double slide_start_x;
@@ -44,4 +61,6 @@ void deco_raise(struct Window *window);
 
 bool deco_handle_press(double lx, double ly, uint32_t button, uint32_t mods);
 bool deco_handle_release(uint32_t button);
-bool deco_handle_motion(double lx, double ly);
+bool deco_handle_motion(double lx);
+bool deco_anim_init(struct wl_event_loop *loop);
+void deco_anim_finish(void);

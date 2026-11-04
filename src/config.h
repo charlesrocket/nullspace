@@ -127,11 +127,14 @@
 #define CFG_ROUNDED_CORNERS_ENABLED        true
 #define CFG_ROUNDED_CORNERS_RADIUS         8 // minimum is 2
 
-#define CFG_DECO_COLOR_ACTIVE              "#cc0000"
-#define CFG_DECO_COLOR_INACTIVE            "#8c8c8c"
-#define CFG_DECO_COLOR_BUTTON              "#666666"
-#define CFG_DECO_COLOR_BUTTON_HL           "#b3b3b3"
+#define CFG_DECO_COLOR_FONT_ACTIVE         "#d5d5d5"
+#define CFG_DECO_COLOR_FONT_INACTIVE       "#2b2b2b"
+#define CFG_DECO_COLOR_ACTIVE              "#b40000"
+#define CFG_DECO_COLOR_INACTIVE            "#767676"
+#define CFG_DECO_COLOR_BUTTON_INACTIVE     "#343434"
+#define CFG_DECO_COLOR_BUTTON_ACTIVE       CFG_DECO_COLOR_FONT_ACTIVE
 #define CFG_DECO_SLIDER_HEIGHT             28
+#define CFG_DECO_FONT                      "Hack Nerd Font Bold 10"
 
 #define CFG_ANIMATIONS_ENABLED             true
 

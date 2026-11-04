@@ -648,8 +648,8 @@ static const char *color_to_hex(const float c[4], char buf[10]) {
 
 DEFINE_DECO_COLOR(deco_color_active)
 DEFINE_DECO_COLOR(deco_color_inactive)
-DEFINE_DECO_COLOR(deco_color_button)
-DEFINE_DECO_COLOR(deco_color_button_hl)
+DEFINE_DECO_COLOR(deco_color_button_inactive)
+DEFINE_DECO_COLOR(deco_color_button_active)
 
 #undef DEFINE_DECO_COLOR
 
@@ -659,20 +659,21 @@ static const struct SpecialOps {
     const char *(*get)(const char *arg, struct Value *out); // NULL: none
     const char *(*set)(const char *value);                  // NULL: none
 } special_ops[] = {
-    {              "layout",  true,               get_layout,set_layout                                                             },
-    {       "current_space",  true,        get_current_space,     set_current_space},
-    {        "space_urgent", false,         get_space_urgent,                  NULL},
-    {  "space_window_count", false,   get_space_window_count,                  NULL},
-    {       "focused_title", false,        get_focused_title,                  NULL},
-    {      "focused_app_id", false,       get_focused_app_id,                  NULL},
-    {               "mfact",  true,                get_mfact,             set_mfact},
-    {      "wallpaper_path",  true,            get_wallpaper,         set_wallpaper},
-    {   "deco_color_active",  true,    get_deco_color_active, set_deco_color_active},
-    { "deco_color_inactive",  true,  get_deco_color_inactive,
-     set_deco_color_inactive                                                       },
-    {   "deco_color_button",  true,    get_deco_color_button, set_deco_color_button},
-    {"deco_color_button_hl",  true, get_deco_color_button_hl,
-     set_deco_color_button_hl                                                      },
+    {                    "layout",  true,                     get_layout,set_layout                                                                         },
+    {             "current_space",  true,              get_current_space,     set_current_space},
+    {              "space_urgent", false,               get_space_urgent,                  NULL},
+    {        "space_window_count", false,         get_space_window_count,                  NULL},
+    {             "focused_title", false,              get_focused_title,                  NULL},
+    {            "focused_app_id", false,             get_focused_app_id,                  NULL},
+    {                     "mfact",  true,                      get_mfact,             set_mfact},
+    {            "wallpaper_path",  true,                  get_wallpaper,         set_wallpaper},
+    {         "deco_color_active",  true,          get_deco_color_active, set_deco_color_active},
+    {       "deco_color_inactive",  true,        get_deco_color_inactive,
+     set_deco_color_inactive                                                                   },
+    {"deco_color_button_inactive",  true, get_deco_color_button_inactive,
+     set_deco_color_button_inactive                                                            },
+    {  "deco_color_button_active",  true,   get_deco_color_button_active,
+     set_deco_color_button_active                                                              },
 };
 
 static const struct SpecialOps *special_find(const char *name) {

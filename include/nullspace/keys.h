@@ -222,10 +222,10 @@ struct IpcKeyMeta {
         "deco_color_inactive", IPC_A_RW, "#rrggbb[aa]", "inactive tab color"   \
     )                                                                          \
     K_SPECIAL(                                                                 \
-        "deco_color_button", IPC_A_RW, "#rrggbb[aa]",                          \
-        "decoration button color"                                              \
+        "deco_color_button_active", IPC_A_RW, "#rrggbb[aa]",                   \
+        "decoration button active color"                                       \
     )                                                                          \
     K_SPECIAL(                                                                 \
-        "deco_color_button_hl", IPC_A_RW, "#rrggbb[aa]",                       \
-        "decoration button highlight color"                                    \
+        "deco_color_button_inactive", IPC_A_RW, "#rrggbb[aa]",                 \
+        "decoration button inactive color"                                     \
     )

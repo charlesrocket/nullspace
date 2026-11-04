@@ -3,6 +3,7 @@
 #include <cairo/cairo.h>
 #include <drm_fourcc.h>
 #include <glib-object.h>
+#include <glibconfig.h>
 #include <limits.h>
 #include <pango/pango-font.h>
 #include <pango/pango-layout.h>
@@ -94,6 +95,17 @@ static void handle_buffer_node_destroy(struct wl_listener *l, void *data) {
     node->buffer_node = NULL;
 }
 
+static cairo_font_options_t *make_font_options(void) {
+    cairo_font_options_t *o = cairo_font_options_create();
+
+    cairo_font_options_set_antialias(o, CAIRO_ANTIALIAS_GRAY);
+    cairo_font_options_set_subpixel_order(o, CAIRO_SUBPIXEL_ORDER_DEFAULT);
+    cairo_font_options_set_hint_style(o, CAIRO_HINT_STYLE_FULL);
+    cairo_font_options_set_hint_metrics(o, CAIRO_HINT_METRICS_ON);
+
+    return o;
+}
+
 struct text_node *text_node_create(
     struct wlr_scene_tree *parent, const char *font_desc, const float color[4],
     int scale
@@ -143,7 +155,16 @@ static void measure_natural(struct text_node *node) {
         cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1, 1);
 
     cairo_t *cr = cairo_create(scratch);
+    cairo_set_antialias(cr, CAIRO_ANTIALIAS_GRAY);
+
     PangoLayout *layout = pango_cairo_create_layout(cr);
+
+    cairo_font_options_t *opts = make_font_options();
+    pango_cairo_context_set_font_options(
+        pango_layout_get_context(layout), opts
+    );
+
+    cairo_font_options_destroy(opts);
 
     pango_layout_set_font_description(layout, node->font);
     pango_layout_set_text(layout, node->text, -1);
@@ -177,34 +198,56 @@ static void render(struct text_node *node) {
         cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1, 1);
 
     cairo_t *scratch_cr = cairo_create(scratch);
+    cairo_set_antialias(scratch_cr, CAIRO_ANTIALIAS_GRAY);
+
     PangoLayout *layout = pango_cairo_create_layout(scratch_cr);
 
-    pango_layout_set_font_description(layout, node->font);
+    cairo_font_options_t *opts = make_font_options();
+    pango_cairo_context_set_font_options(
+        pango_layout_get_context(layout), opts
+    );
+
+    PangoFontDescription *font = pango_font_description_copy(node->font);
+    int sz = pango_font_description_get_size(font);
+    if (pango_font_description_get_size_is_absolute(font)) {
+        pango_font_description_set_absolute_size(font, sz * node->scale);
+    } else {
+        pango_font_description_set_size(font, sz * node->scale);
+    }
+
+    pango_layout_set_font_description(layout, font);
+    pango_font_description_free(font);
+
     pango_layout_set_text(layout, node->text, -1);
 
     if (node->max_width > 0) {
-        pango_layout_set_width(layout, node->max_width * PANGO_SCALE);
+        gint64 wrap_px =
+            (gint64)node->max_width * (gint64)node->scale * (gint64)PANGO_SCALE;
+        if (wrap_px > (gint64)G_MAXINT) wrap_px = (gint64)G_MAXINT;
+        if (wrap_px < 0) wrap_px = 0;
+        pango_layout_set_width(layout, (int)wrap_px);
         pango_layout_set_ellipsize(layout, PANGO_ELLIPSIZE_END);
     } else {
         pango_layout_set_width(layout, -1);
         pango_layout_set_ellipsize(layout, PANGO_ELLIPSIZE_NONE);
     }
 
-    int text_w = 0, text_h = 0;
-    pango_layout_get_pixel_size(layout, &text_w, &text_h);
+    int scaled_w = 0, scaled_h = 0;
+    pango_layout_get_pixel_size(layout, &scaled_w, &scaled_h);
 
-    if (text_w <= 0 || text_h <= 0) {
+    if (scaled_w <= 0 || scaled_h <= 0) {
+        cairo_font_options_destroy(opts);
         g_object_unref(layout);
         cairo_destroy(scratch_cr);
         cairo_surface_destroy(scratch);
         return;
     }
 
-    node->rendered_w = text_w;
-    node->rendered_h = text_h;
+    node->rendered_w = scaled_w / node->scale;
+    node->rendered_h = scaled_h / node->scale;
 
-    int surf_w = text_w * node->scale;
-    int surf_h = text_h * node->scale;
+    int surf_w = scaled_w;
+    int surf_h = scaled_h;
 
     if (!node->buffer || node->buffer->width != surf_w
         || node->buffer->height != surf_h) {
@@ -214,6 +257,7 @@ static void render(struct text_node *node) {
 
         struct cairo_buffer *cbuf = cairo_buffer_create(surf_w, surf_h);
         if (!cbuf) {
+            cairo_font_options_destroy(opts);
             g_object_unref(layout);
             cairo_destroy(scratch_cr);
             cairo_surface_destroy(scratch);
@@ -225,12 +269,15 @@ static void render(struct text_node *node) {
     }
 
     cairo_t *draw_cr = cairo_create(node->surface);
+    cairo_set_font_options(draw_cr, opts);
+    cairo_font_options_destroy(opts);
+    cairo_set_antialias(draw_cr, CAIRO_ANTIALIAS_GRAY);
+
     cairo_set_operator(draw_cr, CAIRO_OPERATOR_SOURCE);
     cairo_set_source_rgba(draw_cr, 0.0, 0.0, 0.0, 0.0);
     cairo_paint(draw_cr);
 
     cairo_set_operator(draw_cr, CAIRO_OPERATOR_OVER);
-    cairo_scale(draw_cr, (double)node->scale, (double)node->scale);
     cairo_set_source_rgba(
         draw_cr, (double)node->color[0], (double)node->color[1],
         (double)node->color[2], (double)node->color[3]
@@ -243,7 +290,9 @@ static void render(struct text_node *node) {
     cairo_surface_flush(node->surface);
 
     wlr_scene_buffer_set_buffer(node->buffer_node, node->buffer);
-    wlr_scene_buffer_set_dest_size(node->buffer_node, text_w, text_h);
+    wlr_scene_buffer_set_dest_size(
+        node->buffer_node, node->rendered_w, node->rendered_h
+    );
 
     g_object_unref(layout);
     cairo_destroy(scratch_cr);
@@ -269,6 +318,7 @@ void text_node_set_text(struct text_node *node, const char *text) {
 void text_node_set_color(struct text_node *node, const float color[4]) {
     if (!node) return;
     if (memcmp(node->color, color, sizeof(node->color)) == 0) return;
+
     memcpy(node->color, color, sizeof(node->color));
     if (node->buffer_node) render(node);
 }
@@ -277,6 +327,7 @@ void text_node_set_max_width(struct text_node *node, int max_width) {
     if (!node) return;
     if (max_width < 0) max_width = 0;
     if (node->max_width == max_width) return;
+
     node->max_width = max_width;
     if (node->buffer_node) render(node);
 }
@@ -293,7 +344,7 @@ void text_node_get_size(struct text_node *node, int *w, int *h) {
 void text_node_destroy(struct text_node *node) {
     if (!node) return;
 
-    if (node->buffer_node) { wlr_scene_node_destroy(&node->buffer_node->node); }
+    if (node->buffer_node) wlr_scene_node_destroy(&node->buffer_node->node);
 
     wlr_buffer_drop(node->buffer);
     pango_font_description_free(node->font);
