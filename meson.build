@@ -2,7 +2,7 @@ project(
   'nullspace',
   'c',
   meson_version: '>= 1.8.0',
-  version: '0.2.1',
+  version: '0.3.0',
   default_options: [
     'c_std=c11',
     'warning_level=3',
