@@ -2,6 +2,88 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2026-11-05
+
+### Bug Fixes
+
+- Correct fullscreen state
+- Improve positioning
+- Ensure `DISPLAY` is present
+- Use ipc scheduler
+- Improve unmaps
+- Set output size
+- Update display socket message
+- Update config messages
+- Update server messages
+- Set cursor size
+- Fix fullscreen call
+- Improve inhibitor surface check
+- Improve parsers
+- Fix focus in monocle
+- Rename input settings
+- Handle pressed focus
+- Update output/xwayland log messages
+- Handle input attachments
+- Update session commands
+- Refresh exclusive zone
+- Handle decorations
+- Handle resize action
+- Improve corner tracking
+- Adjust shadows
+- Handle floating shadows
+- Clip shadow regions
+- Handle titles in floating mode
+- Set surface corners
+- Handle xdg icon
+- Center new clients
+- Cascade new client coordinates
+- Handle multiple displays
+- Hide idle pointer
+- Improve edge tracking
+- Correct refocus
+- Set `xcursor`
+- Implement window maximization
+- Set secret app
+- Implement window minimization
+- Widen commands column
+- Improve floating mode presentation
+- Blur decorations
+- Handle blur rules
+- Sync with current topbar
+- Handle space rules
+
+### Documentation
+
+- Use session script
+- Refresh header
+- Fix topbar link
+
+### Miscellaneous tasks
+
+- Ignore images
+
+### Performance
+
+- Optimize background blur
+
+### Refactor
+
+- Extract region logic
+- Move destruction
+- Move layout objects
+
+### Testing
+
+- Add `ns-util` cases
+
+### Build
+
+- Fix imports
+- Install portal config
+- Drop `wallpaper` option
+- Install desktop entry
+- Install start script
+
 ## [0.2.0] - 2026-10-25
 
 ### Bug Fixes
