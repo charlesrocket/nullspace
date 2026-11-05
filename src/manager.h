@@ -17,31 +17,32 @@
 #define HIDDEN_POS_Y (-1000000)
 
 struct WindowManager {
-    struct wl_list windows;           // Window, creation order
-    struct wl_list focus_stack;       // Window, most recently focused last
-    struct wl_list layer_surfaces;    // LayerSurface
-    struct wl_list minimized_windows; // Window, newest at .prev
+    struct wl_list windows, // Window, creation order
+        focus_stack,        // Window, most recently focused last
+        layer_surfaces,     // LayerSurface
+        minimized_windows;  // Window, newest at .prev
 
     struct AnimationsConfig animations;
     struct WallpaperConfig wallpaper;
     struct LibinputConfig libinput;
-
-    enum Layout layout;
 
     uint64_t next_window_id;
 
     int32_t tiled_gap_outer_h, tiled_gap_outer_v, tiled_gap_inner_h,
         tiled_gap_inner_v, nmasters;
 
-    int rounded_corners_radius;
     char *kb_layout;
+
+    enum Layout layout, space_layouts[SPACE_COUNT];
+
+    int rounded_corners_radius;
 
     float deco_color_active[4], deco_color_font_active[4],
         deco_color_font_inactive[4], deco_color_inactive[4],
         deco_color_button_active[4], deco_color_button_inactive[4], mfact;
 
     bool layout_dirty, rounded_corners, resizing, smart_gaps, center_overspread,
-        center_when_single_stack;
+        center_when_single_stack, space_layout_locked[SPACE_COUNT];
 };
 
 extern struct WindowManager wm;

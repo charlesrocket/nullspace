@@ -1,5 +1,6 @@
 #pragma once
 
+#include <nullspace/layouts.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -12,6 +13,8 @@ struct WindowRuleActions {
 
 void rules_init(void);
 void rules_free(void);
-bool rules_match(
+bool rules_window_match(
     const char *app_id, const char *title, struct WindowRuleActions *out
 );
+
+bool rules_space_layout(int space, enum Layout *out);

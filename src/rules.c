@@ -6,6 +6,7 @@
 
 #include <errno.h>
 #include <ns-util.h>
+#include <nullspace/layouts.h>
 #include <regex.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -14,18 +15,23 @@
 
 #define LOG_TOPIC "rules"
 
-struct Rule {
-    regex_t app_id;
-    regex_t title;
-
+struct WindowRule {
+    regex_t app_id, title;
     int32_t space;
-    size_t rule_count;
 
     bool has_app_id, has_title, has_space, has_blur, blur;
 };
 
-static struct Rule *rules;
-static size_t rule_count;
+struct SpaceRule {
+    int space;
+    enum Layout layout;
+};
+
+static struct WindowRule *window_rules;
+static struct SpaceRule *space_rules;
+
+static size_t window_rule_count, space_rule_count;
+
 static bool rules_loaded;
 
 static bool compile(regex_t *re, const char *pattern, const char *spec) {
@@ -38,7 +44,7 @@ static bool compile(regex_t *re, const char *pattern, const char *spec) {
     return false;
 }
 
-static void rule_free(struct Rule *r) {
+static void window_rule_free(struct WindowRule *r) {
     if (r->has_app_id) regfree(&r->app_id);
     if (r->has_title) regfree(&r->title);
     memset(r, 0, sizeof(*r));
@@ -60,7 +66,7 @@ static bool parse_bool_value(const char *val, bool *out) {
     return false;
 }
 
-static bool parse_field(char *field, const char *spec, struct Rule *r) {
+static bool parse_field(char *field, const char *spec, struct WindowRule *r) {
     field = ns_trim(field);
     if (*field == '\0') return true;
 
@@ -128,7 +134,115 @@ static bool parse_field(char *field, const char *spec, struct Rule *r) {
     return false;
 }
 
-static bool parse_rule(const char *spec, struct Rule *r) {
+static bool parse_space_rule(const char *spec, struct SpaceRule *out) {
+    char *copy = strdup(spec);
+    if (copy == NULL) {
+        log_err("space rule \"%s\": OOM", spec);
+        return false;
+    }
+
+    int space = -1;
+    enum Layout layout = LAYOUT_VERTICAL_TILE;
+    bool has_layout = false;
+    bool ok = true;
+
+    for (char *cur = copy; ok && cur != NULL;) {
+        char *next = strchr(cur, ',');
+        if (next != NULL) *next++ = '\0';
+
+        char *colon = strchr(cur, ':');
+        if (colon == NULL) {
+            log_err("space rule \"%s\": expected key:value", spec);
+            ok = false;
+            break;
+        }
+
+        *colon = '\0';
+        const char *key = ns_trim(cur);
+        const char *val = ns_trim(colon + 1);
+
+        if (*val == '\0') {
+            log_err("space rule \"%s\": empty value for \"%s\"", spec, key);
+            ok = false;
+            break;
+        }
+
+        if (strcmp(key, "id") == 0) {
+            long l;
+            if (!ns_parse_int(val, &l) || l < 0 || l >= SPACE_COUNT) {
+                log_err(
+                    "space rule \"%s\": id must be 0..%d", spec, SPACE_COUNT - 1
+                );
+                ok = false;
+                break;
+            }
+            space = (int)l;
+        } else if (strcmp(key, "layout") == 0) {
+            if (!ns_parse_layout_name(val, &layout)) {
+                log_err("space rule \"%s\": unknown layout \"%s\"", spec, val);
+                ok = false;
+                break;
+            }
+            has_layout = true;
+        } else {
+            log_err("space rule \"%s\": unknown key \"%s\"", spec, key);
+            ok = false;
+        }
+
+        cur = next;
+    }
+
+    free(copy);
+
+    if (!ok) return false;
+
+    if (space < 0) {
+        log_err("space rule \"%s\": missing id", spec);
+        return false;
+    }
+    if (!has_layout) {
+        log_err("space rule \"%s\": missing layout", spec);
+        return false;
+    }
+
+    out->space = space;
+    out->layout = layout;
+    return true;
+}
+
+static void space_rules_init(void) {
+    if (config.space_rule_count == 0) return;
+
+    space_rules = calloc(config.space_rule_count, sizeof(*space_rules));
+    if (space_rules == NULL) {
+        log_err("space rules: OOM");
+        return;
+    }
+
+    for (size_t i = 0; i < config.space_rule_count; i++) {
+        struct SpaceRule r;
+        if (parse_space_rule(config.space_rules[i], &r))
+            space_rules[space_rule_count++] = r;
+    }
+
+    if (space_rule_count > 0) {
+        log_info("Space: %zu/%zu", space_rule_count, config.space_rule_count);
+    }
+}
+
+bool rules_space_layout(int space, enum Layout *out) {
+    // Later rules override earlier ones.
+    for (size_t i = space_rule_count; i > 0; i--) {
+        if (space_rules[i - 1].space == space) {
+            *out = space_rules[i - 1].layout;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool parse_rule(const char *spec, struct WindowRule *r) {
     memset(r, 0, sizeof(*r));
 
     char *copy = strdup(spec);
@@ -162,45 +276,51 @@ static bool parse_rule(const char *spec, struct Rule *r) {
         ok = false;
     }
 
-    if (!ok) rule_free(r);
+    if (!ok) window_rule_free(r);
     return ok;
 }
 
 void rules_init(void) {
     if (rules_loaded) return;
+    rules_loaded = true;
+
+    space_rules_init();
 
     size_t spec_count = config.window_rule_count;
-    if (spec_count == 0) {
-        rules_loaded = true;
-        return;
-    }
+    if (spec_count == 0) return;
 
-    rules = calloc(spec_count, sizeof(*rules));
-    if (rules == NULL) {
+    window_rules = calloc(spec_count, sizeof(*window_rules));
+    if (window_rules == NULL) {
         log_err("OOM");
         return;
     }
 
-    rules_loaded = true;
-
     for (size_t i = 0; i < spec_count; i++) {
-        if (parse_rule(config.window_rules[i], &rules[rule_count]))
-            rule_count++;
+        if (parse_rule(
+                config.window_rules[i], &window_rules[window_rule_count]
+            ))
+            window_rule_count++;
     }
 
-    log_info("Loaded %zu/%zu", rule_count, spec_count);
+    log_info("Window: %zu/%zu", window_rule_count, spec_count);
 }
 
 void rules_free(void) {
-    for (size_t i = 0; i < rule_count; i++) rule_free(&rules[i]);
+    for (size_t i = 0; i < window_rule_count; i++)
+        window_rule_free(&window_rules[i]);
 
-    free(rules);
-    rules = NULL;
-    rule_count = 0;
+    free(window_rules);
+    window_rules = NULL;
+    window_rule_count = 0;
+
+    free(space_rules);
+    space_rules = NULL;
+    space_rule_count = 0;
+
     rules_loaded = false;
 }
 
-bool rules_match(
+bool rules_window_match(
     const char *app_id, const char *title, struct WindowRuleActions *out
 ) {
     if (out == NULL) return false;
@@ -210,8 +330,8 @@ bool rules_match(
     if (title == NULL) title = "";
 
     bool hit = false;
-    for (size_t i = 0; i < rule_count; i++) {
-        const struct Rule *r = &rules[i];
+    for (size_t i = 0; i < window_rule_count; i++) {
+        const struct WindowRule *r = &window_rules[i];
 
         if (r->has_app_id && regexec(&r->app_id, app_id, 0, NULL, 0) != 0)
             continue;

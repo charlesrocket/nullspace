@@ -251,6 +251,15 @@ static void clear_window_rules(void) {
     config.window_rule_count = 0;
 }
 
+static void clear_space_rules(void) {
+    for (size_t i = 0; i < config.space_rule_count; i++)
+        free(config.space_rules[i]);
+
+    free(config.space_rules);
+    config.space_rules = NULL;
+    config.space_rule_count = 0;
+}
+
 static bool append_window_rule(const char *value) {
     char *copy = strdup(value);
     if (!copy) return false;
@@ -266,6 +275,25 @@ static bool append_window_rule(const char *value) {
 
     config.window_rules = rules;
     config.window_rules[config.window_rule_count++] = copy;
+
+    return true;
+}
+
+static bool append_space_rule(const char *value) {
+    char *copy = strdup(value);
+    if (copy == NULL) return false;
+
+    char **rules = reallocarray(
+        config.space_rules, config.space_rule_count + 1, sizeof(*rules)
+    );
+
+    if (rules == NULL) {
+        free(copy);
+        return false;
+    }
+
+    config.space_rules = rules;
+    config.space_rules[config.space_rule_count++] = copy;
 
     return true;
 }
@@ -327,6 +355,7 @@ add_bind(uint32_t mods, xkb_keysym_t key, enum Action action, char *arg) {
         free(arg);
         return false;
     }
+
     config.binds = b;
     config.binds[config.bind_count].mods = mods;
     config.binds[config.bind_count].key = key;
@@ -564,6 +593,8 @@ parse_key(const char *key, const char *value, bool *seen_window_rule) {
         }
 
         if (*value != '\0') append_window_rule(value);
+    } else if (strcmp(key, "space_rule") == 0) {
+        if (*value != '\0') append_space_rule(value);
     } else if (strcmp(key, "kb_rate_hz") == 0) {
         if (parse_int_in_range(key, value, 1, 1000, &l))
             config.kb_rate_hz = (int)l;
@@ -908,6 +939,7 @@ void config_finish(void) {
     if (!initialized) return;
 
     clear_window_rules();
+    clear_space_rules();
 
     for (size_t i = 0; i < ARRAY_LEN(string_keys); i++)
         free(*string_keys[i].field);

@@ -27,6 +27,21 @@
 
 struct WindowManager wm;
 
+static void apply_space_rules(void) {
+    for (int i = 0; i < SPACE_COUNT; i++) {
+        enum Layout l;
+        if (rules_space_layout(i, &l)) {
+            wm.space_layouts[i] = l;
+            wm.space_layout_locked[i] = true;
+        } else {
+            wm.space_layouts[i] = config.default_layout;
+            wm.space_layout_locked[i] = false;
+        }
+    }
+
+    wm.layout = wm.space_layouts[1]; // DEFAULT
+}
+
 void wm_mark_layout_dirty(void) {
     wm.layout_dirty = true;
     struct Output *o;
@@ -139,23 +154,36 @@ void wm_set_kb_layout(const char *layout) {
     ipc_notify_kb_layout();
 }
 
-void wm_set_layout(enum Layout layout) {
-    if (wm.layout == layout) return;
+static void set_layout_impl(enum Layout layout) {
+    const bool changed = (wm.layout != layout);
     wm.layout = layout;
 
     // Reparent windows to the correct scene tree.
     struct Window *w;
     wl_list_for_each(w, &wm.windows, link) {
-        if (w->closed) continue;
+        if (w->closed || w->space_hidden) continue;
+
         window_reparent(w, !layouts_is_tiled(layout));
+
+        if (!changed) continue;
+
         window_set_tiled(w, layouts_is_tiled(layout));
         deco_update_for_layout(w);
         w->prop_valid = false;
         w->has_target = false;
     }
 
-    ipc_notify_layout();
+    if (changed) ipc_notify_layout();
     wm_mark_layout_dirty();
+}
+
+void wm_set_layout(enum Layout layout) {
+    struct Output *out = output_focused();
+    if (out != NULL && wm.space_layout_locked[out->current_space]) return;
+    if (wm.layout == layout) return;
+
+    set_layout_impl(layout);
+    if (out != NULL) wm.space_layouts[out->current_space] = layout;
 }
 
 static void window_hide_offscreen(struct Window *window, int32_t dir) {
@@ -252,6 +280,7 @@ void wm_switch_space_on(struct Output *out, int space) {
     out->current_space = space;
     out->space_urgent[space] = false;
 
+    set_layout_impl(wm.space_layouts[space]);
     ext_workspace_update_states();
 
     struct Window *top = NULL;
@@ -516,6 +545,8 @@ void wm_init(void) {
 
     animation_init();
     rules_init();
+
+    apply_space_rules();
 }
 
 void wm_finish(void) {

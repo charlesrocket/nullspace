@@ -195,46 +195,35 @@
 // RUNTIME
 
 struct UserBind {
+    char *arg; // owned, ?NULL (when unused)
     uint32_t mods;
     xkb_keysym_t key;
     enum Action action;
-    char *arg; // owned, ?NULL (when unused)
 };
 
 struct Config {
     struct UserBind *binds;
-    enum Layout default_layout;
-
-    int gaps;
-    int cursor_size;
-    char *cursor_theme;
-    bool smart_gaps;
-    int nmasters;
-    float mfact;
-    bool center_overspread;
-    bool center_when_single_stack;
-
-    char *cmd_f1, *cmd_f2, *cmd_f3, *cmd_f4, *cmd_f5, *cmd_f6, *cmd_f7, *cmd_f8,
-        *cmd_f9, *cmd_f10, *cmd_start, *cmd_terminal;
-
-    char **window_rules;
-    size_t window_rule_count;
-
-    bool focus_follow, focus_on_activate;
-
-    char *kb_options, *kb_layouts;
-    int kb_rate_hz, kb_delay_ms;
 
     int input_tap_state, input_natural_scroll, input_left_handed,
         input_middle_emulation, input_dwt, input_drag, input_drag_lock,
         input_three_finger_drag, input_accel_profile, input_click_method,
-        input_scroll_method;
+        input_scroll_method, kb_rate_hz, kb_delay_ms, nmasters, gaps,
+        cursor_size;
 
-    float input_accel_speed;
+    char *cursor_theme, *cmd_f1, *cmd_f2, *cmd_f3, *cmd_f4, *cmd_f5, *cmd_f6,
+        *cmd_f7, *cmd_f8, *cmd_f9, *cmd_f10, *cmd_start, *cmd_terminal,
+        *kb_options, *kb_layouts, *wallpaper_path;
 
-    size_t bind_count;
+    char **window_rules, **space_rules;
 
-    char *wallpaper_path;
+    enum Layout default_layout;
+
+    size_t window_rule_count, space_rule_count, bind_count;
+
+    float input_accel_speed, mfact;
+
+    bool smart_gaps, center_overspread, focus_follow, focus_on_activate,
+        center_when_single_stack;
 #ifdef XWAYLAND
     bool xwayland;
 #endif

@@ -17,28 +17,27 @@
 struct wlr_xwayland_surface;
 
 struct Window {
-    struct wlr_xdg_toplevel *xdg_toplevel;
+    struct Output *output;
+    struct Decoration *decoration; // ?NULL (floating/non‑fullscreen windows)
+    struct Icon *icon;             // current, applied on commit
+    struct Icon *pending_icon;     // ?NULL
 
+    struct wlr_ext_foreign_toplevel_handle_v1 *foreign_handle;
+    struct wlr_foreign_toplevel_handle_v1 *wlr_handle;
+    struct wlr_xdg_toplevel *xdg_toplevel;
 #ifdef XWAYLAND
     struct wlr_xwayland_surface *xwayland_surface;
+    struct wlr_scene_tree *xw_surface_tree;
 #endif
-
     struct wlr_scene_tree *scene_tree, *popup_tree;
 
     struct wl_list link;           // WindowManager.windows
     struct wl_list focus_link;     // WindowManager.focus_stack
     struct wl_list minimized_link; // WindowManager.minimized_windows
-    struct wlr_ext_foreign_toplevel_handle_v1 *foreign_handle;
-    struct wlr_foreign_toplevel_handle_v1 *wlr_handle;
-
-    struct Output *output;
-    struct NodeTag node_tag;
-    struct Decoration *decoration; // ?NULL (floating/non‑fullscreen windows)
-    struct Icon *icon;             // current, applied on commit
-    struct Icon *pending_icon;     // ?NULL
 
     struct Animation anim;
     struct AnimationBox target_box;
+    struct NodeTag node_tag;
 
     struct wl_listener map, unmap, commit, destroy, request_move,
         wlr_request_activate, wlr_request_close, request_resize,
@@ -51,21 +50,16 @@ struct Window {
         xw_request_fullscreen, xw_request_minimize, xw_request_activate,
         xw_request_close, xw_set_title, xw_set_class, xw_associate,
         xw_dissociate, xw_tree_destroy;
-
-    struct wlr_scene_tree *xw_surface_tree;
-
-    bool xw_bound; // `xw_map`/`xw_unmap` registered
 #endif
-
-    enum Layout decoration_state;
 
     uint64_t id;
 
-    int32_t max_saved_x, max_saved_y, max_saved_w, max_saved_h, saved_x,
-        saved_y, x, y, width, height, prop_w, prop_h, reveal_dir, hide_dir,
-        last_tl, last_tr, last_bl, last_br;
-
-    int32_t fs_x, fs_y, fs_w, fs_h; // geometry to restore (floating)
+    int32_t max_saved_x, max_saved_y, max_saved_w,
+        max_saved_h,            // maximized saved
+        saved_x, saved_y,       // regular saved
+        fs_x, fs_y, fs_w, fs_h, // floating
+        x, y, width, height, prop_w, prop_h, reveal_dir, hide_dir, last_tl,
+        last_tr, last_bl, last_br;
 
     float size_per; // tiled size weight
 
@@ -73,12 +67,15 @@ struct Window {
 
     char *title, *app_id;
 
+    enum Layout decoration_state;
+
     bool initial_configure_sent, maximized, rules_applied, pending_icon_cleared,
         decoration_state_set, prop_valid, pos_valid, has_target, closed, mapped,
         fullscreen, space_hidden, minimized, blur_enabled;
 
 #ifdef XWAYLAND
-    bool is_xwayland;
+    bool is_xwayland,
+        xw_bound; // `xw_map`/`xw_unmap` registered
 #endif
 };
 
