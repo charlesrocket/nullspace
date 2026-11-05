@@ -1,6 +1,6 @@
 # `nullspace`
 
-Tiling compositor for FreeBSD. It features bespoke visuals, DE integrations ([TopBar](https://codeberg.org/charlesrocket/topbar)),
+Tiling compositor for FreeBSD. It features bespoke visuals, animations, DE integrations ([TopBar](https://codeberg.org/charlesrocket/topbar)), custom rules, and much more.
 
 ## Dependencies
 
