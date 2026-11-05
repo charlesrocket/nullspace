@@ -550,7 +550,9 @@ static void window_apply_rules(struct Window *window) {
 
     struct WindowRuleActions act;
     if (!rules_match(window_app_id(window), window_title(window), &act)) return;
+
     if (act.has_space) wm_assign_new_window_space(window, act.space);
+    if (act.has_blur) window->blur_enabled = act.blur;
 }
 
 static void window_do_map(struct Window *window) {

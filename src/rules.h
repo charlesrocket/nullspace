@@ -6,6 +6,8 @@
 struct WindowRuleActions {
     bool has_space;
     int32_t space; // must sync with `wm_switch_space()`
+
+    bool has_blur, blur;
 };
 
 void rules_init(void);

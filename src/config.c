@@ -775,7 +775,10 @@ static bool write_default_config(const char *path) {
         "# MODS: NONE SUPER SHIFT CTRL ALT, combined with | or +\n"
         "# ACTION: spawn (takes shell command), close, focus_next,\n"
         "#         cycle_layout, exit, fullscreen, move, resize,\n"
-        "#         space_0..space_9, move_to_space_0..move_to_space_9\n";
+        "#         space_0..space_9, move_to_space_0..move_to_space_9\n"
+        "#\n"
+        "# window_rule = key:value[,key:value...]\n"
+        "# KEYS:  appid:<regex>  title:<regex>  space:<0-9>  blur:<on|off>\n";
 
     ok = ok && write_all(fd, footer, sizeof(footer) - 1);
 

@@ -946,7 +946,7 @@ void deco_create(struct Window *window) {
 
     shadow_node_create(deco, window);
 
-    if (CFG_BLUR_WINDOW) {
+    if (CFG_BLUR_WINDOW && window->blur_enabled) {
         deco->blur_win = blur_create(
             window->scene_tree, &deco->blur_win_destroy, handle_blur_win_destroy
         );

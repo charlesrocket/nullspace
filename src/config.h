@@ -46,14 +46,14 @@
 #define CFG_CMD_F10                  ""
 
 #define CFG_WINDOW_RULES                                                       \
-    "space:2,title:foot", "space:2,appid:Alacritty",                           \
-        "space:2,appid:com.mitchellh.ghostty", "space:3,appid:firefox",        \
-        "space:4,appid:emacs", "space:4,appid:app.liten.Gram",                 \
-        "space:4,appid:ev.zed.Zed", "space:5,appid:gedit",                     \
-        "space:6,appid:thunar", "space:7,appid:Claws-mail",                    \
-        "space:7,appid:signal", "space:8,appid:blender",                       \
-        "space:8,appid:smplayer", "space:8,appid:mpv", "space:8,appid:vlc",    \
-        "space:9,appid:org.nicotine_plus.Nicotine"
+    "space:2,appid:foot,blur:on", "space:2,appid:Alacritty,blur:on",           \
+        "space:2,appid:com.mitchellh.ghostty,blur:on",                         \
+        "space:3,appid:firefox", "space:4,appid:emacs",                        \
+        "space:4,appid:app.liten.Gram", "space:4,appid:ev.zed.Zed",            \
+        "space:5,appid:gedit", "space:6,appid:thunar",                         \
+        "space:7,appid:Claws-mail", "space:7,appid:signal",                    \
+        "space:8,appid:blender", "space:8,appid:smplayer",                     \
+        "space:8,appid:mpv", "space:8,appid:vlc",
 
 #define CFG_MOD_SUPER               WLR_MODIFIER_LOGO  // Super key
 #define CFG_MOD_SHIFT               WLR_MODIFIER_SHIFT // Shift key

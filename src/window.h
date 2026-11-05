@@ -75,7 +75,7 @@ struct Window {
 
     bool initial_configure_sent, maximized, rules_applied, pending_icon_cleared,
         decoration_state_set, prop_valid, pos_valid, has_target, closed, mapped,
-        fullscreen, space_hidden, minimized;
+        fullscreen, space_hidden, minimized, blur_enabled;
 
 #ifdef XWAYLAND
     bool is_xwayland;

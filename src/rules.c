@@ -2,7 +2,7 @@
 
 #include "config.h"
 #include "log.h"
-#include "manager.h"
+#include "output.h"
 
 #include <errno.h>
 #include <ns-util.h>
@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #define LOG_TOPIC "rules"
 
@@ -20,7 +21,7 @@ struct Rule {
     int32_t space;
     size_t rule_count;
 
-    bool has_app_id, has_title, has_space;
+    bool has_app_id, has_title, has_space, has_blur, blur;
 };
 
 static struct Rule *rules;
@@ -41,6 +42,22 @@ static void rule_free(struct Rule *r) {
     if (r->has_app_id) regfree(&r->app_id);
     if (r->has_title) regfree(&r->title);
     memset(r, 0, sizeof(*r));
+}
+
+static bool parse_bool_value(const char *val, bool *out) {
+    if (strcasecmp(val, "1") == 0 || strcasecmp(val, "true") == 0
+        || strcasecmp(val, "on") == 0 || strcasecmp(val, "yes") == 0) {
+        *out = true;
+        return true;
+    }
+
+    if (strcasecmp(val, "0") == 0 || strcasecmp(val, "false") == 0
+        || strcasecmp(val, "off") == 0 || strcasecmp(val, "no") == 0) {
+        *out = false;
+        return true;
+    }
+
+    return false;
 }
 
 static bool parse_field(char *field, const char *spec, struct Rule *r) {
@@ -92,6 +109,21 @@ static bool parse_field(char *field, const char *spec, struct Rule *r) {
         return true;
     }
 
+    if (strcmp(key, "blur") == 0 && !r->has_blur) {
+        bool b;
+        if (!parse_bool_value(val, &b)) {
+            log_err(
+                "window rule \"%s\": blur must be on/off (got \"%s\")", spec,
+                val
+            );
+            return false;
+        }
+
+        r->blur = b;
+        r->has_blur = true;
+        return true;
+    }
+
     log_err("window rule \"%s\": unknown/duplicate key \"%s\"", spec, key);
     return false;
 }
@@ -121,8 +153,12 @@ static bool parse_rule(const char *spec, struct Rule *r) {
         ok = false;
     }
 
-    if (ok && !r->has_space) {
-        log_err("window rule \"%s\": no action (space:<n>)", spec);
+    if (ok && !r->has_space && !r->has_blur) {
+        log_err(
+            "window rule \"%s\": no action (space:<n> and/or blur:<on|off>)",
+            spec
+        );
+
         ok = false;
     }
 
@@ -185,6 +221,11 @@ bool rules_match(
         if (r->has_space) {
             out->has_space = true;
             out->space = r->space;
+        }
+
+        if (r->has_blur) {
+            out->has_blur = true;
+            out->blur = r->blur;
         }
 
         hit = true;
