@@ -1,6 +1,6 @@
 # `nullspace`
 
-Tiling compositor for FreeBSD. It features bespoke visuals, animations, DE integrations ([TopBar](https://codeberg.org/charlesrocket/topbar)), custom rules, and much more.
+This is a tiling compositor for FreeBSD. It features bespoke visuals, robust window management, an intuitive control system, DE integrations ([TopBar](https://codeberg.org/charlesrocket/topbar)), custom rules, and much more.
 
 ## Dependencies
 
@@ -19,8 +19,7 @@ Tiling compositor for FreeBSD. It features bespoke visuals, animations, DE integ
 ## Build
 
 ```sh
-meson setup build # -Dbuildtype=release
-ninja -C build
+meson setup build -Dbuildtype=release
 meson install -C build
 ```
 
