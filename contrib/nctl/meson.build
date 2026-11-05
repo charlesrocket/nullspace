@@ -1,7 +1,7 @@
 
 nctl = executable(
   'nctl',
-  'nctl.c',
+  'main.c',
   include_directories: inc_public,
   install: true,
 )

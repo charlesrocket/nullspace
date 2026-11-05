@@ -17,6 +17,10 @@
 #include <ns-util.h>
 #include <nullspace/keys.h>
 #include <nullspace/layouts.h>
+#include <wlr/types/wlr_ext_foreign_toplevel_list_v1.h>
+#ifdef XWAYLAND
+#include <wlr/xwayland.h>
+#endif
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -615,6 +619,95 @@ static const char *set_wallpaper(const char *value) {
 
     emit_kv(NULL, "EVT", "wallpaper_path", v_str(wm.wallpaper.path));
     return NULL;
+}
+
+static int window_pid(const struct Window *w) {
+#ifdef XWAYLAND
+    if (w->is_xwayland) {
+        return w->xwayland_surface != NULL ? (int)w->xwayland_surface->pid : 0;
+    }
+#endif
+    const struct wlr_surface *s = w->xdg_toplevel->base->surface;
+    if (s == NULL || s->resource == NULL) return 0;
+
+    struct wl_client *client = wl_resource_get_client(s->resource);
+    if (client == NULL) return 0;
+
+    pid_t pid = 0;
+    uid_t uid;
+    gid_t gid;
+
+    wl_client_get_credentials(client, &pid, &uid, &gid);
+    return (int)pid;
+}
+
+static void
+inspect_window(struct IpcClient *c, const struct Window *w, bool focused) {
+    const char *monitor = NULL;
+    if (w->output != NULL && w->output->wlr_output != NULL) {
+        monitor = w->output->wlr_output->name;
+    }
+
+    const char *ftl_id =
+        w->foreign_handle != NULL ? w->foreign_handle->identifier : NULL;
+
+    line_printf("CLIENT %llu pid %d", (unsigned long long)w->id, window_pid(w));
+
+    if (ftl_id != NULL) {
+        line_lit(" ftl ");
+        line_quoted(ftl_id);
+    }
+
+    line_lit(" appid ");
+    line_quoted(w->app_id ? w->app_id : "");
+    line_lit(" title ");
+    line_quoted(w->title ? w->title : "");
+    line_lit(" monitor ");
+    line_quoted(monitor);
+
+    line_printf(" space %d", w->space);
+    line_printf(
+        " x %d y %d width %d height %d", w->x, w->y, w->width, w->height
+    );
+
+    line_printf(" visible %d", (w->mapped && !w->space_hidden) ? 1 : 0);
+    line_printf(" focused %d", focused ? 1 : 0);
+    line_printf(" fullscreen %d", w->fullscreen ? 1 : 0);
+    line_printf(" maximized %d", w->maximized ? 1 : 0);
+    line_printf(" minimized %d", w->minimized ? 1 : 0);
+    line_printf(" floating %d", layouts_is_tiled(wm.layout) ? 0 : 1);
+#ifdef XWAYLAND
+    line_printf(" xwayland %d", w->is_xwayland ? 1 : 0);
+#else
+    line_lit(" xwayland 0");
+#endif
+    line_send(c);
+}
+
+static void cmd_inspect_windows(struct IpcClient *c) {
+    size_t count = 0;
+    struct Window *w;
+    wl_list_for_each(w, &wm.windows, link) {
+        if (!w->closed) count++;
+    }
+
+    struct Window *focused = window_focused();
+    wl_list_for_each(w, &wm.windows, link) {
+        if (w->closed) continue;
+        inspect_window(c, w, w == focused);
+    }
+
+    line_printf("OK %zu", count);
+    line_send(c);
+}
+
+static void cmd_inspect(struct IpcClient *c, char *args) {
+    if (args != NULL && strcasecmp(args, "WINDOWS") == 0) {
+        cmd_inspect_windows(c);
+        return;
+    }
+
+    respond(c, "unknown topic (windows)");
 }
 
 #define DEFINE_DECO_COLOR(keyname)                                             \
@@ -1285,6 +1378,7 @@ static const struct Verb {
     {           "PING",         cmd_ping},
     {           "QUIT",         cmd_quit},
     {         "CONFIG",       cmd_config},
+    {        "INSPECT",      cmd_inspect},
     {      "SUBSCRIBE",    cmd_subscribe},
     {    "UNSUBSCRIBE",  cmd_unsubscribe},
     {            "GET",          cmd_get},
