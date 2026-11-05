@@ -388,12 +388,14 @@ void wm_assign_new_window_space(struct Window *window, int space) {
     struct Output *out = window->output;
     if (out == NULL) {
         out = output_focused();
-        if (out == NULL) {
-            window->space = space;
-            return;
-        }
+        if (out == NULL) out = output_primary();
+        if (out == NULL) return;
 
         window->output = out;
+    }
+
+    if (window->space == WINDOW_SPACE_UNSET) {
+        window->space = out->current_space;
     }
 
     window->space = space;

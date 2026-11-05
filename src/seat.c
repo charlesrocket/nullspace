@@ -304,6 +304,16 @@ static void resize_mode_adjust(int32_t dx, int32_t dy) {
             }
         }
 
+        if (resize_mode.base_w < RESIZE_MIN_PX) {
+            resize_mode.base_w = RESIZE_MIN_PX;
+        }
+
+        if (resize_mode.base_h < RESIZE_MIN_PX) {
+            resize_mode.base_h = RESIZE_MIN_PX;
+        }
+
+        window_clamp_to_size_hints(w, &resize_mode.base_w, &resize_mode.base_h);
+
         if (resize_mode.base_w != w->prop_w
             || resize_mode.base_h != w->prop_h) {
             window_set_size(w, resize_mode.base_w, resize_mode.base_h);

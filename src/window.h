@@ -14,6 +14,8 @@
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/util/box.h>
 
+#define WINDOW_SPACE_UNSET (-1)
+
 struct wlr_xwayland_surface;
 
 struct Window {
@@ -97,6 +99,14 @@ void window_toggle_maximized(struct Window *window);
 void window_clear_clip(struct Window *window);
 void window_apply_target(
     struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh
+);
+
+void window_get_size_hints(
+    const struct Window *w, int32_t *min_w, int32_t *min_h, int32_t *max_w,
+    int32_t *max_h
+);
+void window_clamp_to_size_hints(
+    const struct Window *w, int32_t *width, int32_t *height
 );
 
 bool window_usable_area(const struct Window *w, struct wlr_box *out);

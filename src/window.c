@@ -32,6 +32,7 @@
 #include <wlr/util/log.h>
 #ifdef XWAYLAND
 #include <wlr/xwayland.h>
+#include <xcb/xcb_icccm.h>
 #endif
 
 #define LOG_TOPIC "window"
@@ -109,6 +110,59 @@ void window_clamp_to_usable(
     if (*y < min_y) *y = min_y;
 }
 
+void window_get_size_hints(
+    const struct Window *w, int32_t *min_w, int32_t *min_h, int32_t *max_w,
+    int32_t *max_h
+) {
+    *min_w = *min_h = 0;
+    *max_w = *max_h = 0;
+
+    if (w == NULL || w->closed) return;
+
+#ifdef XWAYLAND
+    if (w->is_xwayland) {
+        if (w->xwayland_surface == NULL) return;
+        const xcb_size_hints_t *h = w->xwayland_surface->size_hints;
+        if (h == NULL) return;
+
+        if (h->min_width > 0) *min_w = h->min_width;
+        if (h->min_height > 0) *min_h = h->min_height;
+        if (h->max_width > 0) *max_w = h->max_width;
+        if (h->max_height > 0) *max_h = h->max_height;
+
+        return;
+    }
+#endif
+
+    if (w->xdg_toplevel == NULL) return;
+
+    const struct wlr_xdg_toplevel_state *s = &w->xdg_toplevel->current;
+    *min_w = (int32_t)s->min_width;
+    *min_h = (int32_t)s->min_height;
+    *max_w = (int32_t)s->max_width;
+    *max_h = (int32_t)s->max_height;
+}
+
+void window_clamp_to_size_hints(
+    const struct Window *w, int32_t *width, int32_t *height
+) {
+    if (w == NULL || width == NULL || height == NULL) return;
+    if (w->closed || w->maximized || w->fullscreen) return;
+
+    int32_t min_w, min_h, max_w, max_h;
+    window_get_size_hints(w, &min_w, &min_h, &max_w, &max_h);
+
+    if (min_w <= 0 && min_h <= 0 && max_w <= 0 && max_h <= 0) return;
+
+    if (max_w > 0 && *width > max_w) *width = max_w;
+    if (max_h > 0 && *height > max_h) *height = max_h;
+    if (min_w > 0 && *width < min_w) *width = min_w;
+    if (min_h > 0 && *height < min_h) *height = min_h;
+
+    if (*width < 1) *width = 1;
+    if (*height < 1) *height = 1;
+}
+
 struct CornerApply {
     const struct wlr_surface *root;
     struct fx_corner_radii radii;
@@ -161,7 +215,7 @@ static int corner_radius_for(const struct Window *window) {
     return r;
 }
 
-// TODO rewire to allow state changes (via IPC)
+// TODO rewire to allow state changes
 void window_update_corners(struct Window *window) {
     if (window == NULL || window->closed || window->scene_tree == NULL) return;
 
@@ -238,9 +292,14 @@ void window_apply_target(
     if (w->space_hidden) return;
     if (nw < 1) nw = 1;
     if (nh < 1) nh = 1;
-    if (!w->fullscreen) { window_clamp_to_usable(w, &nx, &ny, &nw, &nh); }
+    if (!w->fullscreen) {
+        window_clamp_to_usable(w, &nx, &ny, &nw, &nh);
+        if (!layouts_is_tiled(wm.layout)) {
+            window_clamp_to_size_hints(w, &nw, &nh);
+        }
+    }
 
-    // Consume the reveal flag unconditionally
+    // Consume the reveal flag unconditionally.
     int32_t reveal_dir = w->reveal_dir;
     w->reveal_dir = 0;
 
@@ -304,6 +363,9 @@ void window_apply_target(
         } else {
             from = target;
         }
+
+        from.width = target.width;
+        from.height = target.height;
 
         type = ANIM_MOVE;
         duration = wm.animations.duration_move;
@@ -560,11 +622,17 @@ static void window_do_map(struct Window *window) {
     if (window->mapped) return;
     window->mapped = true;
 
+    if (window->output == NULL) window->output = output_primary();
+    if (window->output != NULL && window->space == WINDOW_SPACE_UNSET) {
+        window->space = window->output->current_space;
+    }
+
     window_apply_rules(window);
 
+    // Stale cases
     if (window->output != NULL && !window->space_hidden
         && window->space != window->output->current_space) {
-        wm_switch_space_on(window->output, window->space);
+        window->space = window->output->current_space;
     }
 
     wlr_handle_create(window);
@@ -668,7 +736,16 @@ static void window_handle_commit(struct wl_listener *l, void *data) {
 
     if (!window->initial_configure_sent) {
         window->initial_configure_sent = true;
-        wlr_xdg_toplevel_set_size(window->xdg_toplevel, 0, 0);
+
+        int32_t min_w, min_h, max_w, max_h;
+        window_get_size_hints(window, &min_w, &min_h, &max_w, &max_h);
+
+        if (min_w > 0 && min_h > 0) {
+            wlr_xdg_toplevel_set_size(window->xdg_toplevel, min_w, min_h);
+        } else {
+            wlr_xdg_toplevel_set_size(window->xdg_toplevel, 0, 0);
+        }
+
         return;
     }
 
@@ -845,10 +922,11 @@ void window_create(struct wlr_xdg_toplevel *xdg_toplevel) {
     window->size_per = 1.0f;
     window->maximized = false;
     window->id = ++wm.next_window_id;
+    window->node_tag.type = NODE_WINDOW;
     window->xdg_toplevel = xdg_toplevel;
     window->output = output_focused();
-    window->space = window->output ? window->output->current_space : 1;
-    window->node_tag.type = NODE_WINDOW;
+    window->space =
+        window->output ? window->output->current_space : WINDOW_SPACE_UNSET;
 
     struct wlr_scene_tree *parent = layer_for_layout(wm.layout);
     window->scene_tree =
@@ -1309,6 +1387,10 @@ static void xw_handle_request_configure(struct wl_listener *l, void *data) {
     if (w < 1) w = 1;
     if (h < 1) h = 1;
 
+    if (!layouts_is_tiled(wm.layout)) {
+        window_clamp_to_size_hints(window, &w, &h);
+    }
+
     wlr_xwayland_surface_configure(
         window->xwayland_surface, (int16_t)x, (int16_t)y, (uint16_t)w,
         (uint16_t)h
@@ -1445,9 +1527,10 @@ void window_create_xwayland(struct wlr_xwayland_surface *xw) {
     window->id = ++wm.next_window_id;
     window->is_xwayland = true;
     window->xwayland_surface = xw;
-    window->output = output_focused();
-    window->space = window->output ? window->output->current_space : 1;
     window->node_tag.type = NODE_WINDOW;
+    window->output = output_focused();
+    window->space =
+        window->output ? window->output->current_space : WINDOW_SPACE_UNSET;
 
     struct wlr_scene_tree *parent = layer_for_layout(wm.layout);
     window->scene_tree = wlr_scene_tree_create(parent);

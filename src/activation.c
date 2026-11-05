@@ -128,8 +128,12 @@ static void handle_request_activate(struct wl_listener *l, void *data) {
 
     if (allowed && window != NULL && !window->closed) {
         if (!window->mapped) {
-            if (config.focus_on_activate && ctx != NULL) {
-                wm_assign_new_window_space(window, ctx->space);
+            if (config.focus_on_activate && window->output != NULL) {
+                int cur = window->output->current_space;
+                if (cur >= 0 && cur < SPACE_COUNT) {
+                    window->space = cur;
+                    window->space_hidden = false;
+                }
             }
         } else if (config.focus_on_activate) {
             if (window->output != NULL

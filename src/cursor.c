@@ -119,6 +119,12 @@ static void interactive_apply(double cx, double cy) {
             ny += dcy;
         }
 
+        // Pin the stationary edge when hints overrule the drag.
+        int32_t pre_w = nw, pre_h = nh;
+        window_clamp_to_size_hints(v, &nw, &nh);
+        if (nw != pre_w && (g->edges & WLR_EDGE_LEFT)) nx -= (nw - pre_w);
+        if (nh != pre_h && (g->edges & WLR_EDGE_TOP)) ny -= (nh - pre_h);
+
         struct wlr_box ua;
         if (window_usable_area(v, &ua)) {
             const int32_t deco_top = window_visual_top_offset(v);

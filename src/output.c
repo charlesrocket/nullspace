@@ -215,6 +215,7 @@ void output_create(struct wlr_output *wlr_output) {
         wl_list_for_each(w, &wm.windows, link) {
             if (w->closed || w->output != NULL) continue;
             w->output = out;
+            if (w->space == WINDOW_SPACE_UNSET) w->space = out->current_space;
             w->space_hidden = (w->space != out->current_space);
         }
     }
@@ -330,8 +331,6 @@ struct Output *output_primary(void) {
     struct Output *out;
     wl_list_for_each(out, &server.outputs, link) {
         if (out->removed) continue;
-        if (out->width <= 0 || out->height <= 0) continue;
-
         return out;
     }
 
