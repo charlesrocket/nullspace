@@ -127,12 +127,12 @@
 #define CFG_ROUNDED_CORNERS_ENABLED        true
 #define CFG_ROUNDED_CORNERS_RADIUS         8 // minimum is 2
 
-#define CFG_DECO_COLOR_FONT_ACTIVE         "#d5d5d5"
-#define CFG_DECO_COLOR_FONT_INACTIVE       "#2b2b2b"
-#define CFG_DECO_COLOR_ACTIVE              "#b4000082" /// SYNC `82`
-#define CFG_DECO_COLOR_INACTIVE            "#76767682" /// SYNC `82`
-#define CFG_DECO_COLOR_BUTTON_INACTIVE     "#34343482" /// SYNC `82`
-#define CFG_DECO_COLOR_BUTTON_ACTIVE       CFG_DECO_COLOR_FONT_ACTIVE
+#define CFG_DECO_COLOR_ACTIVE              "#000000aa"
+#define CFG_DECO_COLOR_INACTIVE            "#000000aa"
+#define CFG_DECO_COLOR_FONT_ACTIVE         "#b0b4bc"
+#define CFG_DECO_COLOR_FONT_INACTIVE       "#b0b4bcaa"
+#define CFG_DECO_COLOR_BUTTON_ACTIVE       "#b40000aa"
+#define CFG_DECO_COLOR_BUTTON_INACTIVE     CFG_DECO_COLOR_FONT_INACTIVE
 #define CFG_DECO_SLIDER_HEIGHT             28
 #define CFG_DECO_FONT                      "Hack Nerd Font Bold 10"
 
@@ -166,7 +166,7 @@
 
 #define CFG_WINDOW_SHADOW_SIGMA            14.2f
 #define CFG_WINDOW_SHADOW_RADIUS           CFG_ROUNDED_CORNERS_RADIUS
-#define CFG_WINDOW_SHADOW_OPACITY          0.82f /// SYNC `82`
+#define CFG_WINDOW_SHADOW_OPACITY          0.82f
 
 #define CFG_POPUP_SHADOW_SIGMA             CFG_WINDOW_SHADOW_SIGMA
 #define CFG_POPUP_SHADOW_SPREAD            8

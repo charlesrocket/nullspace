@@ -18,7 +18,7 @@ struct wlr_scene_shadow;
 
 #define DECO_TAB_H         CFG_DECO_SLIDER_HEIGHT // slider tab height
 #define DECO_BTN_COUNT     2                      // close/minimize
-#define DECO_BTN_MAX_PARTS 14
+#define DECO_BTN_MAX_PARTS 22
 
 struct DecoButton {
     struct wlr_scene_tree *tree;

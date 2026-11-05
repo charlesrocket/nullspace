@@ -28,7 +28,7 @@
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_scene.h>
 
-#define DECO_BTN           12
+#define DECO_BTN           14
 #define DECO_BTN_PAD       8
 #define DECO_BTN_HIT_SLOP  2
 
@@ -42,7 +42,7 @@
 
 #define DECO_TITLE_FONT    CFG_DECO_FONT
 
-#define DECO_GLYPH_SIZE    10
+#define DECO_GLYPH_SIZE    14
 #define DECO_STROKE        4
 #define DECO_DISC_SIZE     10
 
@@ -56,23 +56,25 @@
 #define SHADOW_STD         (CFG_WINDOW_SHADOW_SIGMA * 0.5f)
 
 // Anti-aliasing/calibration
-#define SHADOW_CUT_GROW    0.0f // .2-.75 test cases
+#define SHADOW_CUT_GROW    0.2f // .2-.75 test cases
 
 struct DecoStrip {
     int32_t x, y, w, h, r;
 };
 
 static const struct DecoStrip DIAMOND_STRIPS[] = {
-    {3, 0,  4, 4, 2},
-    {2, 1,  6, 4, 2},
-    {1, 2,  8, 4, 2},
-    {0, 3, 10, 4, 2},
-    {1, 4,  8, 4, 2},
-    {2, 5,  6, 4, 2},
-    {3, 6,  4, 4, 2},
-}; // x y w h r
+    {4, 0,  6, 6, 3},
+    {3, 1,  8, 6, 3},
+    {2, 2, 10, 6, 3},
+    {1, 3, 12, 6, 3},
+    {0, 4, 14, 6, 3},
+    {1, 5, 12, 6, 3},
+    {2, 6, 10, 6, 3},
+    {3, 7,  8, 6, 3},
+    {4, 8,  6, 6, 3},
+};
 
-#define DIAMOND_STRIP_COUNT        7
+#define DIAMOND_STRIP_COUNT        9
 #define DECO_DIAMOND_PARTS         (1 + DIAMOND_STRIP_COUNT)
 
 #define DECO_ANIM_MS               160 // full 0 to 1 transition
@@ -744,7 +746,7 @@ blur_destroy(struct wlr_scene_blur **blur, struct wl_listener *listener) {
 
 void deco_update_blur(struct Window *window) {
     struct Decoration *deco = window ? window->decoration : NULL;
-    if (deco == NULL || deco->blur_win == NULL) return;
+    if (deco == NULL) return;
 
     if (deco->blur_win != NULL) {
         wlr_scene_blur_set_size(
