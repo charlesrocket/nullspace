@@ -12,28 +12,26 @@ enum AnimationType {
 };
 
 struct AnimationBox {
-    int32_t x, y;
-    int32_t width, height;
+    int32_t x, y, width, height;
 };
 
 struct Animation {
-    enum AnimationType type;
     struct AnimationBox from;
     struct AnimationBox to;
     struct AnimationBox current;
+
     int64_t start_ms;
     int32_t duration_ms;
+
+    enum AnimationType type;
+
     bool running;
 };
 
 struct AnimationsConfig {
-    int32_t duration_move;
-    int32_t duration_open;
-    int32_t duration_close;
-    int32_t duration_space;
+    int32_t duration_move, duration_open, duration_close, duration_space;
 
-    bool enabled;
-    bool open_from_top;
+    bool enabled, open_from_top;
 };
 
 void animation_init(void);
