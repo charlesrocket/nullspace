@@ -20,6 +20,7 @@
 #include <time.h>
 #include <wayland-server-core.h>
 #include <wayland-util.h>
+#include <wlr/types/wlr_foreign_toplevel_management_v1.h>
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/util/log.h>
@@ -112,9 +113,22 @@ static void output_reassign_windows(struct Output *dying) {
     wl_list_for_each(w, &wm.windows, link) {
         if (w->closed || w->output != dying) continue;
 
+        if (w->wlr_handle != NULL && dying->wlr_output != NULL) {
+            wlr_foreign_toplevel_handle_v1_output_leave(
+                w->wlr_handle, dying->wlr_output
+            );
+        }
+
         w->output = new_home;
         w->pos_valid = false;
         w->has_target = false;
+
+        if (new_home != NULL && new_home->wlr_output != NULL
+            && w->wlr_handle != NULL) {
+            wlr_foreign_toplevel_handle_v1_output_enter(
+                w->wlr_handle, new_home->wlr_output
+            );
+        }
 
         bool want_visible = (new_home != NULL) && w->mapped
                          && (w->space == new_home->current_space);
@@ -217,6 +231,12 @@ void output_create(struct wlr_output *wlr_output) {
             w->output = out;
             if (w->space == WINDOW_SPACE_UNSET) w->space = out->current_space;
             w->space_hidden = (w->space != out->current_space);
+
+            if (w->wlr_handle != NULL) {
+                wlr_foreign_toplevel_handle_v1_output_enter(
+                    w->wlr_handle, out->wlr_output
+                );
+            }
         }
     }
 
