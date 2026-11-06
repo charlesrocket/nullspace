@@ -193,6 +193,15 @@ void cursor_begin_interactive(
 
     interactive.active = true;
 
+    if (op == SEAT_OP_RESIZE) {
+        wm.resizing = true;
+        if (window->decoration != NULL && window->decoration->shadow != NULL) {
+            wlr_scene_node_set_enabled(
+                &window->decoration->shadow->node, false
+            );
+        }
+    }
+
     window_reparent(window, true);
     window_raise(window);
 
@@ -202,10 +211,20 @@ void cursor_begin_interactive(
 void cursor_end_interactive(void) {
     if (!interactive.active) return;
 
+    struct Window *was = interactive.window;
+    bool was_resize = (interactive.op == SEAT_OP_RESIZE);
+
     interactive.active = false;
     interactive.window = NULL;
     interactive.op = SEAT_OP_NONE;
     interactive.edges = 0;
+
+    if (was_resize) {
+        wm.resizing = false;
+        if (was != NULL && !was->closed && was->decoration != NULL) {
+            deco_update_position(was);
+        }
+    }
 
     wm_mark_layout_dirty();
 }

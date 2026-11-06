@@ -567,6 +567,10 @@ static float rrect_cover(
 void deco_update_shadow(struct Window *window) {
     struct Decoration *deco = window ? window->decoration : NULL;
     if (deco == NULL || deco->tree == NULL || deco->shadow == NULL) return;
+    if (wm.resizing) return;
+    if (!deco->shadow->node.enabled && window->mapped) {
+        wlr_scene_node_set_enabled(&deco->shadow->node, true);
+    }
 
     const int32_t w = window_w(window), h = window_h(window);
     const int32_t tab_x = deco->tab_x, tab_w = deco->tab_w;
