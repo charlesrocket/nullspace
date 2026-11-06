@@ -195,14 +195,14 @@
 // RUNTIME
 
 struct UserBind {
-    char *arg; // owned, ?NULL (when unused)
+    char* arg; // owned, ?NULL (when unused)
     uint32_t mods;
     xkb_keysym_t key;
     enum Action action;
 };
 
 struct Config {
-    struct UserBind *binds;
+    struct UserBind* binds;
 
     int input_tap_state, input_natural_scroll, input_left_handed,
         input_middle_emulation, input_dwt, input_drag, input_drag_lock,

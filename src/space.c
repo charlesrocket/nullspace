@@ -15,21 +15,21 @@
 
 #define LOG_TOPIC "ext-workspace"
 
-static struct wlr_ext_workspace_manager_v1 *workspace_manager;
-static struct wlr_ext_workspace_group_handle_v1 *workspace_group;
-static struct wlr_ext_workspace_handle_v1 *workspace_handles[SPACE_COUNT];
+static struct wlr_ext_workspace_manager_v1* workspace_manager;
+static struct wlr_ext_workspace_group_handle_v1* workspace_group;
+static struct wlr_ext_workspace_handle_v1* workspace_handles[SPACE_COUNT];
 static struct wl_listener workspace_commit_listener;
 
-static int workspace_space(struct wlr_ext_workspace_handle_v1 *handle) {
+static int workspace_space(struct wlr_ext_workspace_handle_v1* handle) {
     return (int)(intptr_t)handle->data;
 }
 
 void ext_workspace_update_states(void) {
-    struct Output *out = output_focused();
+    struct Output* out = output_focused();
     if (out == NULL) return;
 
     for (int i = 0; i < SPACE_COUNT; i++) {
-        struct wlr_ext_workspace_handle_v1 *handle = workspace_handles[i];
+        struct wlr_ext_workspace_handle_v1* handle = workspace_handles[i];
         if (handle == NULL) continue;
 
         bool active = (i == out->current_space);
@@ -40,10 +40,10 @@ void ext_workspace_update_states(void) {
     }
 }
 
-static void handle_commit(struct wl_listener *l, void *data) {
+static void handle_commit(struct wl_listener* l, void* data) {
     (void)l;
 
-    struct wlr_ext_workspace_v1_commit_event *ev = data;
+    struct wlr_ext_workspace_v1_commit_event* ev = data;
 
     struct wlr_ext_workspace_v1_request *req, *tmp;
     wl_list_for_each_safe(req, tmp, ev->requests, link) {
@@ -71,7 +71,7 @@ static void handle_commit(struct wl_listener *l, void *data) {
     }
 }
 
-bool ext_workspace_init(struct wl_display *display) {
+bool ext_workspace_init(struct wl_display* display) {
     if (workspace_manager != NULL) { return true; }
 
     workspace_manager = wlr_ext_workspace_manager_v1_create(display, 1);
@@ -96,7 +96,7 @@ bool ext_workspace_init(struct wl_display *display) {
         char id[16];
         (void)snprintf(id, sizeof(id), "%d", i);
 
-        struct wlr_ext_workspace_handle_v1 *handle =
+        struct wlr_ext_workspace_handle_v1* handle =
             wlr_ext_workspace_handle_v1_create(workspace_manager, id, caps);
 
         if (handle == NULL) {
@@ -114,7 +114,7 @@ bool ext_workspace_init(struct wl_display *display) {
             return false;
         }
 
-        handle->data = (void *)(intptr_t)i;
+        handle->data = (void*)(intptr_t)i;
         workspace_handles[i] = handle;
 
         wlr_ext_workspace_handle_v1_set_group(handle, workspace_group);
@@ -127,7 +127,7 @@ bool ext_workspace_init(struct wl_display *display) {
         wlr_ext_workspace_handle_v1_set_coordinates(handle, &coord, 1);
     }
 
-    struct Output *out;
+    struct Output* out;
     wl_list_for_each(out, &server.outputs, link) {
         if (!out->removed && out->wlr_output != NULL) {
             wlr_ext_workspace_group_handle_v1_output_enter(
@@ -145,7 +145,7 @@ bool ext_workspace_init(struct wl_display *display) {
     return true;
 }
 
-void ext_workspace_output_enter(struct Output *out) {
+void ext_workspace_output_enter(struct Output* out) {
     if (workspace_group == NULL || out == NULL || out->wlr_output == NULL) {
         return;
     }
@@ -155,7 +155,7 @@ void ext_workspace_output_enter(struct Output *out) {
     );
 }
 
-void ext_workspace_output_leave(struct Output *out) {
+void ext_workspace_output_leave(struct Output* out) {
     if (workspace_group == NULL || out == NULL || out->wlr_output == NULL) {
         return;
     }

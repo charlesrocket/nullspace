@@ -38,19 +38,19 @@
 #define LOG_TOPIC "window"
 
 #ifdef XWAYLAND
-static void xw_unbind(struct Window *window);
+static void xw_unbind(struct Window* window);
 #endif
 
 static int imin(int a, int b) { return a < b ? a : b; }
 
-static struct wlr_scene_tree *layer_for_layout(enum Layout layout) {
+static struct wlr_scene_tree* layer_for_layout(enum Layout layout) {
     return layouts_is_tiled(layout) ? server.tile_tree : server.float_tree;
 }
 
-bool window_usable_area(const struct Window *w, struct wlr_box *out) {
+bool window_usable_area(const struct Window* w, struct wlr_box* out) {
     if (w == NULL || out == NULL) return false;
 
-    const struct Output *o = w->output;
+    const struct Output* o = w->output;
     if (o == NULL) o = output_primary();
     if (o == NULL) return false;
 
@@ -77,7 +77,7 @@ bool window_usable_area(const struct Window *w, struct wlr_box *out) {
     return true;
 }
 
-int32_t window_visual_top_offset(const struct Window *w) {
+int32_t window_visual_top_offset(const struct Window* w) {
     if (w == NULL) return 0;
     if (w->closed || w->decoration == NULL || w->decoration->tab == NULL) {
         return 0;
@@ -87,7 +87,7 @@ int32_t window_visual_top_offset(const struct Window *w) {
 }
 
 void window_clamp_to_usable(
-    struct Window *w, int32_t *x, int32_t *y, int32_t *width, int32_t *height
+    struct Window* w, int32_t* x, int32_t* y, int32_t* width, int32_t* height
 ) {
     if (x == NULL || y == NULL || width == NULL || height == NULL) return;
 
@@ -111,8 +111,8 @@ void window_clamp_to_usable(
 }
 
 void window_get_size_hints(
-    const struct Window *w, int32_t *min_w, int32_t *min_h, int32_t *max_w,
-    int32_t *max_h
+    const struct Window* w, int32_t* min_w, int32_t* min_h, int32_t* max_w,
+    int32_t* max_h
 ) {
     *min_w = *min_h = 0;
     *max_w = *max_h = 0;
@@ -122,7 +122,7 @@ void window_get_size_hints(
 #ifdef XWAYLAND
     if (w->is_xwayland) {
         if (w->xwayland_surface == NULL) return;
-        const xcb_size_hints_t *h = w->xwayland_surface->size_hints;
+        const xcb_size_hints_t* h = w->xwayland_surface->size_hints;
         if (h == NULL) return;
 
         if (h->min_width > 0) *min_w = h->min_width;
@@ -136,7 +136,7 @@ void window_get_size_hints(
 
     if (w->xdg_toplevel == NULL) return;
 
-    const struct wlr_xdg_toplevel_state *s = &w->xdg_toplevel->current;
+    const struct wlr_xdg_toplevel_state* s = &w->xdg_toplevel->current;
     *min_w = (int32_t)s->min_width;
     *min_h = (int32_t)s->min_height;
     *max_w = (int32_t)s->max_width;
@@ -144,7 +144,7 @@ void window_get_size_hints(
 }
 
 void window_clamp_to_size_hints(
-    const struct Window *w, int32_t *width, int32_t *height
+    const struct Window* w, int32_t* width, int32_t* height
 ) {
     if (w == NULL || width == NULL || height == NULL) return;
     if (w->closed || w->maximized || w->fullscreen) return;
@@ -164,19 +164,19 @@ void window_clamp_to_size_hints(
 }
 
 struct CornerApply {
-    const struct wlr_surface *root;
+    const struct wlr_surface* root;
     struct fx_corner_radii radii;
     int applied;
 };
 
 static bool surface_is_under(
-    const struct wlr_surface *surface, const struct wlr_surface *root
+    const struct wlr_surface* surface, const struct wlr_surface* root
 ) {
     while (surface != NULL) {
         if (surface == root) return true;
 
-        struct wlr_subsurface *sub =
-            wlr_subsurface_try_from_wlr_surface((struct wlr_surface *)surface);
+        struct wlr_subsurface* sub =
+            wlr_subsurface_try_from_wlr_surface((struct wlr_surface*)surface);
 
         if (sub == NULL) break;
 
@@ -187,12 +187,12 @@ static bool surface_is_under(
 }
 
 static void
-apply_radius(struct wlr_scene_buffer *buf, int sx, int sy, void *data) {
+apply_radius(struct wlr_scene_buffer* buf, int sx, int sy, void* data) {
     (void)sx;
     (void)sy;
 
-    struct CornerApply *ctx = data;
-    struct wlr_scene_surface *sc_surf = wlr_scene_surface_try_from_buffer(buf);
+    struct CornerApply* ctx = data;
+    struct wlr_scene_surface* sc_surf = wlr_scene_surface_try_from_buffer(buf);
     if (sc_surf == NULL) return;
     if (!surface_is_under(sc_surf->surface, ctx->root)) return;
 
@@ -200,7 +200,7 @@ apply_radius(struct wlr_scene_buffer *buf, int sx, int sy, void *data) {
     ctx->applied++;
 }
 
-static int corner_radius_for(const struct Window *window) {
+static int corner_radius_for(const struct Window* window) {
     if (!wm.rounded_corners || window->fullscreen) return 0;
 
     int r = wm.rounded_corners_radius;
@@ -216,17 +216,17 @@ static int corner_radius_for(const struct Window *window) {
 }
 
 // TODO rewire to allow state changes (via IPC)
-void window_update_corners(struct Window *window) {
+void window_update_corners(struct Window* window) {
     if (window == NULL || window->closed || window->scene_tree == NULL) return;
 
-    struct wlr_surface *root = window_wlr_surface(window);
+    struct wlr_surface* root = window_wlr_surface(window);
     if (root == NULL) return;
 
     int r = corner_radius_for(window);
 
     int tl = r, tr = r, bl = r, br = r;
 
-    const struct Decoration *deco = window->decoration;
+    const struct Decoration* deco = window->decoration;
     if (r > 0 && deco != NULL && deco->tab != NULL) {
         int win_w = window->width > 0 ? window->width : 1;
 
@@ -271,46 +271,46 @@ void window_update_corners(struct Window *window) {
 }
 
 // May return NULL for X11 windows whose wl_surface is not associated yet.
-struct wlr_surface *window_wlr_surface(const struct Window *window) {
+struct wlr_surface* window_wlr_surface(const struct Window* window) {
 #ifdef XWAYLAND
     if (window->is_xwayland) { return window->xwayland_surface->surface; }
 #endif
     return window->xdg_toplevel->base->surface;
 }
 
-const char *window_title(const struct Window *window) {
+const char* window_title(const struct Window* window) {
     return window->title ? window->title : "";
 }
 
-const char *window_app_id(const struct Window *window) {
+const char* window_app_id(const struct Window* window) {
     return window->app_id ? window->app_id : "";
 }
 
 // Look up the window that owns a given toplevel (NULL when the toplevel has no
 // scene tree yet).
-static struct Window *
-window_from_xdg_toplevel(const struct wlr_xdg_toplevel *toplevel) {
+static struct Window*
+window_from_xdg_toplevel(const struct wlr_xdg_toplevel* toplevel) {
     if (toplevel == NULL || toplevel->base == NULL) return NULL;
     if (toplevel->base->data == NULL) return NULL;
 
-    struct wlr_scene_tree *tree = toplevel->base->data;
+    struct wlr_scene_tree* tree = toplevel->base->data;
     return window_from_scene_node(&tree->node);
 }
 
 // Parent (transient-for) of `window`, if any.
-struct Window *window_parent(const struct Window *window) {
+struct Window* window_parent(const struct Window* window) {
     if (window == NULL || window->closed) return NULL;
 
 #ifdef XWAYLAND
     if (window->is_xwayland) {
-        struct wlr_xwayland_surface *px = window->xwayland_surface != NULL
+        struct wlr_xwayland_surface* px = window->xwayland_surface != NULL
                                             ? window->xwayland_surface->parent
                                             : NULL;
 
         if (px == NULL || px->data == NULL) return NULL;
 
-        struct Window *pw =
-            window_from_scene_node(&((struct wlr_scene_tree *)px->data)->node);
+        struct Window* pw =
+            window_from_scene_node(&((struct wlr_scene_tree*)px->data)->node);
 
         return (pw != NULL && !pw->closed) ? pw : NULL;
     }
@@ -318,24 +318,24 @@ struct Window *window_parent(const struct Window *window) {
 
     if (window->xdg_toplevel == NULL) return NULL;
 
-    struct Window *pw = window_from_xdg_toplevel(window->xdg_toplevel->parent);
+    struct Window* pw = window_from_xdg_toplevel(window->xdg_toplevel->parent);
 
     return (pw != NULL && !pw->closed) ? pw : NULL;
 }
 
-bool window_is_transient(const struct Window *window) {
+bool window_is_transient(const struct Window* window) {
     return window_parent(window) != NULL;
 }
 
 void window_apply_target(
-    struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh
+    struct Window* w, int32_t nx, int32_t ny, int32_t nw, int32_t nh
 ) {
     if (w->space_hidden) return;
     if (nw < 1) nw = 1;
     if (nh < 1) nh = 1;
 
     // Transients float over their parent, centred on the parent's TARGET.
-    struct Window *parent = window_parent(w);
+    struct Window* parent = window_parent(w);
     bool transient = (parent != NULL);
 
     if (!w->fullscreen) {
@@ -387,7 +387,7 @@ void window_apply_target(
     if (first && (reveal_dir != 0 || !w->pos_valid)) {
         if (reveal_dir != 0) {
             // Horizontal space slide across the whole output.
-            struct Output *out = w->output;
+            struct Output* out = w->output;
             if (out == NULL) out = output_primary();
             int32_t offset = (out != NULL && out->width > 0) ? out->width : nw;
             if (offset < 1) offset = 1;
@@ -447,7 +447,7 @@ void window_apply_target(
     }
 }
 
-void window_set_activated(struct Window *window, bool activated) {
+void window_set_activated(struct Window* window, bool activated) {
 #ifdef XWAYLAND
     if (window->is_xwayland) {
         wlr_xwayland_surface_activate(window->xwayland_surface, activated);
@@ -466,7 +466,7 @@ void window_set_activated(struct Window *window, bool activated) {
     }
 }
 
-void window_set_maximized(struct Window *window, bool maximized) {
+void window_set_maximized(struct Window* window, bool maximized) {
     if (window == NULL || window->closed) return;
     if (window->fullscreen) return;
     if (window->maximized == maximized) return;
@@ -519,12 +519,12 @@ void window_set_maximized(struct Window *window, bool maximized) {
     wm_mark_layout_dirty();
 }
 
-void window_toggle_maximized(struct Window *window) {
+void window_toggle_maximized(struct Window* window) {
     if (window == NULL || window->closed) return;
     window_set_maximized(window, !window->maximized);
 }
 
-void window_set_fullscreen(struct Window *window, bool fullscreen) {
+void window_set_fullscreen(struct Window* window, bool fullscreen) {
     if (window->closed || window->fullscreen == fullscreen) return;
 
 #ifdef XWAYLAND
@@ -566,7 +566,7 @@ void window_set_fullscreen(struct Window *window, bool fullscreen) {
     window->has_target = false;
     window_reparent(window, !layouts_is_tiled(wm.layout));
 
-    struct Window *child;
+    struct Window* child;
     wl_list_for_each(child, &wm.windows, link) {
         if (child->closed || !child->mapped || child == window) continue;
         if (window_parent(child) != window) continue;
@@ -580,7 +580,7 @@ void window_set_fullscreen(struct Window *window, bool fullscreen) {
     }
 
     if (fullscreen) {
-        struct Output *o = window->output;
+        struct Output* o = window->output;
         if (o == NULL) o = output_primary();
         if (o != NULL) {
             window_apply_target(
@@ -595,24 +595,24 @@ void window_set_fullscreen(struct Window *window, bool fullscreen) {
     wm_mark_layout_dirty();
 }
 
-static void wlr_handle_request_activate(struct wl_listener *l, void *data) {
+static void wlr_handle_request_activate(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, wlr_request_activate);
+    struct Window* window = wl_container_of(l, window, wlr_request_activate);
     if (window->closed) return;
     if (window->space_hidden) wm_switch_space(window->space);
 
     seat_focus(window);
 }
 
-static void wlr_handle_request_close(struct wl_listener *l, void *data) {
+static void wlr_handle_request_close(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, wlr_request_close);
+    struct Window* window = wl_container_of(l, window, wlr_request_close);
     window_close(window);
 }
 
-static void wlr_handle_create(struct Window *window) {
+static void wlr_handle_create(struct Window* window) {
     if (window->wlr_handle != NULL || server.foreign_toplevel_manager == NULL)
         return;
 
@@ -637,7 +637,7 @@ static void wlr_handle_create(struct Window *window) {
         window->wlr_handle, window->maximized
     );
 
-    struct Output *o = window->output;
+    struct Output* o = window->output;
     if (o != NULL && o->wlr_output != NULL) {
         wlr_foreign_toplevel_handle_v1_output_enter(
             window->wlr_handle, o->wlr_output
@@ -656,12 +656,12 @@ static void wlr_handle_create(struct Window *window) {
     );
 }
 
-static void wlr_handle_destroy(struct Window *window) {
+static void wlr_handle_destroy(struct Window* window) {
     if (window->wlr_handle == NULL) return;
 
-    struct wlr_foreign_toplevel_handle_v1 *handle = window->wlr_handle;
+    struct wlr_foreign_toplevel_handle_v1* handle = window->wlr_handle;
 
-    struct Window *w;
+    struct Window* w;
     wl_list_for_each(w, &wm.windows, link) {
         if (w->closed || w->wlr_handle == NULL) continue;
         if (w->last_foreign_parent != handle) continue;
@@ -678,7 +678,7 @@ static void wlr_handle_destroy(struct Window *window) {
     wlr_foreign_toplevel_handle_v1_destroy(handle);
 }
 
-static void foreign_handle_create(struct Window *window) {
+static void foreign_handle_create(struct Window* window) {
     if (window->foreign_handle != NULL || server.foreign_toplevel_list == NULL)
         return;
 
@@ -692,13 +692,13 @@ static void foreign_handle_create(struct Window *window) {
     );
 }
 
-static void foreign_handle_destroy(struct Window *window) {
+static void foreign_handle_destroy(struct Window* window) {
     if (window->foreign_handle == NULL) return;
     wlr_ext_foreign_toplevel_handle_v1_destroy(window->foreign_handle);
     window->foreign_handle = NULL;
 }
 
-static void foreign_handle_update(struct Window *window) {
+static void foreign_handle_update(struct Window* window) {
     if (window->foreign_handle == NULL) return;
 
     const struct wlr_ext_foreign_toplevel_handle_v1_state state = {
@@ -711,7 +711,7 @@ static void foreign_handle_update(struct Window *window) {
     );
 }
 
-static void window_apply_rules(struct Window *window) {
+static void window_apply_rules(struct Window* window) {
     if (window == NULL || window->closed || window->rules_applied) return;
     window->rules_applied = true;
 
@@ -728,21 +728,21 @@ static void window_apply_rules(struct Window *window) {
     if (act.has_blur) window->blur_enabled = act.blur;
 }
 
-static void window_sync_foreign_parent(struct Window *window) {
+static void window_sync_foreign_parent(struct Window* window) {
     if (window == NULL || window->closed) return;
     if (window->wlr_handle == NULL) return;
 
-    struct wlr_foreign_toplevel_handle_v1 *parent_handle = NULL;
+    struct wlr_foreign_toplevel_handle_v1* parent_handle = NULL;
 
 #ifdef XWAYLAND
     if (window->is_xwayland) {
-        struct wlr_xwayland_surface *parent_xw =
+        struct wlr_xwayland_surface* parent_xw =
             window->xwayland_surface != NULL ? window->xwayland_surface->parent
                                              : NULL;
 
         if (parent_xw != NULL && parent_xw->data != NULL) {
-            struct wlr_scene_tree *tree = parent_xw->data;
-            struct Window *pw = window_from_scene_node(&tree->node);
+            struct wlr_scene_tree* tree = parent_xw->data;
+            struct Window* pw = window_from_scene_node(&tree->node);
 
             if (pw != NULL && !pw->closed && pw->wlr_handle != NULL) {
                 parent_handle = pw->wlr_handle;
@@ -753,9 +753,9 @@ static void window_sync_foreign_parent(struct Window *window) {
     {
         if (window->xdg_toplevel == NULL) return;
 
-        struct wlr_xdg_toplevel *parent = window->xdg_toplevel->parent;
+        struct wlr_xdg_toplevel* parent = window->xdg_toplevel->parent;
         if (parent != NULL) {
-            struct Window *pw = window_from_xdg_toplevel(parent);
+            struct Window* pw = window_from_xdg_toplevel(parent);
             if (pw != NULL && !pw->closed && pw->wlr_handle != NULL) {
                 parent_handle = pw->wlr_handle;
             }
@@ -770,7 +770,7 @@ static void window_sync_foreign_parent(struct Window *window) {
     );
 }
 
-static void window_do_map(struct Window *window) {
+static void window_do_map(struct Window* window) {
     if (window->mapped) return;
     window->mapped = true;
 
@@ -782,7 +782,7 @@ static void window_do_map(struct Window *window) {
     window_apply_rules(window);
 
     // Transients live on their parent's output and space.
-    struct Window *parent = window_parent(window);
+    struct Window* parent = window_parent(window);
     if (parent != NULL) {
         if (parent->output != NULL) window->output = parent->output;
         window->space = parent->space;
@@ -820,7 +820,7 @@ static void window_do_map(struct Window *window) {
     idle_update_inhibit();
 }
 
-static void window_do_unmap(struct Window *window) {
+static void window_do_unmap(struct Window* window) {
     if (!window->mapped) return;
 
     window->mapped = false;
@@ -830,13 +830,13 @@ static void window_do_unmap(struct Window *window) {
         wl_list_remove(&window->minimized_link);
         wl_list_init(&window->minimized_link);
 
-        struct Output *out = window->output;
+        struct Output* out = window->output;
         if (out == NULL) out = output_focused();
         window->space_hidden =
             (out != NULL && window->space != out->current_space);
     }
 
-    struct wlr_surface *surface = window_wlr_surface(window);
+    struct wlr_surface* surface = window_wlr_surface(window);
     bool had_focus = surface != NULL && server.seat != NULL
                   && server.seat->keyboard_state.focused_surface == surface;
 
@@ -862,21 +862,21 @@ static void window_do_unmap(struct Window *window) {
     idle_update_inhibit();
 }
 
-static void window_handle_map(struct wl_listener *l, void *data) {
+static void window_handle_map(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, map);
+    struct Window* window = wl_container_of(l, window, map);
     window_do_map(window);
 }
 
-static void window_handle_unmap(struct wl_listener *l, void *data) {
+static void window_handle_unmap(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, unmap);
+    struct Window* window = wl_container_of(l, window, unmap);
     window_do_unmap(window);
 }
 
-static void window_apply_pending_icon(struct Window *window) {
+static void window_apply_pending_icon(struct Window* window) {
     if (window->pending_icon == NULL && !window->pending_icon_cleared) return;
 
     bool changed = window->icon != NULL || window->pending_icon != NULL;
@@ -891,11 +891,11 @@ static void window_apply_pending_icon(struct Window *window) {
     if (changed) ipc_notify_window_meta(window);
 }
 
-static void window_handle_commit(struct wl_listener *l, void *data) {
+static void window_handle_commit(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, commit);
-    struct wlr_xdg_surface *surf = window->xdg_toplevel->base;
+    struct Window* window = wl_container_of(l, window, commit);
+    struct wlr_xdg_surface* surf = window->xdg_toplevel->base;
 
     if (!window->initial_configure_sent) {
         window->initial_configure_sent = true;
@@ -935,7 +935,7 @@ static void window_handle_commit(struct wl_listener *l, void *data) {
     if (surf->surface->mapped) window_update_corners(window);
 
     if (!wl_list_empty(&surf->surface->current.frame_callback_list)) {
-        struct Output *out = window->output;
+        struct Output* out = window->output;
         if (out == NULL) out = output_primary();
         if (out != NULL && out->wlr_output != NULL) {
             wlr_output_schedule_frame(out->wlr_output);
@@ -943,64 +943,64 @@ static void window_handle_commit(struct wl_listener *l, void *data) {
     }
 }
 
-static void window_handle_destroy(struct wl_listener *l, void *data) {
+static void window_handle_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, destroy);
+    struct Window* window = wl_container_of(l, window, destroy);
     window_destroy(window);
 }
 
-static void window_handle_request_move(struct wl_listener *l, void *data) {
+static void window_handle_request_move(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, request_move);
+    struct Window* window = wl_container_of(l, window, request_move);
     if (!layouts_is_tiled(wm.layout)) {
         cursor_begin_interactive(window, SEAT_OP_MOVE, 0);
     }
 }
 
-static void window_handle_request_resize(struct wl_listener *l, void *data) {
-    struct wlr_xdg_toplevel_resize_event *ev = data;
-    struct Window *window = wl_container_of(l, window, request_resize);
+static void window_handle_request_resize(struct wl_listener* l, void* data) {
+    struct wlr_xdg_toplevel_resize_event* ev = data;
+    struct Window* window = wl_container_of(l, window, request_resize);
 
     if (!layouts_is_tiled(wm.layout)) {
         cursor_begin_interactive(window, SEAT_OP_RESIZE, ev->edges);
     }
 }
 
-static void window_handle_request_maximize(struct wl_listener *l, void *data) {
+static void window_handle_request_maximize(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, request_maximize);
-    struct wlr_xdg_surface *surf = window->xdg_toplevel->base;
+    struct Window* window = wl_container_of(l, window, request_maximize);
+    struct wlr_xdg_surface* surf = window->xdg_toplevel->base;
     if (surf->initialized) { wlr_xdg_surface_schedule_configure(surf); }
 }
 
 static void
-window_handle_request_fullscreen(struct wl_listener *l, void *data) {
+window_handle_request_fullscreen(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, request_fullscreen);
+    struct Window* window = wl_container_of(l, window, request_fullscreen);
     if (!window->xdg_toplevel->base->initialized) return;
     window_set_fullscreen(window, window->xdg_toplevel->requested.fullscreen);
 }
 
-static void window_handle_request_minimize(struct wl_listener *l, void *data) {
+static void window_handle_request_minimize(struct wl_listener* l, void* data) {
     (void)l;
     (void)data;
 }
 
-static void window_handle_set_title(struct wl_listener *l, void *data) {
+static void window_handle_set_title(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, set_title);
-    const char *new_title =
+    struct Window* window = wl_container_of(l, window, set_title);
+    const char* new_title =
         window->xdg_toplevel->title ? window->xdg_toplevel->title : "";
 
-    const char *old_title = window->title ? window->title : "";
+    const char* old_title = window->title ? window->title : "";
     if (strcmp(new_title, old_title) == 0) return;
 
-    char *title_copy = strdup(new_title);
+    char* title_copy = strdup(new_title);
     if (title_copy == NULL) {
         log_err("unable to cache window title: OOM");
         return;
@@ -1017,17 +1017,17 @@ static void window_handle_set_title(struct wl_listener *l, void *data) {
     ipc_notify_window_meta(window);
 }
 
-static void window_handle_set_app_id(struct wl_listener *l, void *data) {
+static void window_handle_set_app_id(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, set_app_id);
-    const char *new_id =
+    struct Window* window = wl_container_of(l, window, set_app_id);
+    const char* new_id =
         window->xdg_toplevel->app_id ? window->xdg_toplevel->app_id : "";
 
-    const char *old_id = window->app_id ? window->app_id : "";
+    const char* old_id = window->app_id ? window->app_id : "";
     if (strcmp(new_id, old_id) == 0) return;
 
-    char *app_id_copy = strdup(new_id);
+    char* app_id_copy = strdup(new_id);
     if (app_id_copy == NULL) {
         log_err("unable to cache window app_id: OOM");
         return;
@@ -1043,9 +1043,9 @@ static void window_handle_set_app_id(struct wl_listener *l, void *data) {
     ipc_notify_window_meta(window);
 }
 
-struct Window *window_from_id(uint64_t id) {
+struct Window* window_from_id(uint64_t id) {
     if (id == 0) return NULL;
-    struct Window *w;
+    struct Window* w;
     wl_list_for_each(w, &wm.windows, link) {
         if (w->id == id && !w->closed) return w;
     }
@@ -1053,15 +1053,15 @@ struct Window *window_from_id(uint64_t id) {
     return NULL;
 }
 
-struct Window *window_from_scene_node(const struct wlr_scene_node *node) {
-    struct NodeTag *tag = node_tag_find(node);
+struct Window* window_from_scene_node(const struct wlr_scene_node* node) {
+    struct NodeTag* tag = node_tag_find(node);
     if (tag == NULL || tag->type != NODE_WINDOW) return NULL;
 
-    struct Window *w = wl_container_of(tag, w, node_tag);
+    struct Window* w = wl_container_of(tag, w, node_tag);
     return w;
 }
 
-void window_icon_set_pending(struct Window *w, struct Icon *icon) {
+void window_icon_set_pending(struct Window* w, struct Icon* icon) {
     if (w == NULL || w->closed) {
         icon_free(icon);
         free(icon);
@@ -1075,8 +1075,8 @@ void window_icon_set_pending(struct Window *w, struct Icon *icon) {
     w->pending_icon_cleared = (icon == NULL);
 }
 
-void window_create(struct wlr_xdg_toplevel *xdg_toplevel) {
-    struct Window *window = calloc(1, sizeof(*window));
+void window_create(struct wlr_xdg_toplevel* xdg_toplevel) {
+    struct Window* window = calloc(1, sizeof(*window));
     if (window == NULL) return;
 
     window->last_tl = -1;
@@ -1092,7 +1092,7 @@ void window_create(struct wlr_xdg_toplevel *xdg_toplevel) {
     window->space =
         window->output ? window->output->current_space : WINDOW_SPACE_UNSET;
 
-    struct wlr_scene_tree *parent = layer_for_layout(wm.layout);
+    struct wlr_scene_tree* parent = layer_for_layout(wm.layout);
     window->scene_tree =
         wlr_scene_xdg_surface_create(parent, xdg_toplevel->base);
 
@@ -1171,7 +1171,7 @@ void window_create(struct wlr_xdg_toplevel *xdg_toplevel) {
     wl_list_insert(wm.windows.prev, &window->link);
 }
 
-void window_destroy(struct Window *window) {
+void window_destroy(struct Window* window) {
     if (window->closed) return;
     if (window->mapped) window_do_unmap(window);
 
@@ -1179,7 +1179,7 @@ void window_destroy(struct Window *window) {
 
     if (window->xwayland_surface != NULL) window->xwayland_surface->data = NULL;
 
-    struct Window *child;
+    struct Window* child;
     wl_list_for_each(child, &wm.windows, link) {
         if (child == window || child->closed || !child->mapped) continue;
 
@@ -1286,8 +1286,8 @@ void window_destroy(struct Window *window) {
     free(window);
 }
 
-struct Window *window_focused(void) {
-    struct Window *w;
+struct Window* window_focused(void) {
+    struct Window* w;
     wl_list_for_each_reverse(w, &wm.focus_stack, focus_link) {
         if (w->closed || !w->mapped || w->space_hidden) continue;
         return w;
@@ -1296,17 +1296,17 @@ struct Window *window_focused(void) {
     return NULL;
 }
 
-struct Window *window_at(
-    double lx, double ly, struct wlr_surface **surface, double *sx, double *sy
+struct Window* window_at(
+    double lx, double ly, struct wlr_surface** surface, double* sx, double* sy
 ) {
     double nx = lx, ny = ly;
-    struct wlr_scene_node *node =
+    struct wlr_scene_node* node =
         wlr_scene_node_at(&server.scene->tree.node, nx, ny, &nx, &ny);
 
     if (node == NULL || node->type != WLR_SCENE_NODE_BUFFER) return NULL;
 
-    struct wlr_scene_buffer *buf = wlr_scene_buffer_from_node(node);
-    struct wlr_scene_surface *ssurf = wlr_scene_surface_try_from_buffer(buf);
+    struct wlr_scene_buffer* buf = wlr_scene_buffer_from_node(node);
+    struct wlr_scene_surface* ssurf = wlr_scene_surface_try_from_buffer(buf);
     if (ssurf == NULL) return NULL;
 
     *surface = ssurf->surface;
@@ -1316,7 +1316,7 @@ struct Window *window_at(
     return window_from_scene_node(node);
 }
 
-void window_set_position(struct Window *window, int32_t x, int32_t y) {
+void window_set_position(struct Window* window, int32_t x, int32_t y) {
     if (window->pos_valid && window->x == x && window->y == y) return;
 
     wlr_scene_node_set_position(&window->scene_tree->node, x, y);
@@ -1339,7 +1339,7 @@ void window_set_position(struct Window *window, int32_t x, int32_t y) {
 #endif
 }
 
-void window_set_size(struct Window *window, int32_t w, int32_t h) {
+void window_set_size(struct Window* window, int32_t w, int32_t h) {
     if (w < 1) w = 1;
     if (h < 1) h = 1;
 
@@ -1373,20 +1373,20 @@ void window_set_size(struct Window *window, int32_t w, int32_t h) {
     }
 #endif
 
-    struct wlr_xdg_surface *surf = window->xdg_toplevel->base;
+    struct wlr_xdg_surface* surf = window->xdg_toplevel->base;
     if (!surf->initialized) { return; }
     wlr_xdg_toplevel_set_size(window->xdg_toplevel, w, h);
     deco_update_position(window);
 }
 
-void window_set_tiled(struct Window *window, bool tiled) {
+void window_set_tiled(struct Window* window, bool tiled) {
 #ifdef XWAYLAND
     if (window->is_xwayland) {
         (void)tiled;
         return;
     }
 #endif
-    struct wlr_xdg_surface *surf = window->xdg_toplevel->base;
+    struct wlr_xdg_surface* surf = window->xdg_toplevel->base;
     if (!surf->initialized) return;
 
     if (tiled) {
@@ -1399,7 +1399,7 @@ void window_set_tiled(struct Window *window, bool tiled) {
     }
 }
 
-void window_set_clip(struct Window *window, int32_t w, int32_t h) {
+void window_set_clip(struct Window* window, int32_t w, int32_t h) {
 #ifdef XWAYLAND
     if (window->is_xwayland) {
         if (window->xw_surface_tree == NULL) return;
@@ -1417,7 +1417,7 @@ void window_set_clip(struct Window *window, int32_t w, int32_t h) {
     wlr_scene_subsurface_tree_set_clip(&window->scene_tree->node, &clip);
 }
 
-void window_clear_clip(struct Window *window) {
+void window_clear_clip(struct Window* window) {
 #ifdef XWAYLAND
     if (window->is_xwayland) {
         if (window->xw_surface_tree == NULL) return;
@@ -1437,7 +1437,7 @@ void window_clear_clip(struct Window *window) {
     wlr_scene_subsurface_tree_set_clip(&window->scene_tree->node, &geo);
 }
 
-void window_close(struct Window *window) {
+void window_close(struct Window* window) {
 #ifdef XWAYLAND
     if (window->is_xwayland) {
         wlr_xwayland_surface_close(window->xwayland_surface);
@@ -1447,7 +1447,7 @@ void window_close(struct Window *window) {
     wlr_xdg_toplevel_send_close(window->xdg_toplevel);
 }
 
-static void window_raise_self(struct Window *window) {
+static void window_raise_self(struct Window* window) {
     wlr_scene_node_raise_to_top(&window->scene_tree->node);
     deco_raise(window);
 
@@ -1456,10 +1456,10 @@ static void window_raise_self(struct Window *window) {
     }
 }
 
-void window_raise(struct Window *window) {
+void window_raise(struct Window* window) {
     if (window == NULL || window->closed) return;
 
-    struct Window *parent = window_parent(window);
+    struct Window* parent = window_parent(window);
 
     if (parent == NULL && !window->fullscreen && layouts_is_tiled(wm.layout)) {
         return;
@@ -1469,15 +1469,15 @@ void window_raise(struct Window *window) {
     window_raise_self(window);
 }
 
-void window_reparent(struct Window *window, bool to_float) {
+void window_reparent(struct Window* window, bool to_float) {
     if (window->closed) return;
 
-    struct wlr_scene_tree *target;
+    struct wlr_scene_tree* target;
 
     if (window->fullscreen) {
         target = server.fullscreen_tree;
     } else if (window_is_transient(window)) {
-        struct Window *parent = window_parent(window);
+        struct Window* parent = window_parent(window);
 
         // A dialog of a fullscreen parent must sit above the fullscreen tree.
         target = (parent != NULL && parent->fullscreen) ? server.fullscreen_tree
@@ -1494,29 +1494,29 @@ void window_reparent(struct Window *window, bool to_float) {
 }
 
 #ifdef XWAYLAND
-static void xw_handle_map(struct wl_listener *l, void *data) {
+static void xw_handle_map(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, xw_map);
+    struct Window* window = wl_container_of(l, window, xw_map);
     window_do_map(window);
 }
 
-static void xw_handle_unmap(struct wl_listener *l, void *data) {
+static void xw_handle_unmap(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, xw_unmap);
+    struct Window* window = wl_container_of(l, window, xw_unmap);
     window_do_unmap(window);
 }
 
-static void xw_handle_tree_destroy(struct wl_listener *l, void *data) {
+static void xw_handle_tree_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, xw_tree_destroy);
+    struct Window* window = wl_container_of(l, window, xw_tree_destroy);
     wl_list_remove(&window->xw_tree_destroy.link);
     window->xw_surface_tree = NULL;
 }
 
-static void xw_unbind(struct Window *window) {
+static void xw_unbind(struct Window* window) {
     if (window->xw_bound) {
         wl_list_remove(&window->xw_map.link);
         wl_list_remove(&window->xw_unmap.link);
@@ -1530,8 +1530,8 @@ static void xw_unbind(struct Window *window) {
     }
 }
 
-static void xw_bind(struct Window *window) {
-    struct wlr_surface *surface = window->xwayland_surface->surface;
+static void xw_bind(struct Window* window) {
+    struct wlr_surface* surface = window->xwayland_surface->surface;
     if (window->closed || window->xw_bound || surface == NULL) return;
 
     window->xw_surface_tree =
@@ -1561,32 +1561,32 @@ static void xw_bind(struct Window *window) {
     if (surface->mapped) { window_do_map(window); }
 }
 
-static void xw_handle_associate(struct wl_listener *l, void *data) {
+static void xw_handle_associate(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, xw_associate);
+    struct Window* window = wl_container_of(l, window, xw_associate);
     xw_bind(window);
 }
 
-static void xw_handle_dissociate(struct wl_listener *l, void *data) {
+static void xw_handle_dissociate(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, xw_dissociate);
+    struct Window* window = wl_container_of(l, window, xw_dissociate);
     if (window->mapped) window_do_unmap(window);
     xw_unbind(window);
 }
 
-static void xw_handle_destroy(struct wl_listener *l, void *data) {
+static void xw_handle_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, xw_destroy);
+    struct Window* window = wl_container_of(l, window, xw_destroy);
     window_destroy(window);
 }
 
-static void xw_handle_request_configure(struct wl_listener *l, void *data) {
+static void xw_handle_request_configure(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, xw_request_configure);
+    struct Window* window = wl_container_of(l, window, xw_request_configure);
     if (window->closed || window->xwayland_surface == NULL) return;
 
     int32_t x, y, w, h;
@@ -1615,28 +1615,28 @@ static void xw_handle_request_configure(struct wl_listener *l, void *data) {
     );
 }
 
-static void xw_handle_request_move(struct wl_listener *l, void *data) {
+static void xw_handle_request_move(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, xw_request_move);
+    struct Window* window = wl_container_of(l, window, xw_request_move);
     if (!layouts_is_tiled(wm.layout)) {
         cursor_begin_interactive(window, SEAT_OP_MOVE, 0);
     }
 }
 
-static void xw_handle_request_resize(struct wl_listener *l, void *data) {
-    struct wlr_xwayland_resize_event *ev = data;
+static void xw_handle_request_resize(struct wl_listener* l, void* data) {
+    struct wlr_xwayland_resize_event* ev = data;
 
-    struct Window *window = wl_container_of(l, window, xw_request_resize);
+    struct Window* window = wl_container_of(l, window, xw_request_resize);
     if (!layouts_is_tiled(wm.layout)) {
         cursor_begin_interactive(window, SEAT_OP_RESIZE, ev->edges);
     }
 }
 
-static void xw_handle_request_maximize(struct wl_listener *l, void *data) {
+static void xw_handle_request_maximize(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, xw_request_maximize);
+    struct Window* window = wl_container_of(l, window, xw_request_maximize);
 
     if (window->xwayland_surface) {
         wlr_xwayland_surface_set_maximized(
@@ -1645,53 +1645,53 @@ static void xw_handle_request_maximize(struct wl_listener *l, void *data) {
     }
 }
 
-static void xw_handle_request_fullscreen(struct wl_listener *l, void *data) {
+static void xw_handle_request_fullscreen(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, xw_request_fullscreen);
+    struct Window* window = wl_container_of(l, window, xw_request_fullscreen);
     if (!window->xwayland_surface) return;
     window_set_fullscreen(window, window->xwayland_surface->fullscreen);
 }
 
-static void xw_handle_request_minimize(struct wl_listener *l, void *data) {
+static void xw_handle_request_minimize(struct wl_listener* l, void* data) {
     (void)l;
     (void)data;
 }
 
-static void xw_handle_request_activate(struct wl_listener *l, void *data) {
+static void xw_handle_request_activate(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, xw_request_activate);
+    struct Window* window = wl_container_of(l, window, xw_request_activate);
     if (window->closed) return;
     if (window->space_hidden) wm_switch_space(window->space);
     seat_focus(window);
 }
 
-static void xw_handle_request_close(struct wl_listener *l, void *data) {
+static void xw_handle_request_close(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, xw_request_close);
+    struct Window* window = wl_container_of(l, window, xw_request_close);
     window_close(window);
 }
 
-static void xw_handle_set_parent(struct wl_listener *l, void *data) {
+static void xw_handle_set_parent(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, xw_set_parent);
+    struct Window* window = wl_container_of(l, window, xw_set_parent);
     window_sync_foreign_parent(window);
 }
 
-static void xw_handle_set_title(struct wl_listener *l, void *data) {
+static void xw_handle_set_title(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, xw_set_title);
-    const char *new_title =
+    struct Window* window = wl_container_of(l, window, xw_set_title);
+    const char* new_title =
         window->xwayland_surface->title ? window->xwayland_surface->title : "";
 
-    const char *old_title = window->title ? window->title : "";
+    const char* old_title = window->title ? window->title : "";
     if (strcmp(new_title, old_title) == 0) return;
 
-    char *copy = strdup(new_title);
+    char* copy = strdup(new_title);
     if (copy == NULL) {
         log_err("unable to cache x11 window title: OOM");
         return;
@@ -1709,17 +1709,17 @@ static void xw_handle_set_title(struct wl_listener *l, void *data) {
     ipc_notify_window_meta(window);
 }
 
-static void xw_handle_set_class(struct wl_listener *l, void *data) {
+static void xw_handle_set_class(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Window *window = wl_container_of(l, window, xw_set_class);
-    const char *new_id =
+    struct Window* window = wl_container_of(l, window, xw_set_class);
+    const char* new_id =
         window->xwayland_surface->class ? window->xwayland_surface->class : "";
 
-    const char *old_id = window->app_id ? window->app_id : "";
+    const char* old_id = window->app_id ? window->app_id : "";
     if (strcmp(new_id, old_id) == 0) return;
 
-    char *copy = strdup(new_id);
+    char* copy = strdup(new_id);
     if (copy == NULL) {
         log_err("Unable to cache x11 window class: OOM");
         return;
@@ -1736,8 +1736,8 @@ static void xw_handle_set_class(struct wl_listener *l, void *data) {
     ipc_notify_window_meta(window);
 }
 
-void window_create_xwayland(struct wlr_xwayland_surface *xw) {
-    struct Window *window = calloc(1, sizeof(*window));
+void window_create_xwayland(struct wlr_xwayland_surface* xw) {
+    struct Window* window = calloc(1, sizeof(*window));
     if (window == NULL) {
         wlr_xwayland_surface_close(xw);
         return;
@@ -1757,7 +1757,7 @@ void window_create_xwayland(struct wlr_xwayland_surface *xw) {
     window->space =
         window->output ? window->output->current_space : WINDOW_SPACE_UNSET;
 
-    struct wlr_scene_tree *parent = layer_for_layout(wm.layout);
+    struct wlr_scene_tree* parent = layer_for_layout(wm.layout);
     window->scene_tree = wlr_scene_tree_create(parent);
     if (window->scene_tree == NULL) {
         free(window);

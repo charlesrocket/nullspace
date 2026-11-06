@@ -39,15 +39,15 @@ double animation_ease(double t, enum AnimationType type);
 int64_t animation_now_ms(void);
 
 void animation_start(
-    struct Animation *a, enum AnimationType type,
-    const struct AnimationBox *from, const struct AnimationBox *to,
+    struct Animation* a, enum AnimationType type,
+    const struct AnimationBox* from, const struct AnimationBox* to,
     int32_t duration_ms
 );
 
-bool animation_step(struct Animation *a, int64_t now_ms);
+bool animation_step(struct Animation* a, int64_t now_ms);
 
 static inline bool
-animation_box_eq(const struct AnimationBox *a, const struct AnimationBox *b) {
+animation_box_eq(const struct AnimationBox* a, const struct AnimationBox* b) {
     return a->x == b->x && a->y == b->y && a->width == b->width
         && a->height == b->height;
 }

@@ -35,8 +35,8 @@ enum PrimaryPhase {
 static struct wl_listener new_surface_listener;
 static struct wl_listener ready_listener;
 
-static xcb_connection_t *conn = NULL;
-static struct wl_event_source *conn_source = NULL;
+static xcb_connection_t* conn = NULL;
+static struct wl_event_source* conn_source = NULL;
 static xcb_window_t root = XCB_NONE;
 
 static char display_name[XWL_NAME_MAX];
@@ -59,7 +59,7 @@ static int32_t info_idx = 0;
 
 static void xwayland_primary_apply(void);
 static void xwayland_primary_start(void);
-static int32_t xwayland_primary_ready(int32_t fd, uint32_t mask, void *data);
+static int32_t xwayland_primary_ready(int32_t fd, uint32_t mask, void* data);
 
 static bool xwayland_alive(void) {
     return server.xwayland != NULL && server.xwayland->xwm != NULL;
@@ -204,10 +204,10 @@ static void xwayland_primary_start(void) {
 }
 
 static void xwayland_primary_drain_events(void) {
-    xcb_generic_event_t *event;
+    xcb_generic_event_t* event;
     while ((event = xcb_poll_for_event(conn)) != NULL) {
         if (event->response_type == 0) {
-            xcb_generic_error_t *err = (xcb_generic_error_t *)event;
+            xcb_generic_error_t* err = (xcb_generic_error_t*)event;
             log_warn(
                 "X error %u (major %u, minor %u)", (unsigned)err->error_code,
                 (unsigned)err->major_code, (unsigned)err->minor_code
@@ -218,7 +218,7 @@ static void xwayland_primary_drain_events(void) {
     }
 }
 
-static int32_t xwayland_primary_ready(int32_t fd, uint32_t mask, void *data) {
+static int32_t xwayland_primary_ready(int32_t fd, uint32_t mask, void* data) {
     (void)fd;
     (void)data;
 
@@ -235,11 +235,11 @@ static int32_t xwayland_primary_ready(int32_t fd, uint32_t mask, void *data) {
     }
 
     if (phase == PHASE_RESOURCES) {
-        xcb_randr_get_screen_resources_current_reply_t *resources = NULL;
-        xcb_generic_error_t *err = NULL;
+        xcb_randr_get_screen_resources_current_reply_t* resources = NULL;
+        xcb_generic_error_t* err = NULL;
 
         if (!xcb_poll_for_reply(
-                conn, resources_cookie.sequence, (void **)&resources, &err
+                conn, resources_cookie.sequence, (void**)&resources, &err
             )) {
             return 0;
         }
@@ -256,7 +256,7 @@ static int32_t xwayland_primary_ready(int32_t fd, uint32_t mask, void *data) {
 
         int32_t len =
             xcb_randr_get_screen_resources_current_outputs_length(resources);
-        const xcb_randr_output_t *ids =
+        const xcb_randr_output_t* ids =
             xcb_randr_get_screen_resources_current_outputs(resources);
 
         if (len > XWL_CACHE_MAX) {
@@ -288,11 +288,11 @@ static int32_t xwayland_primary_ready(int32_t fd, uint32_t mask, void *data) {
 
     if (phase == PHASE_INFO) {
         while (info_idx < outputs_len) {
-            xcb_randr_get_output_info_reply_t *info = NULL;
-            xcb_generic_error_t *err = NULL;
+            xcb_randr_get_output_info_reply_t* info = NULL;
+            xcb_generic_error_t* err = NULL;
 
             if (!xcb_poll_for_reply(
-                    conn, info_cookies[info_idx].sequence, (void **)&info, &err
+                    conn, info_cookies[info_idx].sequence, (void**)&info, &err
                 )) {
                 return 0;
             }
@@ -306,8 +306,8 @@ static int32_t xwayland_primary_ready(int32_t fd, uint32_t mask, void *data) {
 
             if (info) {
                 int32_t len = xcb_randr_get_output_info_name_length(info);
-                const char *name =
-                    (const char *)xcb_randr_get_output_info_name(info);
+                const char* name =
+                    (const char*)xcb_randr_get_output_info_name(info);
 
                 if (name && len > 0 && cache_len < XWL_CACHE_MAX) {
                     int32_t copy =
@@ -340,8 +340,8 @@ static int32_t xwayland_primary_ready(int32_t fd, uint32_t mask, void *data) {
     return 0;
 }
 
-static void xwayland_primary_set(struct Output *out) {
-    const char *display =
+static void xwayland_primary_set(struct Output* out) {
+    const char* display =
         server.xwayland ? server.xwayland->display_name : NULL;
 
     if (!display || !out || !out->wlr_output || !out->wlr_output->name) {
@@ -370,7 +370,7 @@ void xwayland_primary_update(void) {
     cache_valid = false;
     cache_stale = true;
 
-    struct Output *out = output_primary();
+    struct Output* out = output_primary();
     if (out) {
         xwayland_primary_set(out);
     } else {
@@ -379,18 +379,18 @@ void xwayland_primary_update(void) {
     }
 }
 
-static void xw_handle_ready(struct wl_listener *l, void *data) {
+static void xw_handle_ready(struct wl_listener* l, void* data) {
     (void)l;
     (void)data;
 
     wlr_xcursor_manager_load(server.cursor_mgr, 1);
 
-    struct wlr_xcursor *xcursor =
+    struct wlr_xcursor* xcursor =
         wlr_xcursor_manager_get_xcursor(server.cursor_mgr, "default", 1);
 
     if (xcursor != NULL) {
-        struct wlr_xcursor_image *image = xcursor->images[0];
-        struct wlr_buffer *buffer = wlr_xcursor_image_get_buffer(image);
+        struct wlr_xcursor_image* image = xcursor->images[0];
+        struct wlr_buffer* buffer = wlr_xcursor_image_get_buffer(image);
 
         wlr_xwayland_set_cursor(
             server.xwayland, buffer, (int32_t)image->hotspot_x,
@@ -409,9 +409,9 @@ static void xw_handle_ready(struct wl_listener *l, void *data) {
 }
 
 struct XWaylandUnmanaged {
-    struct wlr_xwayland_surface *xw;
-    struct wlr_scene_tree *tree;
-    struct wlr_scene_tree *surface_tree;
+    struct wlr_xwayland_surface* xw;
+    struct wlr_scene_tree* tree;
+    struct wlr_scene_tree* surface_tree;
     struct wl_listener destroy;
     struct wl_listener set_geometry;
     struct wl_listener request_configure;
@@ -420,21 +420,21 @@ struct XWaylandUnmanaged {
     struct wl_listener surface_tree_destroy;
 };
 
-static void xw_unmanaged_sync_position(struct XWaylandUnmanaged *u) {
+static void xw_unmanaged_sync_position(struct XWaylandUnmanaged* u) {
     wlr_scene_node_set_position(&u->tree->node, u->xw->x, u->xw->y);
 }
 
-static void xw_unmanaged_set_geometry(struct wl_listener *l, void *data) {
+static void xw_unmanaged_set_geometry(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct XWaylandUnmanaged *u = wl_container_of(l, u, set_geometry);
+    struct XWaylandUnmanaged* u = wl_container_of(l, u, set_geometry);
     xw_unmanaged_sync_position(u);
 }
 
-static void xw_unmanaged_request_configure(struct wl_listener *l, void *data) {
+static void xw_unmanaged_request_configure(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct XWaylandUnmanaged *u = wl_container_of(l, u, request_configure);
+    struct XWaylandUnmanaged* u = wl_container_of(l, u, request_configure);
 
     int16_t x = u->xw->x;
     int16_t y = u->xw->y;
@@ -448,15 +448,15 @@ static void xw_unmanaged_request_configure(struct wl_listener *l, void *data) {
 }
 
 static void
-xw_unmanaged_surface_tree_destroyed(struct wl_listener *l, void *data) {
+xw_unmanaged_surface_tree_destroyed(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct XWaylandUnmanaged *u = wl_container_of(l, u, surface_tree_destroy);
+    struct XWaylandUnmanaged* u = wl_container_of(l, u, surface_tree_destroy);
     wl_list_remove(&u->surface_tree_destroy.link);
     u->surface_tree = NULL;
 }
 
-static void xw_unmanaged_unbind(struct XWaylandUnmanaged *u) {
+static void xw_unmanaged_unbind(struct XWaylandUnmanaged* u) {
     if (u->surface_tree == NULL) return;
 
     wl_list_remove(&u->surface_tree_destroy.link);
@@ -464,7 +464,7 @@ static void xw_unmanaged_unbind(struct XWaylandUnmanaged *u) {
     u->surface_tree = NULL;
 }
 
-static void xw_unmanaged_bind(struct XWaylandUnmanaged *u) {
+static void xw_unmanaged_bind(struct XWaylandUnmanaged* u) {
     if (u->surface_tree != NULL || u->xw->surface == NULL) return;
 
     u->surface_tree = wlr_scene_subsurface_tree_create(u->tree, u->xw->surface);
@@ -479,24 +479,24 @@ static void xw_unmanaged_bind(struct XWaylandUnmanaged *u) {
     );
 }
 
-static void xw_unmanaged_associate(struct wl_listener *l, void *data) {
+static void xw_unmanaged_associate(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct XWaylandUnmanaged *u = wl_container_of(l, u, associate);
+    struct XWaylandUnmanaged* u = wl_container_of(l, u, associate);
     xw_unmanaged_bind(u);
 }
 
-static void xw_unmanaged_dissociate(struct wl_listener *l, void *data) {
+static void xw_unmanaged_dissociate(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct XWaylandUnmanaged *u = wl_container_of(l, u, dissociate);
+    struct XWaylandUnmanaged* u = wl_container_of(l, u, dissociate);
     xw_unmanaged_unbind(u);
 }
 
-static void xw_unmanaged_destroy(struct wl_listener *l, void *data) {
+static void xw_unmanaged_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct XWaylandUnmanaged *u = wl_container_of(l, u, destroy);
+    struct XWaylandUnmanaged* u = wl_container_of(l, u, destroy);
 
     xw_unmanaged_unbind(u);
 
@@ -511,8 +511,8 @@ static void xw_unmanaged_destroy(struct wl_listener *l, void *data) {
     free(u);
 }
 
-static void xwayland_unmanaged_create(struct wlr_xwayland_surface *xw) {
-    struct XWaylandUnmanaged *u = calloc(1, sizeof(*u));
+static void xwayland_unmanaged_create(struct wlr_xwayland_surface* xw) {
+    struct XWaylandUnmanaged* u = calloc(1, sizeof(*u));
     if (u == NULL) {
         wlr_xwayland_surface_close(xw);
         return;
@@ -547,10 +547,10 @@ static void xwayland_unmanaged_create(struct wlr_xwayland_surface *xw) {
     xw_unmanaged_bind(u); // no-op unless a surface is already associated
 }
 
-static void xw_handle_new_surface(struct wl_listener *l, void *data) {
+static void xw_handle_new_surface(struct wl_listener* l, void* data) {
     (void)l;
 
-    struct wlr_xwayland_surface *xw = data;
+    struct wlr_xwayland_surface* xw = data;
 
     if (xw->override_redirect) {
         xwayland_unmanaged_create(xw);
@@ -559,7 +559,7 @@ static void xw_handle_new_surface(struct wl_listener *l, void *data) {
     }
 }
 
-bool xwayland_init(struct wl_display *display) {
+bool xwayland_init(struct wl_display* display) {
     if (!config.xwayland) {
         log_info("Server disabled");
         return false;

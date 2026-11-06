@@ -27,14 +27,14 @@ struct SpaceRule {
     enum Layout layout;
 };
 
-static struct WindowRule *window_rules;
-static struct SpaceRule *space_rules;
+static struct WindowRule* window_rules;
+static struct SpaceRule* space_rules;
 
 static size_t window_rule_count, space_rule_count;
 
 static bool rules_loaded;
 
-static bool compile(regex_t *re, const char *pattern, const char *spec) {
+static bool compile(regex_t* re, const char* pattern, const char* spec) {
     int err = regcomp(re, pattern, REG_EXTENDED | REG_ICASE | REG_NOSUB);
     if (err == 0) return true;
 
@@ -44,13 +44,13 @@ static bool compile(regex_t *re, const char *pattern, const char *spec) {
     return false;
 }
 
-static void window_rule_free(struct WindowRule *r) {
+static void window_rule_free(struct WindowRule* r) {
     if (r->has_app_id) regfree(&r->app_id);
     if (r->has_title) regfree(&r->title);
     memset(r, 0, sizeof(*r));
 }
 
-static bool parse_bool_value(const char *val, bool *out) {
+static bool parse_bool_value(const char* val, bool* out) {
     if (strcasecmp(val, "1") == 0 || strcasecmp(val, "true") == 0
         || strcasecmp(val, "on") == 0 || strcasecmp(val, "yes") == 0) {
         *out = true;
@@ -66,19 +66,19 @@ static bool parse_bool_value(const char *val, bool *out) {
     return false;
 }
 
-static bool parse_field(char *field, const char *spec, struct WindowRule *r) {
+static bool parse_field(char* field, const char* spec, struct WindowRule* r) {
     field = ns_trim(field);
     if (*field == '\0') return true;
 
-    char *colon = strchr(field, ':');
+    char* colon = strchr(field, ':');
     if (colon == NULL) {
         log_err("window rule \"%s\": expected key:value", spec);
         return false;
     }
 
     *colon = '\0';
-    const char *key = ns_trim(field);
-    const char *val = ns_trim(colon + 1);
+    const char* key = ns_trim(field);
+    const char* val = ns_trim(colon + 1);
 
     if (*val == '\0') {
         log_err("window rule \"%s\": empty value for \"%s\"", spec, key);
@@ -96,7 +96,7 @@ static bool parse_field(char *field, const char *spec, struct WindowRule *r) {
     }
 
     if (strcmp(key, "space") == 0 && !r->has_space) {
-        char *end = NULL;
+        char* end = NULL;
         errno = 0;
         long n = strtol(val, &end, 10);
 
@@ -134,8 +134,8 @@ static bool parse_field(char *field, const char *spec, struct WindowRule *r) {
     return false;
 }
 
-static bool parse_space_rule(const char *spec, struct SpaceRule *out) {
-    char *copy = strdup(spec);
+static bool parse_space_rule(const char* spec, struct SpaceRule* out) {
+    char* copy = strdup(spec);
     if (copy == NULL) {
         log_err("space rule \"%s\": OOM", spec);
         return false;
@@ -146,11 +146,11 @@ static bool parse_space_rule(const char *spec, struct SpaceRule *out) {
     bool has_layout = false;
     bool ok = true;
 
-    for (char *cur = copy; ok && cur != NULL;) {
-        char *next = strchr(cur, ',');
+    for (char* cur = copy; ok && cur != NULL;) {
+        char* next = strchr(cur, ',');
         if (next != NULL) *next++ = '\0';
 
-        char *colon = strchr(cur, ':');
+        char* colon = strchr(cur, ':');
         if (colon == NULL) {
             log_err("space rule \"%s\": expected key:value", spec);
             ok = false;
@@ -158,8 +158,8 @@ static bool parse_space_rule(const char *spec, struct SpaceRule *out) {
         }
 
         *colon = '\0';
-        const char *key = ns_trim(cur);
-        const char *val = ns_trim(colon + 1);
+        const char* key = ns_trim(cur);
+        const char* val = ns_trim(colon + 1);
 
         if (*val == '\0') {
             log_err("space rule \"%s\": empty value for \"%s\"", spec, key);
@@ -230,7 +230,7 @@ static void space_rules_init(void) {
     }
 }
 
-bool rules_space_layout(int space, enum Layout *out) {
+bool rules_space_layout(int space, enum Layout* out) {
     // Later rules override earlier ones.
     for (size_t i = space_rule_count; i > 0; i--) {
         if (space_rules[i - 1].space == space) {
@@ -242,18 +242,18 @@ bool rules_space_layout(int space, enum Layout *out) {
     return false;
 }
 
-static bool parse_rule(const char *spec, struct WindowRule *r) {
+static bool parse_rule(const char* spec, struct WindowRule* r) {
     memset(r, 0, sizeof(*r));
 
-    char *copy = strdup(spec);
+    char* copy = strdup(spec);
     if (copy == NULL) {
         log_err("window rule \"%s\": OOM", spec);
         return false;
     }
 
     bool ok = true;
-    for (char *cur = copy; ok && cur != NULL;) {
-        char *next = strchr(cur, ',');
+    for (char* cur = copy; ok && cur != NULL;) {
+        char* next = strchr(cur, ',');
         if (next != NULL) *next++ = '\0';
 
         ok = parse_field(cur, spec, r);
@@ -321,7 +321,7 @@ void rules_free(void) {
 }
 
 bool rules_window_match(
-    const char *app_id, const char *title, struct WindowRuleActions *out
+    const char* app_id, const char* title, struct WindowRuleActions* out
 ) {
     if (out == NULL) return false;
 
@@ -331,7 +331,7 @@ bool rules_window_match(
 
     bool hit = false;
     for (size_t i = 0; i < window_rule_count; i++) {
-        const struct WindowRule *r = &window_rules[i];
+        const struct WindowRule* r = &window_rules[i];
 
         if (r->has_app_id && regexec(&r->app_id, app_id, 0, NULL, 0) != 0)
             continue;

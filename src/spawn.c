@@ -20,15 +20,15 @@
 #define ACT_LEN   (sizeof(ACT_PREFIX) - 1)
 #define SID_LEN   (sizeof(SID_PREFIX) - 1)
 
-extern char **environ;
+extern char** environ;
 
 static const char ACT_PREFIX[] = "XDG_ACTIVATION_TOKEN=";
 static const char SID_PREFIX[] = "DESKTOP_STARTUP_ID=";
 
 struct SpawnEnv {
-    char **envp;
-    char *token_activation;
-    char *token_startup;
+    char** envp;
+    char* token_activation;
+    char* token_startup;
 };
 
 static void restore_signals(void) {
@@ -38,7 +38,7 @@ static void restore_signals(void) {
     signal(SIGPIPE, SIG_DFL);
 }
 
-static bool resolve_path(const char *cmd, char *out, size_t out_size) {
+static bool resolve_path(const char* cmd, char* out, size_t out_size) {
     if (cmd == NULL || *cmd == '\0') return false;
 
     if (strchr(cmd, '/') != NULL) {
@@ -46,12 +46,12 @@ static bool resolve_path(const char *cmd, char *out, size_t out_size) {
         return access(out, X_OK) == 0;
     }
 
-    const char *path = getenv("PATH");
+    const char* path = getenv("PATH");
     if (path == NULL) path = "/usr/local/bin:/usr/bin:/bin";
 
-    const char *p = path;
+    const char* p = path;
     while (*p != '\0') {
-        const char *end = strchr(p, ':');
+        const char* end = strchr(p, ':');
         size_t len = end ? (size_t)(end - p) : strlen(p);
 
         if (len > 0 && len < out_size) {
@@ -68,7 +68,7 @@ static bool resolve_path(const char *cmd, char *out, size_t out_size) {
     return false;
 }
 
-static bool build_env(const char *token_name, struct SpawnEnv *out) {
+static bool build_env(const char* token_name, struct SpawnEnv* out) {
     out->envp = NULL;
     out->token_activation = NULL;
     out->token_startup = NULL;
@@ -119,7 +119,7 @@ static bool build_env(const char *token_name, struct SpawnEnv *out) {
     return true;
 }
 
-static void free_env(struct SpawnEnv *env) {
+static void free_env(struct SpawnEnv* env) {
     free(env->token_activation);
     free(env->token_startup);
     free(env->envp);
@@ -129,14 +129,14 @@ static void free_env(struct SpawnEnv *env) {
     env->token_startup = NULL;
 }
 
-static char **build_argv(const char *const *argv, const char *shell_cmd) {
+static char** build_argv(const char* const* argv, const char* shell_cmd) {
     if (shell_cmd != NULL) {
-        char **out = calloc(4, sizeof(*out));
+        char** out = calloc(4, sizeof(*out));
         if (out == NULL) return NULL;
 
-        out[0] = (char *)"/bin/sh";
-        out[1] = (char *)"-c";
-        out[2] = (char *)shell_cmd;
+        out[0] = (char*)"/bin/sh";
+        out[1] = (char*)"-c";
+        out[2] = (char*)shell_cmd;
         out[3] = NULL;
 
         return out;
@@ -145,15 +145,15 @@ static char **build_argv(const char *const *argv, const char *shell_cmd) {
     size_t n = 0;
     while (argv[n] != NULL) n++;
 
-    char **out = malloc((n + 1) * sizeof(*out));
+    char** out = malloc((n + 1) * sizeof(*out));
     if (out == NULL) return NULL;
 
-    for (size_t i = 0; i < n; i++) out[i] = (char *)argv[i];
+    for (size_t i = 0; i < n; i++) out[i] = (char*)argv[i];
     out[n] = NULL;
     return out;
 }
 
-static int do_spawn(const char *const *argv, const char *shell_cmd) {
+static int do_spawn(const char* const* argv, const char* shell_cmd) {
     if (argv != NULL) {
         if (argv[0] == NULL) {
             log_warn("Empty argv");
@@ -165,7 +165,7 @@ static int do_spawn(const char *const *argv, const char *shell_cmd) {
         return -1;
     }
 
-    const char *token_name = activation_mint_spawn_token();
+    const char* token_name = activation_mint_spawn_token();
 
     char exe[PATH_MAX];
     if (shell_cmd != NULL) {
@@ -177,7 +177,7 @@ static int do_spawn(const char *const *argv, const char *shell_cmd) {
         }
     }
 
-    char **exec_argv = build_argv(argv, shell_cmd);
+    char** exec_argv = build_argv(argv, shell_cmd);
     if (exec_argv == NULL) return -1;
 
     struct SpawnEnv env;
@@ -212,5 +212,5 @@ static int do_spawn(const char *const *argv, const char *shell_cmd) {
     return 0;
 }
 
-int spawn(const char *const *argv) { return do_spawn(argv, NULL); }
-int spawn_shell(const char *cmdline) { return do_spawn(NULL, cmdline); }
+int spawn(const char* const* argv) { return do_spawn(argv, NULL); }
+int spawn_shell(const char* cmdline) { return do_spawn(NULL, cmdline); }

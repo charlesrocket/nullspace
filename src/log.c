@@ -9,7 +9,7 @@
 
 static enum LogLevel current_level = LOG_INFO;
 
-static const char *const LEVEL_NAMES[] = {
+static const char* const LEVEL_NAMES[] = {
     [LOG_TRACE] = "trace", [LOG_DEBUG] = "debug", [LOG_INFO] = "info",
     [LOG_WARN] = "warn",   [LOG_ERROR] = "error",
 };
@@ -26,7 +26,7 @@ static enum wlr_log_importance to_wlr(enum LogLevel lvl) {
     return WLR_INFO;
 }
 
-static bool parse_level(const char *s, enum LogLevel *out) {
+static bool parse_level(const char* s, enum LogLevel* out) {
     for (int i = 0; i < LOG_ERROR + 1; i++) {
         if (strcasecmp(s, LEVEL_NAMES[i]) == 0) {
             *out = (enum LogLevel)i;
@@ -43,7 +43,7 @@ static bool parse_level(const char *s, enum LogLevel *out) {
 }
 
 void log_init(void) {
-    const char *env = getenv("NULLSPACE_LOG_LEVEL");
+    const char* env = getenv("NULLSPACE_LOG_LEVEL");
     if (env && *env && !parse_level(env, &current_level))
         current_level = LOG_INFO;
 
@@ -58,17 +58,17 @@ void log_set_level(enum LogLevel level) {
 enum LogLevel log_get_level(void) { return current_level; }
 
 void log_msg(
-    enum LogLevel level, const char *topic, const char *file, int line,
-    const char *fmt, ...
+    enum LogLevel level, const char* topic, const char* file, int line,
+    const char* fmt, ...
 ) {
     if (level < current_level) return;
 
     char prefix[128] = "";
     if (topic && *topic) snprintf(prefix, sizeof prefix, "[%s] ", topic);
 
-    const char *base = NULL;
+    const char* base = NULL;
     if (file) {
-        const char *slash = strrchr(file, '/');
+        const char* slash = strrchr(file, '/');
         base = slash ? slash + 1 : file;
     }
 
@@ -76,7 +76,7 @@ void log_msg(
     va_start(args, fmt);
 
     size_t len = strlen(prefix) + strlen(fmt) + 64;
-    char *full = malloc(len);
+    char* full = malloc(len);
     if (full != NULL) {
         if (base != NULL)
             snprintf(full, len, "%s%s [%s:%d]", prefix, fmt, base, line);

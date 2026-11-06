@@ -13,10 +13,10 @@ struct wlr_scene_tree;
 struct wlr_surface;
 
 struct LayerSurface {
-    struct wlr_layer_surface_v1 *layer_surface;
-    struct wlr_scene_tree *scene_tree;
-    struct wlr_scene_tree *popup_tree;
-    struct Output *output;
+    struct wlr_layer_surface_v1* layer_surface;
+    struct wlr_scene_tree* scene_tree;
+    struct wlr_scene_tree* popup_tree;
+    struct Output* output;
     struct NodeTag node_tag;
 
     struct wl_list link; // WindowManager.layer_surfaces
@@ -32,6 +32,6 @@ struct LayerSurface {
     bool mapped;
 };
 
-void layers_handle_new_surface(struct wl_listener *listener, void *data);
-struct LayerSurface *layer_surface_from_wlr_surface(struct wlr_surface *surface
+void layers_handle_new_surface(struct wl_listener* listener, void* data);
+struct LayerSurface* layer_surface_from_wlr_surface(struct wlr_surface* surface
 );

@@ -24,9 +24,9 @@
 #define IO_TIMEOUT_SEC 5
 
 struct CtlCommand {
-    const char *name;
-    const char *usage;
-    const char *desc;
+    const char* name;
+    const char* usage;
+    const char* desc;
 };
 
 static const struct CtlCommand COMMANDS[] = {
@@ -51,8 +51,8 @@ static const struct CtlCommand COMMANDS[] = {
 };
 
 struct LayoutEntry {
-    const char *name;
-    const char *desc;
+    const char* name;
+    const char* desc;
 };
 
 static const struct LayoutEntry layout_table[] = {
@@ -93,13 +93,13 @@ static const struct IpcKeyMeta nctl_keys[] = {
 };
 
 struct Style {
-    const char *bold;
-    const char *head;
-    const char *reset;
+    const char* bold;
+    const char* head;
+    const char* reset;
 };
 
 static struct Style style_for(int fd) {
-    const char *no_color = getenv("NO_COLOR");
+    const char* no_color = getenv("NO_COLOR");
     bool on = isatty(fd) && !(no_color != NULL && *no_color != '\0');
     if (on) { return (struct Style){"\033[1m", "\033[1m\033[4m", "\033[0m"}; }
 
@@ -111,7 +111,7 @@ struct Cmd {
     size_t len;
 };
 
-static bool cmd_append(struct Cmd *c, const char *s) {
+static bool cmd_append(struct Cmd* c, const char* s) {
     const size_t room = CMD_MAX - 1 - c->len;
     const size_t n = strlcpy(c->buf + c->len, s, room);
 
@@ -125,7 +125,7 @@ static bool cmd_append(struct Cmd *c, const char *s) {
 }
 
 // "switch-space" -> "SWITCH_SPACE"
-static bool cmd_append_wire(struct Cmd *c, const char *name) {
+static bool cmd_append_wire(struct Cmd* c, const char* name) {
     const size_t start = c->len;
 
     if (!cmd_append(c, name)) { return false; }
@@ -141,12 +141,12 @@ static bool cmd_append_wire(struct Cmd *c, const char *name) {
     return true;
 }
 
-static void cmd_seal(struct Cmd *c) {
+static void cmd_seal(struct Cmd* c) {
     c->buf[c->len++] = '\n';
     c->buf[c->len] = '\0';
 }
 
-static const struct CtlCommand *find_command(const char *name) {
+static const struct CtlCommand* find_command(const char* name) {
     for (size_t i = 0; i < nitems(COMMANDS); i++) {
         if (strcmp(COMMANDS[i].name, name) == 0) { return &COMMANDS[i]; }
     }
@@ -154,7 +154,7 @@ static const struct CtlCommand *find_command(const char *name) {
     return NULL;
 }
 
-static void usage(FILE *out) {
+static void usage(FILE* out) {
     const struct Style style = style_for(fileno(out));
 
     fputs(style.bold, out);
@@ -174,7 +174,7 @@ static void usage(FILE *out) {
     );
 }
 
-static void put_col(const char *s, size_t w) {
+static void put_col(const char* s, size_t w) {
     size_t n = strlen(s);
 
     fputs(s, stdout);
@@ -182,14 +182,14 @@ static void put_col(const char *s, size_t w) {
     putchar(' ');
 }
 
-static void put_heading(const struct Style *st, const char *title) {
+static void put_heading(const struct Style* st, const char* title) {
     fputs(st->head, stdout);
     fputs(title, stdout);
     fputs(st->reset, stdout);
     fputs("\n\n", stdout);
 }
 
-static void list_commands(const struct Style *st) {
+static void list_commands(const struct Style* st) {
     put_heading(st, "COMMANDS");
     for (size_t i = 0; i < nitems(COMMANDS); i++) {
         fputs("  ", stdout);
@@ -201,7 +201,7 @@ static void list_commands(const struct Style *st) {
     putchar('\n');
 }
 
-static void list_layouts(const struct Style *st) {
+static void list_layouts(const struct Style* st) {
     put_heading(st, "LAYOUTS");
     for (size_t i = 0; i < nitems(layout_table); i++) {
         fputs("  ", stdout);
@@ -214,7 +214,7 @@ static void list_layouts(const struct Style *st) {
 }
 
 static void list_keys(
-    const struct Style *st, const char *title, enum IpcAccess want,
+    const struct Style* st, const char* title, enum IpcAccess want,
     bool show_range
 ) {
     size_t name_w = 0, desc_w = 0;
@@ -222,7 +222,7 @@ static void list_keys(
     put_heading(st, title);
 
     for (size_t i = 0; i < nitems(nctl_keys); i++) {
-        const struct IpcKeyMeta *k = &nctl_keys[i];
+        const struct IpcKeyMeta* k = &nctl_keys[i];
         size_t n;
 
         if ((k->access & want) == 0) { continue; }
@@ -237,7 +237,7 @@ static void list_keys(
     }
 
     for (size_t i = 0; i < nitems(nctl_keys); i++) {
-        const struct IpcKeyMeta *k = &nctl_keys[i];
+        const struct IpcKeyMeta* k = &nctl_keys[i];
 
         if ((k->access & want) == 0) { continue; }
 
@@ -260,17 +260,17 @@ static void list_keys(
     putchar('\n');
 }
 
-static void list_getters(const struct Style *st) {
+static void list_getters(const struct Style* st) {
     list_keys(st, "GETTERS", IPC_A_R, false);
 }
 
-static void list_setters(const struct Style *st) {
+static void list_setters(const struct Style* st) {
     list_keys(st, "SETTERS", IPC_A_W, true);
 }
 
 static const struct {
-    const char *name;
-    void (*print)(const struct Style *);
+    const char* name;
+    void (*print)(const struct Style*);
 } LIST_TOPICS[] = {
     {"commands", list_commands},
     { "layouts",  list_layouts},
@@ -278,7 +278,7 @@ static const struct {
     {     "set",  list_setters},
 };
 
-static int list_all(const char *topic) {
+static int list_all(const char* topic) {
     const struct Style style = style_for(STDOUT_FILENO);
     const bool all = (topic == NULL || *topic == '\0');
     bool matched = false;
@@ -307,7 +307,7 @@ static bool is_token_end(char c) {
     return c == '\0' || c == ' ' || c == '\t' || c == '\r' || c == '\n';
 }
 
-static bool is_subscribe(const char *line) {
+static bool is_subscribe(const char* line) {
     static const char word[] = "SUBSCRIBE";
     const size_t n = sizeof(word) - 1;
 
@@ -316,7 +316,7 @@ static bool is_subscribe(const char *line) {
 }
 
 static int
-build_command(struct Cmd *c, int argc, char *argv[], bool *streaming) {
+build_command(struct Cmd* c, int argc, char* argv[], bool* streaming) {
     const bool raw = (strcmp(argv[1], "raw") == 0);
 
     if (raw && argc < 3) {
@@ -335,7 +335,7 @@ build_command(struct Cmd *c, int argc, char *argv[], bool *streaming) {
     c->buf[0] = '\0';
 
     if (!raw) {
-        const struct CtlCommand *cc = find_command(argv[1]);
+        const struct CtlCommand* cc = find_command(argv[1]);
         if (cc == NULL) {
             warnx(
                 "unknown command '%s' (see `nctl list commands`; "
@@ -367,7 +367,7 @@ build_command(struct Cmd *c, int argc, char *argv[], bool *streaming) {
     return 0;
 }
 
-static int connect_socket(const char *path, bool streaming) {
+static int connect_socket(const char* path, bool streaming) {
     struct sockaddr_un addr = {.sun_family = AF_UNIX};
 
     if (strlcpy(addr.sun_path, path, sizeof(addr.sun_path))
@@ -392,8 +392,7 @@ static int connect_socket(const char *path, bool streaming) {
         return -1;
     }
 
-    if (connect(sock, (struct sockaddr *)&addr, (socklen_t)SUN_LEN(&addr))
-        < 0) {
+    if (connect(sock, (struct sockaddr*)&addr, (socklen_t)SUN_LEN(&addr)) < 0) {
         warn("connect to '%s'", path);
         close(sock);
         return -1;
@@ -414,7 +413,7 @@ static int enter_sandbox(int sock) {
     return caph_enter();
 }
 
-static int write_all(int fd, const char *p, size_t n) {
+static int write_all(int fd, const char* p, size_t n) {
     while (n > 0) {
         const ssize_t w = write(fd, p, n);
 
@@ -435,14 +434,14 @@ static int write_all(int fd, const char *p, size_t n) {
     return 0;
 }
 
-static bool is_status(const char *line, size_t len, const char *tok) {
+static bool is_status(const char* line, size_t len, const char* tok) {
     const size_t tl = strlen(tok);
 
     return len >= tl && memcmp(line, tok, tl) == 0
         && (len == tl || is_token_end(line[tl]));
 }
 
-static int line_status(bool streaming, const char *head, size_t n) {
+static int line_status(bool streaming, const char* head, size_t n) {
     if (streaming) { return -1; }
     if (is_status(head, n, "OK")) { return EXIT_SUCCESS; }
     if (is_status(head, n, "ERR")) { return EXIT_FAILURE; }
@@ -515,7 +514,7 @@ static int pump_replies(int sock, bool streaming) {
     return EXIT_FAILURE;
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
     if (argc < 2) {
         usage(stderr);
         return EXIT_FAILURE;
@@ -536,7 +535,7 @@ int main(int argc, char *argv[]) {
         return list_all(argc == 3 ? argv[2] : NULL);
     }
 
-    const char *socket_path = getenv(SOCKET_ENV);
+    const char* socket_path = getenv(SOCKET_ENV);
     if (socket_path == NULL || *socket_path == '\0') {
         warnx("nullspace socket is not available");
         return EXIT_FAILURE;

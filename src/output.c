@@ -27,23 +27,23 @@
 
 #define LOG_TOPIC "output"
 
-static void output_handle_frame(struct wl_listener *l, void *data);
-static void output_handle_request_state(struct wl_listener *l, void *data);
-static void output_handle_destroy(struct wl_listener *l, void *data);
+static void output_handle_frame(struct wl_listener* l, void* data);
+static void output_handle_request_state(struct wl_listener* l, void* data);
+static void output_handle_destroy(struct wl_listener* l, void* data);
 
-struct Output *output_focused(void) {
-    struct Window *w = window_focused();
+struct Output* output_focused(void) {
+    struct Window* w = window_focused();
     if (w != NULL && w->output != NULL && !w->output->removed) {
         return w->output;
     }
 
     if (server.cursor != NULL && server.output_layout != NULL) {
-        struct wlr_output *wo = wlr_output_layout_output_at(
+        struct wlr_output* wo = wlr_output_layout_output_at(
             server.output_layout, server.cursor->x, server.cursor->y
         );
 
         if (wo != NULL) {
-            struct Output *o = output_from_wlr_output(wo);
+            struct Output* o = output_from_wlr_output(wo);
             if (o != NULL && !o->removed) return o;
         }
     }
@@ -51,7 +51,7 @@ struct Output *output_focused(void) {
     return output_primary();
 }
 
-bool output_set_enabled(struct wlr_output *wlr_output, bool on) {
+bool output_set_enabled(struct wlr_output* wlr_output, bool on) {
     if (wlr_output->enabled == on) return true;
 
     struct wlr_output_state state;
@@ -67,9 +67,9 @@ bool output_set_enabled(struct wlr_output *wlr_output, bool on) {
 // mode: 0 off | 1 on | 2 toggle
 // name: NULL means all outputs
 // (returns the number of outputs matched)
-int output_set_power(const char *name, int mode) {
+int output_set_power(const char* name, int mode) {
     int matched = 0;
-    struct Output *o;
+    struct Output* o;
     wl_list_for_each(o, &server.outputs, link) {
         if (o->removed) continue;
         if (name != NULL && strcmp(o->wlr_output->name, name) != 0) continue;
@@ -82,7 +82,7 @@ int output_set_power(const char *name, int mode) {
     return matched;
 }
 
-static void output_update_geometry(struct Output *out) {
+static void output_update_geometry(struct Output* out) {
     struct wlr_box box;
     wlr_output_layout_get_box(server.output_layout, out->wlr_output, &box);
     if (box.width <= 0 || box.height <= 0) return;
@@ -99,9 +99,9 @@ static void output_update_geometry(struct Output *out) {
     out->area_set = true;
 }
 
-static void output_reassign_windows(struct Output *dying) {
-    struct Output *new_home = NULL;
-    struct Output *it;
+static void output_reassign_windows(struct Output* dying) {
+    struct Output* new_home = NULL;
+    struct Output* it;
     wl_list_for_each(it, &server.outputs, link) {
         if (it != dying && !it->removed) {
             new_home = it;
@@ -109,7 +109,7 @@ static void output_reassign_windows(struct Output *dying) {
         }
     }
 
-    struct Window *w;
+    struct Window* w;
     wl_list_for_each(w, &wm.windows, link) {
         if (w->closed || w->output != dying) continue;
 
@@ -154,7 +154,7 @@ static void output_reassign_windows(struct Output *dying) {
     seat_focus(NULL);
 }
 
-void output_create(struct wlr_output *wlr_output) {
+void output_create(struct wlr_output* wlr_output) {
     if (!wlr_output_init_render(
             wlr_output, server.allocator, server.renderer
         )) {
@@ -168,7 +168,7 @@ void output_create(struct wlr_output *wlr_output) {
         wlr_output_state_init(&state);
         wlr_output_state_set_enabled(&state, true);
 
-        struct wlr_output_mode *mode = wlr_output_preferred_mode(wlr_output);
+        struct wlr_output_mode* mode = wlr_output_preferred_mode(wlr_output);
         if (mode != NULL) {
             wlr_output_state_set_mode(&state, mode);
         } else if (wlr_output->width > 0 && wlr_output->height > 0) {
@@ -187,7 +187,7 @@ void output_create(struct wlr_output *wlr_output) {
         }
     }
 
-    struct Output *out = calloc(1, sizeof(*out));
+    struct Output* out = calloc(1, sizeof(*out));
     if (out == NULL) return;
 
     out->wlr_output = wlr_output;
@@ -199,7 +199,7 @@ void output_create(struct wlr_output *wlr_output) {
         return;
     }
 
-    struct wlr_output_layout_output *layout_out =
+    struct wlr_output_layout_output* layout_out =
         wlr_output_layout_add_auto(server.output_layout, wlr_output);
 
     wlr_scene_output_layout_add_output(
@@ -225,7 +225,7 @@ void output_create(struct wlr_output *wlr_output) {
     wl_list_insert(&server.outputs, &out->link);
 
     { // adopt windows created before any output existed
-        struct Window *w;
+        struct Window* w;
         wl_list_for_each(w, &wm.windows, link) {
             if (w->closed || w->output != NULL) continue;
             w->output = out;
@@ -254,10 +254,10 @@ void output_create(struct wlr_output *wlr_output) {
 #endif
 }
 
-static void output_handle_frame(struct wl_listener *l, void *data) {
+static void output_handle_frame(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Output *out = wl_container_of(l, out, frame);
+    struct Output* out = wl_container_of(l, out, frame);
 
     if (wm.layout_dirty) {
         wm.layout_dirty = false;
@@ -280,27 +280,27 @@ static void output_handle_frame(struct wl_listener *l, void *data) {
     }
 }
 
-static void output_handle_request_state(struct wl_listener *l, void *data) {
+static void output_handle_request_state(struct wl_listener* l, void* data) {
     (void)l;
 
-    struct wlr_output_event_request_state *ev = data;
+    struct wlr_output_event_request_state* ev = data;
     if (!wlr_output_commit_state(ev->output, ev->state)) return;
 
-    struct Output *out = output_from_wlr_output(ev->output);
+    struct Output* out = output_from_wlr_output(ev->output);
     if (out != NULL) output_update_geometry(out);
 
     session_lock_update_geometry();
     wm_mark_layout_dirty();
 }
 
-static void output_handle_destroy(struct wl_listener *l, void *data) {
+static void output_handle_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Output *out = wl_container_of(l, out, destroy);
+    struct Output* out = wl_container_of(l, out, destroy);
     output_destroy(out);
 }
 
-void output_destroy(struct Output *out) {
+void output_destroy(struct Output* out) {
     if (out->removed) return;
     out->removed = true;
     output_reassign_windows(out);
@@ -338,8 +338,8 @@ void output_destroy(struct Output *out) {
 #endif
 }
 
-struct Output *output_from_wlr_output(struct wlr_output *wlr_output) {
-    struct Output *out;
+struct Output* output_from_wlr_output(struct wlr_output* wlr_output) {
+    struct Output* out;
     wl_list_for_each(out, &server.outputs, link) {
         if (out->wlr_output == wlr_output) return out;
     }
@@ -347,8 +347,8 @@ struct Output *output_from_wlr_output(struct wlr_output *wlr_output) {
     return NULL;
 }
 
-struct Output *output_primary(void) {
-    struct Output *out;
+struct Output* output_primary(void) {
+    struct Output* out;
     wl_list_for_each(out, &server.outputs, link) {
         if (out->removed) continue;
         return out;

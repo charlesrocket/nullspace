@@ -20,8 +20,8 @@ static const float popup_shadow_color[4] = {
 
 static struct wl_list popups = {&popups, &popups};
 
-static struct Popup *popup_find(struct wlr_xdg_surface *base) {
-    struct Popup *it;
+static struct Popup* popup_find(struct wlr_xdg_surface* base) {
+    struct Popup* it;
     wl_list_for_each(it, &popups, link) {
         if (it->xdg_popup->base == base) { return it; }
     }
@@ -29,15 +29,15 @@ static struct Popup *popup_find(struct wlr_xdg_surface *base) {
     return NULL;
 }
 
-static struct wlr_scene_tree *popup_root_for(
-    struct wlr_xdg_popup *xdg_popup, struct wlr_scene_tree *parent_tree
+static struct wlr_scene_tree* popup_root_for(
+    struct wlr_xdg_popup* xdg_popup, struct wlr_scene_tree* parent_tree
 ) {
     if (xdg_popup->parent != NULL) {
-        struct wlr_xdg_surface *parent =
+        struct wlr_xdg_surface* parent =
             wlr_xdg_surface_try_from_wlr_surface(xdg_popup->parent);
 
         if (parent != NULL && parent->role == WLR_XDG_SURFACE_ROLE_POPUP) {
-            struct Popup *pp = popup_find(parent);
+            struct Popup* pp = popup_find(parent);
             if (pp != NULL) { return pp->root_tree; }
         }
     }
@@ -45,10 +45,10 @@ static struct wlr_scene_tree *popup_root_for(
     return parent_tree;
 }
 
-static void popup_update_shadow(struct Popup *p) {
+static void popup_update_shadow(struct Popup* p) {
     if (p == NULL || p->shadow == NULL || p->xdg_popup == NULL) { return; }
 
-    struct wlr_xdg_surface *xdg_surface = p->xdg_popup->base;
+    struct wlr_xdg_surface* xdg_surface = p->xdg_popup->base;
     int width = xdg_surface->geometry.width;
     int height = xdg_surface->geometry.height;
 
@@ -66,13 +66,13 @@ static void popup_update_shadow(struct Popup *p) {
     wlr_scene_node_lower_to_bottom(&p->shadow->node);
 }
 
-static void popup_unconstrain(struct Popup *p) {
+static void popup_unconstrain(struct Popup* p) {
     if (p->root_tree != NULL) {
         int lx = 0, ly = 0;
         wlr_scene_node_coords(&p->root_tree->node, &lx, &ly);
 
-        struct Output *o = NULL;
-        struct wlr_output *wo =
+        struct Output* o = NULL;
+        struct wlr_output* wo =
             wlr_output_layout_output_at(server.output_layout, lx, ly);
 
         if (wo != NULL) { o = output_from_wlr_output(wo); }
@@ -91,10 +91,10 @@ static void popup_unconstrain(struct Popup *p) {
     }
 }
 
-static void popup_handle_commit(struct wl_listener *l, void *data) {
+static void popup_handle_commit(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Popup *p = wl_container_of(l, p, commit);
+    struct Popup* p = wl_container_of(l, p, commit);
 
     popup_update_shadow(p);
 
@@ -103,20 +103,20 @@ static void popup_handle_commit(struct wl_listener *l, void *data) {
     popup_unconstrain(p);
 }
 
-static void popup_handle_reposition(struct wl_listener *l, void *data) {
+static void popup_handle_reposition(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Popup *p = wl_container_of(l, p, reposition);
+    struct Popup* p = wl_container_of(l, p, reposition);
 
     if (!p->xdg_popup->base->initialized) { return; }
 
     popup_unconstrain(p);
 }
 
-static void popup_handle_destroy(struct wl_listener *l, void *data) {
+static void popup_handle_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Popup *p = wl_container_of(l, p, destroy);
+    struct Popup* p = wl_container_of(l, p, destroy);
 
     wl_list_remove(&p->commit.link);
     wl_list_remove(&p->reposition.link);
@@ -127,17 +127,17 @@ static void popup_handle_destroy(struct wl_listener *l, void *data) {
 }
 
 void popup_track(
-    struct wlr_xdg_popup *xdg_popup, struct wlr_scene_tree *parent_tree
+    struct wlr_xdg_popup* xdg_popup, struct wlr_scene_tree* parent_tree
 ) {
     if (popup_find(xdg_popup->base) != NULL) { return; }
 
-    struct Popup *p = calloc(1, sizeof(*p));
+    struct Popup* p = calloc(1, sizeof(*p));
     if (p == NULL) {
         wlr_xdg_popup_destroy(xdg_popup);
         return;
     }
 
-    struct wlr_scene_tree *tree =
+    struct wlr_scene_tree* tree =
         wlr_scene_xdg_surface_create(parent_tree, xdg_popup->base);
     if (tree == NULL) {
         free(p);

@@ -12,7 +12,7 @@
 struct Window;
 
 struct Keyboard {
-    struct wlr_keyboard *wlr_keyboard;
+    struct wlr_keyboard* wlr_keyboard;
     struct wl_list link; // NsServer.keyboards
     struct wl_listener modifiers;
     struct wl_listener key;
@@ -21,13 +21,13 @@ struct Keyboard {
 
 void seat_init(void);
 void seat_finish(void);
-void seat_handle_new_input(struct wlr_input_device *device);
-void seat_focus(struct Window *window);
+void seat_handle_new_input(struct wlr_input_device* device);
+void seat_focus(struct Window* window);
 void seat_refocus_after_drag(void);
-void seat_spawn(const void *arg);
-void seat_update_decorations(const struct Window *focused);
-void seat_spawn_shell(const char *cmdline);
-void seat_resize_mode_window_destroyed(struct Window *w);
+void seat_spawn(const void* arg);
+void seat_update_decorations(const struct Window* focused);
+void seat_spawn_shell(const char* cmdline);
+void seat_resize_mode_window_destroyed(struct Window* w);
 void seat_foreach_input_device(
-    void (*fn)(struct wlr_input_device *, void *), void *data
+    void (*fn)(struct wlr_input_device*, void*), void* data
 );

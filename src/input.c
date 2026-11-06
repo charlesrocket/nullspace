@@ -21,12 +21,12 @@ const struct PointerDef cfg_pointer_binds[] = {CFG_POINTER_BINDS};
 const size_t cfg_pointer_binds_len =
     sizeof(cfg_pointer_binds) / sizeof(cfg_pointer_binds[0]);
 
-static struct libinput_device *libinput_of(struct wlr_input_device *device) {
+static struct libinput_device* libinput_of(struct wlr_input_device* device) {
     if (!wlr_input_device_is_libinput(device)) return NULL;
     return wlr_libinput_get_device_handle(device);
 }
 
-static void apply_tap(struct libinput_device *dev) {
+static void apply_tap(struct libinput_device* dev) {
     if (wm.libinput.tap_state < 0) return;
     if (libinput_device_config_tap_get_finger_count(dev) < 1) return;
 
@@ -36,7 +36,7 @@ static void apply_tap(struct libinput_device *dev) {
     );
 }
 
-static void apply_natural_scroll(struct libinput_device *dev) {
+static void apply_natural_scroll(struct libinput_device* dev) {
     if (wm.libinput.natural_scroll < 0) return;
     if (!libinput_device_config_scroll_has_natural_scroll(dev)) return;
 
@@ -45,7 +45,7 @@ static void apply_natural_scroll(struct libinput_device *dev) {
     );
 }
 
-static void apply_left_handed(struct libinput_device *dev) {
+static void apply_left_handed(struct libinput_device* dev) {
     if (wm.libinput.left_handed < 0) return;
     if (!libinput_device_config_left_handed_is_available(dev)) return;
 
@@ -54,7 +54,7 @@ static void apply_left_handed(struct libinput_device *dev) {
     );
 }
 
-static void apply_middle_emulation(struct libinput_device *dev) {
+static void apply_middle_emulation(struct libinput_device* dev) {
     if (wm.libinput.middle_emulation < 0) return;
     if (!libinput_device_config_middle_emulation_is_available(dev)) return;
 
@@ -65,7 +65,7 @@ static void apply_middle_emulation(struct libinput_device *dev) {
     );
 }
 
-static void apply_dwt(struct libinput_device *dev) {
+static void apply_dwt(struct libinput_device* dev) {
     if (wm.libinput.dwt < 0) return;
     if (!libinput_device_config_dwt_is_available(dev)) return;
 
@@ -75,7 +75,7 @@ static void apply_dwt(struct libinput_device *dev) {
     );
 }
 
-static void apply_drag(struct libinput_device *dev) {
+static void apply_drag(struct libinput_device* dev) {
     if (wm.libinput.drag < 0) return;
     if (libinput_device_config_tap_get_finger_count(dev) < 1) return;
 
@@ -85,7 +85,7 @@ static void apply_drag(struct libinput_device *dev) {
     );
 }
 
-static void apply_drag_lock(struct libinput_device *dev) {
+static void apply_drag_lock(struct libinput_device* dev) {
     if (wm.libinput.drag_lock < 0) return;
     if (libinput_device_config_tap_get_finger_count(dev) < 1) return;
 
@@ -101,7 +101,7 @@ static void apply_drag_lock(struct libinput_device *dev) {
     libinput_device_config_tap_set_drag_lock_enabled(dev, state);
 }
 
-static void apply_three_finger_drag(struct libinput_device *dev) {
+static void apply_three_finger_drag(struct libinput_device* dev) {
     if (wm.libinput.three_finger_drag < 0) return;
     if (libinput_device_config_tap_get_finger_count(dev) < 3) return;
 
@@ -112,7 +112,7 @@ static void apply_three_finger_drag(struct libinput_device *dev) {
     );
 }
 
-static void apply_accel(struct libinput_device *dev) {
+static void apply_accel(struct libinput_device* dev) {
     if (!libinput_device_config_accel_is_available(dev)) return;
 
     if (wm.libinput.accel_profile >= 0) {
@@ -142,7 +142,7 @@ static void apply_accel(struct libinput_device *dev) {
     }
 }
 
-static void apply_click_method(struct libinput_device *dev) {
+static void apply_click_method(struct libinput_device* dev) {
     if (wm.libinput.click_method < 0) return;
 
     uint32_t methods = libinput_device_config_click_get_methods(dev);
@@ -164,7 +164,7 @@ static void apply_click_method(struct libinput_device *dev) {
     libinput_device_config_click_set_method(dev, m);
 }
 
-static void apply_scroll_method(struct libinput_device *dev) {
+static void apply_scroll_method(struct libinput_device* dev) {
     if (wm.libinput.scroll_method < 0) return;
 
     uint32_t methods = libinput_device_config_scroll_get_methods(dev);
@@ -187,7 +187,7 @@ static void apply_scroll_method(struct libinput_device *dev) {
     libinput_device_config_scroll_set_method(dev, m);
 }
 
-static void apply_all(struct libinput_device *dev) {
+static void apply_all(struct libinput_device* dev) {
     apply_tap(dev);
     apply_natural_scroll(dev);
     apply_left_handed(dev);
@@ -201,16 +201,16 @@ static void apply_all(struct libinput_device *dev) {
     apply_scroll_method(dev);
 }
 
-void input_apply_pointer_config(struct wlr_input_device *device) {
-    struct libinput_device *dev = libinput_of(device);
+void input_apply_pointer_config(struct wlr_input_device* device) {
+    struct libinput_device* dev = libinput_of(device);
     if (dev == NULL) return;
     apply_all(dev);
 }
 
-static void reconfigure_visit(struct wlr_input_device *device, void *data) {
+static void reconfigure_visit(struct wlr_input_device* device, void* data) {
     (void)data;
 
-    struct libinput_device *dev = libinput_of(device);
+    struct libinput_device* dev = libinput_of(device);
     if (dev == NULL) return;
     apply_all(dev);
 }

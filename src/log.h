@@ -19,8 +19,8 @@ void log_init(void);
 void log_set_level(enum LogLevel level);
 
 void log_msg( // internal
-    enum LogLevel level, const char *topic, const char *file, int line,
-    const char *fmt, ...
+    enum LogLevel level, const char* topic, const char* file, int line,
+    const char* fmt, ...
 ) __attribute__((format(printf, 5, 6)));
 
 #define log_trace(...)                                                         \

@@ -18,12 +18,12 @@
 #define LOG_TOPIC "activation"
 
 struct ActivationContext {
-    struct wlr_xdg_activation_token_v1 *token;
+    struct wlr_xdg_activation_token_v1* token;
 
-    struct wlr_surface *origin_focus;
+    struct wlr_surface* origin_focus;
     struct wl_listener origin_focus_destroy;
 
-    struct wlr_seat_client *seat_client; // ?NULL
+    struct wlr_seat_client* seat_client; // ?NULL
 
     struct wl_listener token_destroy;
 
@@ -35,7 +35,7 @@ static struct wl_listener new_token_listener;
 static struct wl_listener request_activate_listener;
 static bool activation_initialized;
 
-static void context_free(struct ActivationContext *ctx) {
+static void context_free(struct ActivationContext* ctx) {
     if (ctx == NULL) return;
 
     if (ctx->origin_focus != NULL) {
@@ -46,18 +46,18 @@ static void context_free(struct ActivationContext *ctx) {
     free(ctx);
 }
 
-static void handle_token_destroy(struct wl_listener *l, void *data) {
+static void handle_token_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct ActivationContext *ctx = wl_container_of(l, ctx, token_destroy);
+    struct ActivationContext* ctx = wl_container_of(l, ctx, token_destroy);
     ctx->token = NULL;
     context_free(ctx);
 }
 
-static void handle_origin_focus_destroy(struct wl_listener *l, void *data) {
+static void handle_origin_focus_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct ActivationContext *ctx =
+    struct ActivationContext* ctx =
         wl_container_of(l, ctx, origin_focus_destroy);
 
     ctx->origin_focus = NULL;
@@ -65,28 +65,28 @@ static void handle_origin_focus_destroy(struct wl_listener *l, void *data) {
     wl_list_init(&ctx->origin_focus_destroy.link);
 }
 
-static struct Window *window_from_surface(struct wlr_surface *surface) {
+static struct Window* window_from_surface(struct wlr_surface* surface) {
     if (surface == NULL) return NULL;
 
-    struct wlr_xdg_surface *xdg = wlr_xdg_surface_try_from_wlr_surface(surface);
+    struct wlr_xdg_surface* xdg = wlr_xdg_surface_try_from_wlr_surface(surface);
     if (xdg == NULL || xdg->role != WLR_XDG_SURFACE_ROLE_TOPLEVEL) return NULL;
 
-    struct wlr_scene_tree *tree = xdg->data;
+    struct wlr_scene_tree* tree = xdg->data;
     if (tree == NULL) return NULL;
 
     return window_from_scene_node(&tree->node);
 }
 
-static struct wlr_seat_client *
-seat_client_for_token(struct wlr_xdg_activation_token_v1 *token) {
+static struct wlr_seat_client*
+seat_client_for_token(struct wlr_xdg_activation_token_v1* token) {
     if (token == NULL || token->surface == NULL
         || token->surface->resource == NULL) {
         return NULL;
     }
 
-    struct wl_client *client = wl_resource_get_client(token->surface->resource);
+    struct wl_client* client = wl_resource_get_client(token->surface->resource);
 
-    struct wlr_seat_client *sc;
+    struct wlr_seat_client* sc;
     wl_list_for_each(sc, &server.seat->clients, link) {
         if (sc->client == client) return sc;
     }
@@ -94,14 +94,14 @@ seat_client_for_token(struct wlr_xdg_activation_token_v1 *token) {
     return NULL;
 }
 
-static void handle_request_activate(struct wl_listener *l, void *data) {
+static void handle_request_activate(struct wl_listener* l, void* data) {
     (void)l;
 
-    struct wlr_xdg_activation_v1_request_activate_event *ev = data;
+    struct wlr_xdg_activation_v1_request_activate_event* ev = data;
     if (ev == NULL || ev->token == NULL) return;
 
-    struct ActivationContext *ctx = ev->token->data;
-    struct Window *window = window_from_surface(ev->surface);
+    struct ActivationContext* ctx = ev->token->data;
+    struct Window* window = window_from_surface(ev->surface);
 
     bool allowed = false;
     if (ctx != NULL) {
@@ -115,13 +115,13 @@ static void handle_request_activate(struct wl_listener *l, void *data) {
             if (!allowed) {
                 log_debug(
                     "Rejected serial=%u for seat_client=%p", ev->token->serial,
-                    (void *)ctx->seat_client
+                    (void*)ctx->seat_client
                 );
             }
         } else {
             log_debug(
                 "No seat client for token (surface=%p)",
-                (void *)ev->token->surface
+                (void*)ev->token->surface
             );
         }
     }
@@ -160,18 +160,18 @@ static void handle_request_activate(struct wl_listener *l, void *data) {
     context_free(ctx);
 }
 
-static void handle_new_token(struct wl_listener *l, void *data) {
+static void handle_new_token(struct wl_listener* l, void* data) {
     (void)l;
 
-    struct wlr_xdg_activation_token_v1 *token = data;
+    struct wlr_xdg_activation_token_v1* token = data;
     if (token == NULL) return;
 
-    struct ActivationContext *ctx = calloc(1, sizeof(*ctx));
+    struct ActivationContext* ctx = calloc(1, sizeof(*ctx));
     if (ctx == NULL) return;
 
     ctx->token = token;
 
-    struct Output *out = output_focused();
+    struct Output* out = output_focused();
     ctx->space = out ? out->current_space : 0;
     ctx->is_compositor = false;
 
@@ -193,7 +193,7 @@ static void handle_new_token(struct wl_listener *l, void *data) {
     wl_signal_add(&token->events.destroy, &ctx->token_destroy);
 }
 
-void activation_init(struct wlr_xdg_activation_v1 *activation) {
+void activation_init(struct wlr_xdg_activation_v1* activation) {
     if (activation == NULL || activation_initialized) return;
 
     new_token_listener.notify = handle_new_token;
@@ -216,21 +216,21 @@ void activation_finish(void) {
     activation_initialized = false;
 }
 
-const char *activation_mint_spawn_token(void) {
+const char* activation_mint_spawn_token(void) {
     if (server.xdg_activation == NULL || server.seat == NULL) return NULL;
 
-    struct wlr_xdg_activation_token_v1 *token =
+    struct wlr_xdg_activation_token_v1* token =
         wlr_xdg_activation_token_v1_create(server.xdg_activation);
     if (token == NULL) return NULL;
 
-    struct ActivationContext *ctx = calloc(1, sizeof(*ctx));
+    struct ActivationContext* ctx = calloc(1, sizeof(*ctx));
     if (ctx == NULL) {
         wlr_xdg_activation_token_v1_destroy(token);
         return NULL;
     }
 
     ctx->token = token;
-    struct Output *out = output_focused();
+    struct Output* out = output_focused();
     ctx->space = out ? out->current_space : 0;
     ctx->is_compositor = true;
 

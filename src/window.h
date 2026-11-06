@@ -40,17 +40,17 @@ struct Window {
         focus_link,      // WindowManager.focus_stack
         minimized_link;  // WindowManager.minimized_windows
 
-    struct Output *output;
-    struct Decoration *decoration; // ?NULL (floating/non‑fullscreen windows)
+    struct Output* output;
+    struct Decoration* decoration; // ?NULL (floating/non‑fullscreen windows)
     struct Icon *icon,             // current, applied on commit
         *pending_icon;             // ?NULL
 
-    struct wlr_ext_foreign_toplevel_handle_v1 *foreign_handle;
+    struct wlr_ext_foreign_toplevel_handle_v1* foreign_handle;
     struct wlr_foreign_toplevel_handle_v1 *wlr_handle, *last_foreign_parent;
-    struct wlr_xdg_toplevel *xdg_toplevel;
+    struct wlr_xdg_toplevel* xdg_toplevel;
 #ifdef XWAYLAND
-    struct wlr_xwayland_surface *xwayland_surface;
-    struct wlr_scene_tree *xw_surface_tree;
+    struct wlr_xwayland_surface* xwayland_surface;
+    struct wlr_scene_tree* xw_surface_tree;
 #endif
     struct wlr_scene_tree *scene_tree, *popup_tree;
 
@@ -82,54 +82,54 @@ struct Window {
 #endif
 };
 
-void window_create(struct wlr_xdg_toplevel *xdg_toplevel);
-void window_destroy(struct Window *window);
-void window_close(struct Window *window);
-void window_raise(struct Window *window);
-void window_reparent(struct Window *window, bool to_float);
-void window_update_corners(struct Window *window);
-void window_icon_set_pending(struct Window *w, struct Icon *icon);
-void window_set_fullscreen(struct Window *window, bool fullscreen);
-void window_set_position(struct Window *window, int32_t x, int32_t y);
-void window_set_size(struct Window *window, int32_t w, int32_t h);
-void window_set_tiled(struct Window *window, bool tiled);
-void window_set_clip(struct Window *window, int32_t w, int32_t h);
-void window_set_activated(struct Window *window, bool activated);
-void window_set_maximized(struct Window *window, bool maximized);
-void window_toggle_maximized(struct Window *window);
-void window_clear_clip(struct Window *window);
+void window_create(struct wlr_xdg_toplevel* xdg_toplevel);
+void window_destroy(struct Window* window);
+void window_close(struct Window* window);
+void window_raise(struct Window* window);
+void window_reparent(struct Window* window, bool to_float);
+void window_update_corners(struct Window* window);
+void window_icon_set_pending(struct Window* w, struct Icon* icon);
+void window_set_fullscreen(struct Window* window, bool fullscreen);
+void window_set_position(struct Window* window, int32_t x, int32_t y);
+void window_set_size(struct Window* window, int32_t w, int32_t h);
+void window_set_tiled(struct Window* window, bool tiled);
+void window_set_clip(struct Window* window, int32_t w, int32_t h);
+void window_set_activated(struct Window* window, bool activated);
+void window_set_maximized(struct Window* window, bool maximized);
+void window_toggle_maximized(struct Window* window);
+void window_clear_clip(struct Window* window);
 void window_apply_target(
-    struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh
+    struct Window* w, int32_t nx, int32_t ny, int32_t nw, int32_t nh
 );
 
 void window_get_size_hints(
-    const struct Window *w, int32_t *min_w, int32_t *min_h, int32_t *max_w,
-    int32_t *max_h
+    const struct Window* w, int32_t* min_w, int32_t* min_h, int32_t* max_w,
+    int32_t* max_h
 );
 void window_clamp_to_size_hints(
-    const struct Window *w, int32_t *width, int32_t *height
+    const struct Window* w, int32_t* width, int32_t* height
 );
 
-bool window_usable_area(const struct Window *w, struct wlr_box *out);
-int32_t window_visual_top_offset(const struct Window *w);
+bool window_usable_area(const struct Window* w, struct wlr_box* out);
+int32_t window_visual_top_offset(const struct Window* w);
 void window_clamp_to_usable(
-    struct Window *w, int32_t *x, int32_t *y, int32_t *width, int32_t *height
+    struct Window* w, int32_t* x, int32_t* y, int32_t* width, int32_t* height
 );
 
 #ifdef XWAYLAND
-void window_create_xwayland(struct wlr_xwayland_surface *xw);
+void window_create_xwayland(struct wlr_xwayland_surface* xw);
 #endif
 
-struct Window *window_from_id(uint64_t id);
-struct Window *window_from_scene_node(const struct wlr_scene_node *node);
-struct Window *window_focused(void);
-struct Window *window_parent(const struct Window *window);
-struct Window *window_at(
-    double lx, double ly, struct wlr_surface **surface, double *sx, double *sy
+struct Window* window_from_id(uint64_t id);
+struct Window* window_from_scene_node(const struct wlr_scene_node* node);
+struct Window* window_focused(void);
+struct Window* window_parent(const struct Window* window);
+struct Window* window_at(
+    double lx, double ly, struct wlr_surface** surface, double* sx, double* sy
 );
 
-bool window_is_transient(const struct Window *window);
+bool window_is_transient(const struct Window* window);
 
-struct wlr_surface *window_wlr_surface(const struct Window *window);
-const char *window_title(const struct Window *window);
-const char *window_app_id(const struct Window *window);
+struct wlr_surface* window_wlr_surface(const struct Window* window);
+const char* window_title(const struct Window* window);
+const char* window_app_id(const struct Window* window);

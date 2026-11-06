@@ -11,8 +11,8 @@ static inline int32_t hmin(int32_t a, int32_t b) { return a < b ? a : b; }
 // Smart_gaps zeroes everything when there is a single window,
 // matching the current vertical layouts.
 static void effective_gaps(
-    const struct LayoutParams *p, size_t n, int32_t *go_h, int32_t *go_v,
-    int32_t *gi_h, int32_t *gi_v
+    const struct LayoutParams* p, size_t n, int32_t* go_h, int32_t* go_v,
+    int32_t* gi_h, int32_t* gi_v
 ) {
     *go_h = p->gap_outer_h;
     *go_v = p->gap_outer_v;
@@ -24,7 +24,7 @@ static void effective_gaps(
 
 // Master column on the left, stack column on the right.
 void horizontal_tile(
-    struct LayoutWindow *lw, size_t n, const struct LayoutParams *p
+    struct LayoutWindow* lw, size_t n, const struct LayoutParams* p
 ) {
     int32_t go_h, go_v, gi_h, gi_v;
     effective_gaps(p, n, &go_h, &go_v, &gi_h, &gi_v);
@@ -65,7 +65,7 @@ void horizontal_tile(
 
 // Master column on the right, stack on the left.
 void horizontal_right_tile(
-    struct LayoutWindow *lw, size_t n, const struct LayoutParams *p
+    struct LayoutWindow* lw, size_t n, const struct LayoutParams* p
 ) {
     int32_t go_h, go_v, gi_h, gi_v;
     effective_gaps(p, n, &go_h, &go_v, &gi_h, &gi_v);
@@ -108,7 +108,7 @@ void horizontal_right_tile(
 // windows are shown as a row of previews below. Focus promotes the window to
 // the center.
 void horizontal_monocle(
-    struct LayoutWindow *lw, size_t n, const struct LayoutParams *p
+    struct LayoutWindow* lw, size_t n, const struct LayoutParams* p
 ) {
     if (n == 0) { return; }
     int32_t go_h, go_v, gi_h, gi_v;
@@ -171,7 +171,7 @@ void horizontal_monocle(
 }
 
 void horizontal_grid(
-    struct LayoutWindow *lw, size_t n, const struct LayoutParams *p
+    struct LayoutWindow* lw, size_t n, const struct LayoutParams* p
 ) {
     int32_t go_h, go_v, gi_h, gi_v;
     effective_gaps(p, n, &go_h, &go_v, &gi_h, &gi_v);
@@ -190,8 +190,8 @@ void horizontal_grid(
 
     int32_t avail_w = p->width - 2 * go_h - (cols - 1) * gi_h;
 
-    int32_t *col_x = calloc((size_t)cols, sizeof(int32_t));
-    int32_t *col_w = calloc((size_t)cols, sizeof(int32_t));
+    int32_t* col_x = calloc((size_t)cols, sizeof(int32_t));
+    int32_t* col_w = calloc((size_t)cols, sizeof(int32_t));
 
     if (col_x == NULL || col_w == NULL) {
         free(col_x);
@@ -209,8 +209,8 @@ void horizontal_grid(
     }
 
     int32_t avail_h_base = p->height - 2 * go_v - (base_rows - 1) * gi_v;
-    int32_t *row_y_base = calloc((size_t)base_rows, sizeof(int32_t));
-    int32_t *row_h_base = calloc((size_t)base_rows, sizeof(int32_t));
+    int32_t* row_y_base = calloc((size_t)base_rows, sizeof(int32_t));
+    int32_t* row_h_base = calloc((size_t)base_rows, sizeof(int32_t));
 
     if (row_y_base == NULL || row_h_base == NULL) {
         free(col_x);
@@ -231,8 +231,8 @@ void horizontal_grid(
         next_y += row_h_base[i] + gi_v;
     }
 
-    int32_t *row_y_max = calloc((size_t)max_rows, sizeof(int32_t));
-    int32_t *row_h_max = calloc((size_t)max_rows, sizeof(int32_t));
+    int32_t* row_y_max = calloc((size_t)max_rows, sizeof(int32_t));
+    int32_t* row_h_max = calloc((size_t)max_rows, sizeof(int32_t));
     if (row_y_max == NULL || row_h_max == NULL) {
         free(col_x);
         free(col_w);

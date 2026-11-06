@@ -14,7 +14,7 @@ struct WindowRuleActions {
 void rules_init(void);
 void rules_free(void);
 bool rules_window_match(
-    const char *app_id, const char *title, struct WindowRuleActions *out
+    const char* app_id, const char* title, struct WindowRuleActions* out
 );
 
-bool rules_space_layout(int space, enum Layout *out);
+bool rules_space_layout(int space, enum Layout* out);

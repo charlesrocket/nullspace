@@ -91,8 +91,8 @@ enum DecoPart {
     DECO_PART_TAB,
 };
 
-static int32_t window_w(const struct Window *w);
-static int32_t window_h(const struct Window *w);
+static int32_t window_w(const struct Window* w);
+static int32_t window_h(const struct Window* w);
 static int32_t tab_corner_radius(int32_t tab_w);
 
 static float clamp01(float v) {
@@ -117,19 +117,19 @@ static float ease_out_cubic(float t) {
     return 1.0f - u * u * u;
 }
 
-static void lerp4(float *out, const float *a, const float *b, float t) {
+static void lerp4(float* out, const float* a, const float* b, float t) {
     for (int i = 0; i < 4; i++) out[i] = lerpf(a[i], b[i], t);
 }
 
 // `wlr_scene_rect` wants premultiplied values.
-static void premul_copy(float *out, const float *in) {
+static void premul_copy(float* out, const float* in) {
     out[0] = in[0] * in[3];
     out[1] = in[1] * in[3];
     out[2] = in[2] * in[3];
     out[3] = in[3];
 }
 
-static void lerp4_premul(float *out, const float *a, const float *b, float t) {
+static void lerp4_premul(float* out, const float* a, const float* b, float t) {
     float pa[4], pb[4];
     premul_copy(pa, a);
     premul_copy(pb, b);
@@ -209,7 +209,7 @@ static struct DecoPartSpec part_spec(enum DecoPart kind, size_t i) {
                 if (i == 0) {
                     s.disc = SHAPE_DISC_FULL;
                 } else if (i <= DIAMOND_STRIP_COUNT) {
-                    const struct DecoStrip *st = &DIAMOND_STRIPS[i - 1];
+                    const struct DecoStrip* st = &DIAMOND_STRIPS[i - 1];
 
                     s.glyph = (struct DecoShape){
                         .x = DECO_GLYPH_OFF + st->x,
@@ -230,7 +230,7 @@ static struct DecoPartSpec part_spec(enum DecoPart kind, size_t i) {
 }
 
 static struct DecoShape
-shape_lerp(const struct DecoShape *a, const struct DecoShape *b, float t) {
+shape_lerp(const struct DecoShape* a, const struct DecoShape* b, float t) {
     return (struct DecoShape){
         .x = iround(lerpf((float)a->x, (float)b->x, t)),
         .y = iround(lerpf((float)a->y, (float)b->y, t)),
@@ -241,7 +241,7 @@ shape_lerp(const struct DecoShape *a, const struct DecoShape *b, float t) {
 }
 
 static void
-apply_shape(struct wlr_scene_rect *rect, const struct DecoShape *s) {
+apply_shape(struct wlr_scene_rect* rect, const struct DecoShape* s) {
     if (rect == NULL) return;
 
     const int32_t w = s->w > 0 ? s->w : 0;
@@ -270,7 +270,7 @@ apply_shape(struct wlr_scene_rect *rect, const struct DecoShape *s) {
     wlr_scene_rect_set_corner_radii(rect, radii);
 }
 
-static void deco_apply_visuals(struct Decoration *deco) {
+static void deco_apply_visuals(struct Decoration* deco) {
     if (deco == NULL) return;
 
     const float p = clamp01(deco->progress);
@@ -284,10 +284,10 @@ static void deco_apply_visuals(struct Decoration *deco) {
     if (deco->tab != NULL) wlr_scene_rect_set_color(deco->tab, tab);
 
     for (int k = 0; k < DECO_BTN_COUNT; k++) {
-        struct DecoButton *b = &deco->btn[k];
+        struct DecoButton* b = &deco->btn[k];
 
         for (size_t i = 0; i < b->n_parts && i < DECO_BTN_MAX_PARTS; i++) {
-            struct wlr_scene_rect *rect = b->parts[i];
+            struct wlr_scene_rect* rect = b->parts[i];
             if (rect == NULL) continue;
 
             const struct DecoPartSpec s = part_spec((enum DecoPart)k, i);
@@ -314,13 +314,13 @@ static void deco_apply_visuals(struct Decoration *deco) {
 }
 
 void deco_refresh_colors(void) {
-    struct Window *w;
+    struct Window* w;
     wl_list_for_each(w, &wm.windows, link) {
         if (w->decoration != NULL) deco_apply_visuals(w->decoration);
     }
 }
 
-static struct wl_event_source *anim_timer = NULL;
+static struct wl_event_source* anim_timer = NULL;
 static bool anim_armed = false;
 
 static bool anim_arm(void) {
@@ -335,7 +335,7 @@ static bool anim_arm(void) {
     return true;
 }
 
-static void anim_snap(struct Decoration *d, float target) {
+static void anim_snap(struct Decoration* d, float target) {
     d->animating = false;
     d->progress = target;
     d->anim_from = target;
@@ -343,7 +343,7 @@ static void anim_snap(struct Decoration *d, float target) {
     deco_apply_visuals(d);
 }
 
-static void anim_retarget(struct Decoration *d, float target) {
+static void anim_retarget(struct Decoration* d, float target) {
     if (d == NULL) return;
 
     if (d->animating) {
@@ -373,7 +373,7 @@ static void anim_retarget(struct Decoration *d, float target) {
     if (!anim_arm()) anim_snap(d, target);
 }
 
-static bool anim_step(struct Decoration *d, uint64_t now) {
+static bool anim_step(struct Decoration* d, uint64_t now) {
     if (d->tree == NULL) {
         d->animating = false;
         d->progress = d->anim_to;
@@ -395,7 +395,7 @@ static bool anim_step(struct Decoration *d, uint64_t now) {
     return d->animating;
 }
 
-static int deco_anim_tick(void *data) {
+static int deco_anim_tick(void* data) {
     (void)data;
 
     anim_armed = false;
@@ -403,16 +403,16 @@ static int deco_anim_tick(void *data) {
     const uint64_t now = now_ms();
     bool more = false;
 
-    struct Window *w;
+    struct Window* w;
     wl_list_for_each(w, &wm.windows, link) {
-        struct Decoration *d = w->decoration;
+        struct Decoration* d = w->decoration;
         if (d == NULL || !d->animating) continue;
         if (anim_step(d, now)) more = true;
     }
 
     if (more && !anim_arm()) {
         wl_list_for_each(w, &wm.windows, link) {
-            struct Decoration *d = w->decoration;
+            struct Decoration* d = w->decoration;
             if (d != NULL && d->animating) anim_snap(d, d->anim_to);
         }
     }
@@ -420,7 +420,7 @@ static int deco_anim_tick(void *data) {
     return 0;
 }
 
-bool deco_anim_init(struct wl_event_loop *loop) {
+bool deco_anim_init(struct wl_event_loop* loop) {
     if (anim_timer != NULL) return true;
     if (loop == NULL) return false;
 
@@ -437,11 +437,11 @@ void deco_anim_finish(void) {
     anim_armed = false;
 }
 
-static struct Decoration *sliding_deco = NULL;
+static struct Decoration* sliding_deco = NULL;
 static uint32_t swallowed_button = 0;
 
 static struct {
-    const struct Decoration *deco;
+    const struct Decoration* deco;
     uint64_t ms;
     double x, y;
 } last_click;
@@ -452,7 +452,7 @@ static void click_reset(void) {
 }
 
 static bool
-click_is_double(const struct Decoration *deco, double lx, double ly) {
+click_is_double(const struct Decoration* deco, double lx, double ly) {
     const uint64_t now = now_ms();
 
     const bool dbl = now != 0 && last_click.deco == deco && now >= last_click.ms
@@ -472,10 +472,10 @@ click_is_double(const struct Decoration *deco, double lx, double ly) {
     return dbl;
 }
 
-static void handle_tree_destroy(struct wl_listener *l, void *data) {
+static void handle_tree_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Decoration *deco = wl_container_of(l, deco, tree_destroy);
+    struct Decoration* deco = wl_container_of(l, deco, tree_destroy);
 
     wl_list_remove(&deco->tree_destroy.link);
     deco->tree = NULL;
@@ -489,29 +489,29 @@ static void handle_tree_destroy(struct wl_listener *l, void *data) {
 
 struct ShadowBuf {
     struct wlr_buffer base;
-    uint32_t *data;
+    uint32_t* data;
 };
 
-static void shadowbuf_destroy(struct wlr_buffer *b) {
-    struct ShadowBuf *s = wl_container_of(b, s, base);
+static void shadowbuf_destroy(struct wlr_buffer* b) {
+    struct ShadowBuf* s = wl_container_of(b, s, base);
     free(s->data);
     free(s);
 }
 
 static bool shadowbuf_begin(
-    struct wlr_buffer *b, uint32_t flags, void **data, uint32_t *fmt,
-    size_t *stride
+    struct wlr_buffer* b, uint32_t flags, void** data, uint32_t* fmt,
+    size_t* stride
 ) {
     (void)flags;
 
-    struct ShadowBuf *s = wl_container_of(b, s, base);
+    struct ShadowBuf* s = wl_container_of(b, s, base);
     *data = s->data;
     *fmt = DRM_FORMAT_ARGB8888;
     *stride = (size_t)b->width * 4;
     return true;
 }
 
-static void shadowbuf_end(struct wlr_buffer *b) { (void)b; }
+static void shadowbuf_end(struct wlr_buffer* b) { (void)b; }
 
 static const struct wlr_buffer_impl shadowbuf_impl = {
     .destroy = shadowbuf_destroy,
@@ -521,7 +521,7 @@ static const struct wlr_buffer_impl shadowbuf_impl = {
 
 // Never steal pointer events from windows behind the shadow.
 static bool
-shadow_no_input(struct wlr_scene_buffer *b, double *sx, double *sy) {
+shadow_no_input(struct wlr_scene_buffer* b, double* sx, double* sy) {
     (void)b;
     (void)sx;
     (void)sy;
@@ -564,8 +564,8 @@ static float rrect_cover(
     return fminf(fmaxf(0.5f + grow - sd, 0.0f), 1.0f);
 }
 
-void deco_update_shadow(struct Window *window) {
-    struct Decoration *deco = window ? window->decoration : NULL;
+void deco_update_shadow(struct Window* window) {
+    struct Decoration* deco = window ? window->decoration : NULL;
     if (deco == NULL || deco->tree == NULL || deco->shadow == NULL) return;
     if (wm.resizing) return;
     if (sliding_deco == deco) return;
@@ -593,7 +593,7 @@ void deco_update_shadow(struct Window *window) {
     const int M = shadow_margin();
     const int cw = w + 2 * M, ch = h + DECO_TAB_H + 2 * M;
 
-    struct ShadowBuf *sb = calloc(1, sizeof(*sb));
+    struct ShadowBuf* sb = calloc(1, sizeof(*sb));
     if (sb == NULL) return;
 
     sb->data = calloc((size_t)cw * (size_t)ch, sizeof(uint32_t));
@@ -602,7 +602,7 @@ void deco_update_shadow(struct Window *window) {
         return;
     }
 
-    float *tbl = malloc(sizeof(float) * (2 * (size_t)cw + 2 * (size_t)ch));
+    float* tbl = malloc(sizeof(float) * (2 * (size_t)cw + 2 * (size_t)ch));
     if (tbl == NULL) {
         free(sb->data);
         free(sb);
@@ -631,7 +631,7 @@ void deco_update_shadow(struct Window *window) {
 
     for (int j = 0; j < ch; j++) {
         const float y = (float)(j - M - DECO_TAB_H) + 0.5f;
-        uint32_t *row = sb->data + (size_t)j * (size_t)cw;
+        uint32_t* row = sb->data + (size_t)j * (size_t)cw;
 
         for (int i = 0; i < cw; i++) {
             const float a = wx[i] * wy[j], b = tx[i] * ty[j];
@@ -670,10 +670,10 @@ void deco_update_shadow(struct Window *window) {
     deco->shadow_key_valid = true;
 }
 
-static void handle_shadow_destroy(struct wl_listener *l, void *data) {
+static void handle_shadow_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Decoration *deco = wl_container_of(l, deco, shadow_destroy);
+    struct Decoration* deco = wl_container_of(l, deco, shadow_destroy);
     wl_list_remove(&deco->shadow_destroy.link);
     deco->shadow = NULL;
 }
@@ -682,7 +682,7 @@ static void handle_shadow_destroy(struct wl_listener *l, void *data) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunreachable-code"
 #endif
-static void shadow_node_create(struct Decoration *deco, struct Window *window) {
+static void shadow_node_create(struct Decoration* deco, struct Window* window) {
     if (!(CFG_WINDOW_SHADOW_OPACITY > 0.0f)) return;
 
     deco->shadow = wlr_scene_buffer_create(window->scene_tree, NULL);
@@ -699,7 +699,7 @@ static void shadow_node_create(struct Decoration *deco, struct Window *window) {
 #pragma clang diagnostic pop
 #endif
 
-static void shadow_node_destroy(struct Decoration *deco) {
+static void shadow_node_destroy(struct Decoration* deco) {
     if (deco->shadow == NULL) return;
 
     wl_list_remove(&deco->shadow_destroy.link);
@@ -707,27 +707,27 @@ static void shadow_node_destroy(struct Decoration *deco) {
     deco->shadow = NULL;
 }
 
-static void handle_blur_win_destroy(struct wl_listener *l, void *data) {
+static void handle_blur_win_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Decoration *deco = wl_container_of(l, deco, blur_win_destroy);
+    struct Decoration* deco = wl_container_of(l, deco, blur_win_destroy);
     wl_list_remove(&deco->blur_win_destroy.link);
     deco->blur_win = NULL;
 }
 
-static void handle_blur_tab_destroy(struct wl_listener *l, void *data) {
+static void handle_blur_tab_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Decoration *deco = wl_container_of(l, deco, blur_tab_destroy);
+    struct Decoration* deco = wl_container_of(l, deco, blur_tab_destroy);
     wl_list_remove(&deco->blur_tab_destroy.link);
     deco->blur_tab = NULL;
 }
 
-static struct wlr_scene_blur *blur_create(
-    struct wlr_scene_tree *parent, struct wl_listener *listener,
+static struct wlr_scene_blur* blur_create(
+    struct wlr_scene_tree* parent, struct wl_listener* listener,
     wl_notify_func_t notify
 ) {
-    struct wlr_scene_blur *b = wlr_scene_blur_create(parent, 1, 1);
+    struct wlr_scene_blur* b = wlr_scene_blur_create(parent, 1, 1);
     if (b == NULL) return NULL;
 
     wlr_scene_blur_set_strength(b, CFG_BLUR_STRENGTH);
@@ -740,18 +740,18 @@ static struct wlr_scene_blur *blur_create(
 }
 
 static void
-blur_destroy(struct wlr_scene_blur **blur, struct wl_listener *listener) {
+blur_destroy(struct wlr_scene_blur** blur, struct wl_listener* listener) {
     if (*blur == NULL) return;
 
-    struct wlr_scene_blur *b = *blur;
+    struct wlr_scene_blur* b = *blur;
 
     *blur = NULL;
     wl_list_remove(&listener->link);
     wlr_scene_node_destroy(&b->node);
 }
 
-void deco_update_blur(struct Window *window) {
-    struct Decoration *deco = window ? window->decoration : NULL;
+void deco_update_blur(struct Window* window) {
+    struct Decoration* deco = window ? window->decoration : NULL;
     if (deco == NULL) return;
 
     if (deco->blur_win != NULL) {
@@ -802,7 +802,7 @@ static int32_t tab_corner_radius(int32_t tab_w) {
     return r < 0 ? 0 : r;
 }
 
-static void update_tab_corners(struct Decoration *deco, int32_t tab_w) {
+static void update_tab_corners(struct Decoration* deco, int32_t tab_w) {
     if (deco == NULL || deco->tab == NULL) return;
 
     const uint16_t r = (uint16_t)tab_corner_radius(tab_w);
@@ -816,15 +816,15 @@ static void update_tab_corners(struct Decoration *deco, int32_t tab_w) {
     wlr_scene_rect_set_corner_radii(deco->tab, radii);
 }
 
-static int32_t window_w(const struct Window *w) {
+static int32_t window_w(const struct Window* w) {
     return w->width > 0 ? w->width : 1;
 }
 
-static int32_t window_h(const struct Window *w) {
+static int32_t window_h(const struct Window* w) {
     return w->height > 0 ? w->height : 1;
 }
 
-static int32_t tab_width_for(const struct Window *w) {
+static int32_t tab_width_for(const struct Window* w) {
     const int32_t ww = window_w(w);
 
     int32_t natural = 0;
@@ -839,13 +839,13 @@ static int32_t tab_width_for(const struct Window *w) {
     return wanted < ww ? wanted : ww;
 }
 
-static int32_t tab_x_max(const struct Window *w, int32_t tab_w) {
+static int32_t tab_x_max(const struct Window* w, int32_t tab_w) {
     const int32_t m = window_w(w) - tab_w;
     return m > 0 ? m : 0;
 }
 
 static void
-layout_button(struct DecoButton *b, int32_t x, int32_t y, bool enabled) {
+layout_button(struct DecoButton* b, int32_t x, int32_t y, bool enabled) {
     if (b == NULL || b->tree == NULL) return;
 
     wlr_scene_node_set_enabled(&b->tree->node, enabled);
@@ -859,7 +859,7 @@ layout_button(struct DecoButton *b, int32_t x, int32_t y, bool enabled) {
     }
 }
 
-static void layout_tab(struct Decoration *deco, int32_t tab_w) {
+static void layout_tab(struct Decoration* deco, int32_t tab_w) {
     if (deco == NULL || deco->tree == NULL || deco->tab == NULL) return;
 
     deco->tab_w = tab_w;
@@ -908,11 +908,11 @@ static void layout_tab(struct Decoration *deco, int32_t tab_w) {
 }
 
 static bool button_create(
-    struct Decoration *deco, struct Window *window, enum DecoPart kind
+    struct Decoration* deco, struct Window* window, enum DecoPart kind
 ) {
     static const float clear[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 
-    struct DecoButton *b = &deco->btn[kind];
+    struct DecoButton* b = &deco->btn[kind];
 
     b->tree = wlr_scene_tree_create(deco->tree);
     if (b->tree == NULL) return false;
@@ -937,12 +937,12 @@ static bool button_create(
     return b->hit != NULL;
 }
 
-void deco_create(struct Window *window) {
+void deco_create(struct Window* window) {
     if (window == NULL || window->decoration != NULL) return;
     if (window->closed || window->fullscreen) return;
     if (layouts_is_tiled(wm.layout) && !window_is_transient(window)) return;
 
-    struct Decoration *deco = calloc(1, sizeof(*deco));
+    struct Decoration* deco = calloc(1, sizeof(*deco));
     if (deco == NULL) return;
 
     deco->window = window;
@@ -996,7 +996,7 @@ void deco_create(struct Window *window) {
 
     deco->active = (window == wm_focus_stack_top());
 
-    const float *initial_color =
+    const float* initial_color =
         deco->active ? wm.deco_color_font_active : wm.deco_color_font_inactive;
 
     deco->title_text =
@@ -1014,10 +1014,10 @@ void deco_create(struct Window *window) {
     deco_apply_visuals(deco);
 }
 
-void deco_destroy(struct Window *window) {
+void deco_destroy(struct Window* window) {
     if (window == NULL || window->decoration == NULL) return;
 
-    struct Decoration *deco = window->decoration;
+    struct Decoration* deco = window->decoration;
     window->decoration = NULL;
 
     if (sliding_deco == deco) sliding_deco = NULL;
@@ -1044,8 +1044,8 @@ void deco_destroy(struct Window *window) {
     window_update_corners(window);
 }
 
-void deco_update_position(struct Window *window) {
-    struct Decoration *deco = window ? window->decoration : NULL;
+void deco_update_position(struct Window* window) {
+    struct Decoration* deco = window ? window->decoration : NULL;
     if (deco == NULL || deco->tree == NULL || deco->tab == NULL) return;
 
     const int32_t tab_w = tab_width_for(window);
@@ -1062,8 +1062,8 @@ void deco_update_position(struct Window *window) {
     deco_update_shadow(window);
 }
 
-void deco_update_active(struct Window *window, bool active) {
-    struct Decoration *deco = window ? window->decoration : NULL;
+void deco_update_active(struct Window* window, bool active) {
+    struct Decoration* deco = window ? window->decoration : NULL;
     if (deco == NULL || deco->active == active) return;
 
     deco->active = active;
@@ -1078,7 +1078,7 @@ void deco_update_active(struct Window *window, bool active) {
     anim_retarget(deco, active ? 1.0f : 0.0f);
 }
 
-void deco_update_for_layout(struct Window *window) {
+void deco_update_for_layout(struct Window* window) {
     if (window == NULL) return;
 
     bool want_deco =
@@ -1091,7 +1091,7 @@ void deco_update_for_layout(struct Window *window) {
 
     if (window->decoration == NULL) deco_create(window);
 
-    struct Decoration *deco = window->decoration;
+    struct Decoration* deco = window->decoration;
     if (deco != NULL && deco->tree != NULL) {
         // Also re-enables the shadow and blur nodes that unmap disabled.
         deco_set_visible(window, window->mapped);
@@ -1099,24 +1099,24 @@ void deco_update_for_layout(struct Window *window) {
     }
 }
 
-void deco_update_title(struct Window *window) {
+void deco_update_title(struct Window* window) {
     if (window == NULL || window->decoration == NULL) return;
 
-    struct Decoration *deco = window->decoration;
+    struct Decoration* deco = window->decoration;
     if (deco->title_text == NULL) return;
 
     text_node_set_text(deco->title_text, window->title);
     deco_update_position(window);
 }
 
-void deco_set_visible(struct Window *window, bool visible) {
-    struct Decoration *deco = window ? window->decoration : NULL;
+void deco_set_visible(struct Window* window, bool visible) {
+    struct Decoration* deco = window ? window->decoration : NULL;
     if (deco == NULL || deco->tree == NULL) return;
 
     if (!visible && sliding_deco == deco) {
-          sliding_deco = NULL;
-          deco->shadow_key_valid = false;
-      }
+        sliding_deco = NULL;
+        deco->shadow_key_valid = false;
+    }
 
     if (!visible && sliding_deco == deco) sliding_deco = NULL;
     wlr_scene_node_set_enabled(&deco->tree->node, visible);
@@ -1136,8 +1136,8 @@ void deco_set_visible(struct Window *window, bool visible) {
     if (!visible && deco->animating) anim_snap(deco, deco->anim_to);
 }
 
-void deco_raise(struct Window *window) {
-    struct Decoration *deco = window ? window->decoration : NULL;
+void deco_raise(struct Window* window) {
+    struct Decoration* deco = window ? window->decoration : NULL;
     if (deco == NULL || deco->tree == NULL || window->scene_tree == NULL) {
         return;
     }
@@ -1148,17 +1148,17 @@ void deco_raise(struct Window *window) {
 }
 
 static bool
-deco_pick(double lx, double ly, struct Decoration **out, enum DecoPart *part) {
+deco_pick(double lx, double ly, struct Decoration** out, enum DecoPart* part) {
     double nx, ny;
-    struct wlr_scene_node *node =
+    struct wlr_scene_node* node =
         wlr_scene_node_at(&server.scene->tree.node, lx, ly, &nx, &ny);
 
     if (node == NULL) return false;
 
-    struct Window *w = window_from_scene_node(node);
+    struct Window* w = window_from_scene_node(node);
     if (w == NULL || w->closed || w->decoration == NULL) return false;
 
-    struct Decoration *deco = w->decoration;
+    struct Decoration* deco = w->decoration;
 
     if (node->type == WLR_SCENE_NODE_RECT) {
         if (deco->tab == NULL) return false;
@@ -1169,7 +1169,7 @@ deco_pick(double lx, double ly, struct Decoration **out, enum DecoPart *part) {
             bool found = false;
 
             for (int k = 0; k < DECO_BTN_COUNT; k++) {
-                struct wlr_scene_rect *hit = deco->btn[k].hit;
+                struct wlr_scene_rect* hit = deco->btn[k].hit;
                 if (hit != NULL && node == &hit->node) {
                     *part = (enum DecoPart)k;
                     found = true;
@@ -1195,7 +1195,7 @@ deco_pick(double lx, double ly, struct Decoration **out, enum DecoPart *part) {
     return false;
 }
 
-static void focus_and_raise(struct Window *w) {
+static void focus_and_raise(struct Window* w) {
     if (w->closed || !w->mapped || w->space_hidden) return;
     seat_focus(w);
     window_raise(w);
@@ -1205,7 +1205,7 @@ bool deco_handle_press(double lx, double ly, uint32_t button, uint32_t mods) {
     swallowed_button = 0;
     sliding_deco = NULL;
 
-    struct Decoration *deco = NULL;
+    struct Decoration* deco = NULL;
     enum DecoPart part = DECO_PART_TAB;
 
     if (!deco_pick(lx, ly, &deco, &part)) {
@@ -1213,7 +1213,7 @@ bool deco_handle_press(double lx, double ly, uint32_t button, uint32_t mods) {
         return false;
     }
 
-    struct Window *w = deco->window;
+    struct Window* w = deco->window;
     swallowed_button = button;
 
     if (button != BTN_LEFT) {
@@ -1259,7 +1259,7 @@ bool deco_handle_press(double lx, double ly, uint32_t button, uint32_t mods) {
 bool deco_handle_release(uint32_t button) {
     if (swallowed_button == 0 || swallowed_button != button) return false;
 
-    struct Decoration *deco = sliding_deco;
+    struct Decoration* deco = sliding_deco;
 
     swallowed_button = 0;
     sliding_deco = NULL;
@@ -1273,10 +1273,10 @@ bool deco_handle_release(uint32_t button) {
 }
 
 bool deco_handle_motion(double lx) {
-    struct Decoration *deco = sliding_deco;
+    struct Decoration* deco = sliding_deco;
     if (deco == NULL) return false;
 
-    struct Window *w = deco->window;
+    struct Window* w = deco->window;
     if (w == NULL || w->closed || !w->mapped || w->space_hidden
         || w->decoration != deco || deco->tree == NULL) {
         sliding_deco = NULL;

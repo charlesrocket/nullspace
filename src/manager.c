@@ -45,13 +45,13 @@ static void apply_space_rules(void) {
 
 void wm_mark_layout_dirty(void) {
     wm.layout_dirty = true;
-    struct Output *o;
+    struct Output* o;
     wl_list_for_each(o, &server.outputs, link) {
         if (!o->removed) wlr_output_schedule_frame(o->wlr_output);
     }
 }
 
-void wm_mark_space_urgent_on(struct Output *out, int space) {
+void wm_mark_space_urgent_on(struct Output* out, int space) {
     if (out == NULL || out->removed) return;
     if (space < 0 || space >= SPACE_COUNT) return;
     if (space == out->current_space) return;
@@ -67,7 +67,7 @@ void wm_mark_space_urgent(int space) {
 
 bool wm_animation_active(void) {
     if (!wm.animations.enabled) return false;
-    struct Window *w;
+    struct Window* w;
     wl_list_for_each(w, &wm.windows, link) {
         if (w->closed || !w->mapped) continue;
         if (w->anim.running) return true;
@@ -80,7 +80,7 @@ bool wm_animation_active(void) {
 void wm_animation_tick_all(void) {
     if (!wm.animations.enabled) return;
     int64_t now = animation_now_ms();
-    struct Window *w;
+    struct Window* w;
     wl_list_for_each(w, &wm.windows, link) {
         if (w->closed || !w->mapped) continue;
         if (!w->anim.running && w->hide_dir == 0) continue;
@@ -105,11 +105,11 @@ void wm_animation_tick_all(void) {
     }
 }
 
-struct Window *wm_focus_stack_top(void) {
+struct Window* wm_focus_stack_top(void) {
     if (wl_list_empty(&wm.focus_stack)) return NULL;
-    struct wl_list *cur = wm.focus_stack.prev;
+    struct wl_list* cur = wm.focus_stack.prev;
     while (cur != &wm.focus_stack) {
-        struct Window *w = wl_container_of(cur, w, focus_link);
+        struct Window* w = wl_container_of(cur, w, focus_link);
         if (!w->closed && w->mapped && !w->space_hidden) return w;
         cur = cur->prev;
     }
@@ -117,8 +117,8 @@ struct Window *wm_focus_stack_top(void) {
     return NULL;
 }
 
-struct Window *wm_focus_stack_top_except(struct Window *skip) {
-    struct Window *w;
+struct Window* wm_focus_stack_top_except(struct Window* skip) {
+    struct Window* w;
     wl_list_for_each_reverse(w, &wm.focus_stack, focus_link) {
         if (w == skip || w->closed || !w->mapped || w->space_hidden) continue;
         return w;
@@ -127,10 +127,10 @@ struct Window *wm_focus_stack_top_except(struct Window *skip) {
     return NULL;
 }
 
-struct Window *wm_next_window(struct Window *window) {
-    struct wl_list *sentinel = &wm.windows;
-    struct wl_list *stop = window ? &window->link : sentinel;
-    struct wl_list *cur = stop->next;
+struct Window* wm_next_window(struct Window* window) {
+    struct wl_list* sentinel = &wm.windows;
+    struct wl_list* stop = window ? &window->link : sentinel;
+    struct wl_list* cur = stop->next;
 
     while (cur != stop) {
         if (cur == sentinel) {
@@ -138,7 +138,7 @@ struct Window *wm_next_window(struct Window *window) {
             continue;
         }
 
-        struct Window *w = wl_container_of(cur, w, link);
+        struct Window* w = wl_container_of(cur, w, link);
         if (!w->closed && w->mapped && !w->space_hidden) return w;
         cur = cur->next;
     }
@@ -146,7 +146,7 @@ struct Window *wm_next_window(struct Window *window) {
     return NULL;
 }
 
-void wm_set_kb_layout(const char *layout) {
+void wm_set_kb_layout(const char* layout) {
     if (layout == NULL) return;
     if (wm.kb_layout != NULL && strcmp(wm.kb_layout, layout) == 0) return;
 
@@ -160,7 +160,7 @@ static void set_layout_impl(enum Layout layout) {
     wm.layout = layout;
 
     // Reparent windows to the correct scene tree.
-    struct Window *w;
+    struct Window* w;
     wl_list_for_each(w, &wm.windows, link) {
         if (w->closed || w->space_hidden) continue;
 
@@ -180,7 +180,7 @@ static void set_layout_impl(enum Layout layout) {
 }
 
 void wm_set_layout(enum Layout layout) {
-    struct Output *out = output_focused();
+    struct Output* out = output_focused();
     if (out != NULL && wm.space_layout_locked[out->current_space]) return;
     if (wm.layout == layout) return;
 
@@ -188,7 +188,7 @@ void wm_set_layout(enum Layout layout) {
     if (out != NULL) wm.space_layouts[out->current_space] = layout;
 }
 
-static void window_hide_offscreen(struct Window *window, int32_t dir) {
+static void window_hide_offscreen(struct Window* window, int32_t dir) {
     if (window->space_hidden) return;
 
     if (window->pos_valid) {
@@ -203,7 +203,7 @@ static void window_hide_offscreen(struct Window *window, int32_t dir) {
     window->has_target = false;
     window->space_hidden = true;
 
-    struct Output *out = window->output;
+    struct Output* out = window->output;
     if (out == NULL) out = output_primary();
 
     if (!wm.animations.enabled || dir == 0 || out == NULL || out->width <= 0) {
@@ -246,14 +246,14 @@ static void window_hide_offscreen(struct Window *window, int32_t dir) {
     );
 }
 
-void wm_switch_space_on(struct Output *out, int space) {
+void wm_switch_space_on(struct Output* out, int space) {
     if (out == NULL || out->removed) return;
     if (space < 0 || space >= SPACE_COUNT) return;
     if (space == out->current_space) return;
 
     const int32_t dir = (space > out->current_space) ? +1 : -1;
 
-    struct Window *window;
+    struct Window* window;
     wl_list_for_each(window, &wm.windows, link) {
         if (window->closed || !window->mapped) continue;
         if (window->output != out) continue;
@@ -285,8 +285,8 @@ void wm_switch_space_on(struct Output *out, int space) {
     set_layout_impl(wm.space_layouts[space]);
     ext_workspace_update_states();
 
-    struct Window *top = NULL;
-    struct Window *w;
+    struct Window* top = NULL;
+    struct Window* w;
     wl_list_for_each_reverse(w, &wm.focus_stack, focus_link) {
         if (w->closed || !w->mapped || w->space_hidden) continue;
         if (w->output != out) continue;
@@ -307,12 +307,12 @@ void wm_switch_space_on(struct Output *out, int space) {
     idle_update_inhibit();
 }
 
-void wm_minimize_window(struct Window *window) {
+void wm_minimize_window(struct Window* window) {
     if (window == NULL || window->closed) return;
     if (!window->mapped) return;
     if (window->minimized) return;
 
-    struct Window *w;
+    struct Window* w;
     wl_list_for_each(w, &wm.windows, link) {
         if (w->closed || !w->mapped || w->minimized || w->space_hidden)
             continue;
@@ -328,7 +328,7 @@ void wm_minimize_window(struct Window *window) {
     }
 
     // Hand off the focus.
-    struct wlr_surface *surface = window_wlr_surface(window);
+    struct wlr_surface* surface = window_wlr_surface(window);
     bool had_kbd_focus = surface != NULL && server.seat != NULL
                       && server.seat->keyboard_state.focused_surface == surface;
 
@@ -344,11 +344,11 @@ void wm_minimize_window(struct Window *window) {
     idle_update_inhibit();
 }
 
-void wm_restore_window(struct Window *window) {
+void wm_restore_window(struct Window* window) {
     if (window == NULL || window->closed) return;
     if (!window->minimized) return;
 
-    struct Output *out = window->output;
+    struct Output* out = window->output;
     if (out == NULL) out = output_focused();
     if (out == NULL) return;
 
@@ -382,10 +382,10 @@ void wm_restore_window(struct Window *window) {
     idle_update_inhibit();
 }
 
-struct Window *wm_restore_last_minimized(void) {
+struct Window* wm_restore_last_minimized(void) {
     if (wl_list_empty(&wm.minimized_windows)) return NULL;
 
-    struct Window *w =
+    struct Window* w =
         wl_container_of(wm.minimized_windows.prev, w, minimized_link);
 
     wm_restore_window(w);
@@ -394,7 +394,7 @@ struct Window *wm_restore_last_minimized(void) {
 
 void wm_switch_space(int space) { wm_switch_space_on(output_focused(), space); }
 
-void wm_move_window_to_space(struct Window *window, int space) {
+void wm_move_window_to_space(struct Window* window, int space) {
     if (space < 0 || space >= SPACE_COUNT) return;
     if (window == NULL || window->closed || window->space_hidden) return;
     if (window->space == space) return;
@@ -405,11 +405,11 @@ void wm_move_window_to_space(struct Window *window, int space) {
     ipc_notify_window_meta(window);
 }
 
-void wm_assign_new_window_space(struct Window *window, int space) {
+void wm_assign_new_window_space(struct Window* window, int space) {
     if (window == NULL || window->closed) return;
     if (space < 0 || space >= SPACE_COUNT) return;
 
-    struct Output *out = window->output;
+    struct Output* out = window->output;
     if (out == NULL) {
         out = output_focused();
         if (out == NULL) out = output_primary();
@@ -442,21 +442,21 @@ void wm_assign_new_window_space(struct Window *window, int space) {
     }
 }
 
-bool wm_set_wallpaper_path(const char *path) {
+bool wm_set_wallpaper_path(const char* path) {
     if (path == NULL || path[0] == '\0') return false;
 
     char resolved[4096];
-    const char *full = path;
+    const char* full = path;
 
     if (path[0] != '/') {
-        const char *home = getenv("HOME");
+        const char* home = getenv("HOME");
         if (home != NULL) {
             snprintf(resolved, sizeof(resolved), "%s/%s", home, path);
             full = resolved;
         }
     }
 
-    char *new_path = strdup(full);
+    char* new_path = strdup(full);
     if (new_path == NULL) return false;
 
     if (!wallpaper_load_image(full)) {

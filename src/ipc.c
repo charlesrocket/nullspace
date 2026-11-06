@@ -50,10 +50,10 @@
 
 struct IpcClient {
     struct wl_list link;
-    struct wl_event_source *source;
+    struct wl_event_source* source;
 
     char inbuf[IPC_INBUF_SIZE];
-    char *outbuf;
+    char* outbuf;
 
     size_t inlen;
     size_t outoff;
@@ -84,8 +84,8 @@ static size_t ipc_pending_count;
 
 static int ipc_server_fd = -1;
 static int ipc_reserve_fd = -1;
-static struct wl_event_source *ipc_server_source;
-static struct wl_event_loop *ipc_loop;
+static struct wl_event_source* ipc_server_source;
+static struct wl_event_loop* ipc_loop;
 static bool ipc_initialized;
 static char ipc_path[256];
 
@@ -95,7 +95,7 @@ static void schedule_pending_processing(void);
 
 static bool ipc_pending_scheduled;
 
-static void ipc_idle_handler(void *data) {
+static void ipc_idle_handler(void* data) {
     (void)data;
 
     ipc_pending_scheduled = false;
@@ -112,9 +112,9 @@ static void schedule_pending_processing(void) {
     wl_event_loop_add_idle(ipc_loop, ipc_idle_handler, NULL);
 }
 
-static bool parse_bool(const char *s, bool *out) {
-    static const char *const yes[] = {"1", "true", "on", "yes"};
-    static const char *const no[] = {"0", "false", "off", "no"};
+static bool parse_bool(const char* s, bool* out) {
+    static const char* const yes[] = {"1", "true", "on", "yes"};
+    static const char* const no[] = {"0", "false", "off", "no"};
 
     for (size_t i = 0; i < ARRAY_LEN(yes); i++) {
         if (!strcmp(s, yes[i])) {
@@ -131,16 +131,16 @@ static bool parse_bool(const char *s, bool *out) {
     return false;
 }
 
-static bool parse_space(const char *s, int *out) {
+static bool parse_space(const char* s, int* out) {
     long v;
     if (!ns_parse_int(s, &v) || v < 0 || v >= SPACE_COUNT) return false;
     *out = (int)v;
     return true;
 }
 
-static bool parse_u64(const char *s, uint64_t *out) {
+static bool parse_u64(const char* s, uint64_t* out) {
     if (s == NULL || *s == '\0' || *s == '-') return false;
-    char *end = NULL;
+    char* end = NULL;
     errno = 0;
     unsigned long long v = strtoull(s, &end, 10);
     if (errno != 0 || end == s || *end != '\0') return false;
@@ -148,27 +148,27 @@ static bool parse_u64(const char *s, uint64_t *out) {
     return true;
 }
 
-static char *skip_ws(char *s) {
+static char* skip_ws(char* s) {
     while (*s == ' ' || *s == '\t') s++;
     return s;
 }
 
-static char *split_token(char *s) {
-    char *p = strpbrk(s, " \t");
+static char* split_token(char* s) {
+    char* p = strpbrk(s, " \t");
     if (!p) return NULL;
     *p++ = '\0';
     p = skip_ws(p);
     return *p ? p : NULL;
 }
 
-static uint32_t client_wanted_mask(const struct IpcClient *c) {
+static uint32_t client_wanted_mask(const struct IpcClient* c) {
     uint32_t m = 0;
     if (!c->read_closed) m |= WL_EVENT_READABLE;
     if (c->outlen > c->outoff) m |= WL_EVENT_WRITABLE;
     return m;
 }
 
-static void client_sync_events(struct IpcClient *c) {
+static void client_sync_events(struct IpcClient* c) {
     if (c->source == NULL || c->dead) return;
 
     uint32_t want = client_wanted_mask(c);
@@ -182,7 +182,7 @@ static void client_sync_events(struct IpcClient *c) {
     c->mask = want;
 }
 
-static void client_flush(struct IpcClient *c) {
+static void client_flush(struct IpcClient* c) {
     while (!c->dead && c->outoff < c->outlen) {
         ssize_t n =
             send(c->fd, c->outbuf + c->outoff, c->outlen - c->outoff, 0);
@@ -216,7 +216,7 @@ static void client_flush(struct IpcClient *c) {
     client_sync_events(c);
 }
 
-static void outbuf_append(struct IpcClient *c, const char *data, size_t len) {
+static void outbuf_append(struct IpcClient* c, const char* data, size_t len) {
     if (c->dead || len == 0) return;
 
     size_t pending = c->outlen - c->outoff;
@@ -237,7 +237,7 @@ static void outbuf_append(struct IpcClient *c, const char *data, size_t len) {
             while (cap < c->outlen + len) cap *= 2;
             if (cap > IPC_OUTBUF_HARD) cap = IPC_OUTBUF_HARD;
 
-            char *nb = realloc(c->outbuf, cap);
+            char* nb = realloc(c->outbuf, cap);
             if (!nb) {
                 c->dead = true;
                 return;
@@ -253,7 +253,7 @@ static void outbuf_append(struct IpcClient *c, const char *data, size_t len) {
     client_sync_events(c);
 }
 
-static void client_destroy(struct IpcClient *c) {
+static void client_destroy(struct IpcClient* c) {
     if (c->source != NULL) wl_event_source_remove(c->source);
     wl_list_remove(&c->link);
     ipc_client_count--;
@@ -270,7 +270,7 @@ static void reap_dead_clients(void) {
 }
 
 static struct {
-    char *data;
+    char* data;
     size_t len, cap;
     bool failed;
 } line;
@@ -288,7 +288,7 @@ static bool line_reserve(size_t extra) {
     size_t cap = line.cap ? line.cap : 256;
     while (cap < need) cap *= 2;
 
-    char *p = realloc(line.data, cap);
+    char* p = realloc(line.data, cap);
     if (!p) {
         line.failed = true;
         return false;
@@ -299,7 +299,7 @@ static bool line_reserve(size_t extra) {
     return true;
 }
 
-static void line_put(const char *s, size_t n) {
+static void line_put(const char* s, size_t n) {
     if (n == 0 || !line_reserve(n)) return;
     memcpy(line.data + line.len, s, n);
     line.len += n;
@@ -308,7 +308,7 @@ static void line_put(const char *s, size_t n) {
 #define line_lit(s) line_put((s), sizeof(s) - 1)
 
 __attribute__((format(printf, 1, 2))) static void
-line_printf(const char *fmt, ...) {
+line_printf(const char* fmt, ...) {
     char tmp[128];
     va_list ap;
     va_start(ap, fmt);
@@ -323,13 +323,13 @@ line_printf(const char *fmt, ...) {
     line_put(tmp, (size_t)n);
 }
 
-static void line_quoted(const char *s) {
+static void line_quoted(const char* s) {
     if (!s) s = "";
     line_lit("\"");
 
-    const char *run = s;
-    for (const char *p = s;; p++) {
-        const char *esc = NULL;
+    const char* run = s;
+    for (const char* p = s;; p++) {
+        const char* esc = NULL;
         switch (*p) {
             case '"': esc = "\\\""; break;
             case '\\': esc = "\\\\"; break;
@@ -349,7 +349,7 @@ static void line_quoted(const char *s) {
     line_lit("\"");
 }
 
-static void line_send(struct IpcClient *to) {
+static void line_send(struct IpcClient* to) {
     line_lit("\n");
 
     if (line.failed) {
@@ -358,7 +358,7 @@ static void line_send(struct IpcClient *to) {
     } else if (to) {
         outbuf_append(to, line.data, line.len);
     } else {
-        struct IpcClient *c;
+        struct IpcClient* c;
         wl_list_for_each(c, &ipc_clients, link) {
             if (c->subscribed) outbuf_append(c, line.data, line.len);
         }
@@ -374,7 +374,7 @@ struct Value {
         long i;
         double f;
         bool b;
-        const char *s;
+        const char* s;
     } u;
 };
 
@@ -390,11 +390,11 @@ static struct Value v_bool(bool b) {
     return (struct Value){.type = V_BOOL, .u.b = b};
 }
 
-static struct Value v_str(const char *s) {
+static struct Value v_str(const char* s) {
     return (struct Value){.type = V_STR, .u.s = s ? s : ""};
 }
 
-static void line_value(const struct Value *v) {
+static void line_value(const struct Value* v) {
     switch (v->type) {
         case V_INT: line_printf("%ld", v->u.i); break;
         case V_FLOAT: line_printf("%g", v->u.f); break;
@@ -410,14 +410,14 @@ static void line_value(const struct Value *v) {
 }
 
 static void emit_kv(
-    struct IpcClient *to, const char *tag, const char *name, struct Value v
+    struct IpcClient* to, const char* tag, const char* name, struct Value v
 ) {
     line_printf("%s %s ", tag, name);
     line_value(&v);
     line_send(to);
 }
 
-static void respond(struct IpcClient *c, const char *err) {
+static void respond(struct IpcClient* c, const char* err) {
     if (err) {
         line_printf("ERR %s", err);
     } else {
@@ -427,7 +427,7 @@ static void respond(struct IpcClient *c, const char *err) {
     line_send(c);
 }
 
-static const char *reply_value(struct IpcClient *c, struct Value v) {
+static const char* reply_value(struct IpcClient* c, struct Value v) {
     line_lit("OK ");
     line_value(&v);
     line_send(c);
@@ -451,12 +451,12 @@ static void act_cycle_layout(intptr_t unused) {
 static void act_close(intptr_t unused) {
     (void)unused;
 
-    struct Window *w = window_focused();
+    struct Window* w = window_focused();
     if (w != NULL) window_close(w);
 }
 
 static void act_activate_window(intptr_t arg) {
-    struct Window *w = window_from_id((uint64_t)arg);
+    struct Window* w = window_from_id((uint64_t)arg);
     if (w == NULL) return;
 
     if (w->minimized) {
@@ -470,7 +470,7 @@ static void act_activate_window(intptr_t arg) {
 }
 
 static void act_minimize_window(intptr_t arg) {
-    struct Window *w = window_from_id((uint64_t)arg);
+    struct Window* w = window_from_id((uint64_t)arg);
     if (w != NULL) wm_minimize_window(w);
 }
 
@@ -480,16 +480,16 @@ static void act_restore_last_minimized(intptr_t unused) {
 }
 
 static void act_close_window(intptr_t arg) {
-    struct Window *w = window_from_id((uint64_t)arg);
+    struct Window* w = window_from_id((uint64_t)arg);
     if (w != NULL) window_close(w);
 }
 
 // Returns NULL/error text
-static const char *queue_action(IpcAction action, intptr_t arg) {
+static const char* queue_action(IpcAction action, intptr_t arg) {
     if (server.locked) return "SESSION LOCKED";
     if (ipc_pending_count >= IPC_PENDING_MAX) return "BUSY";
 
-    struct IpcPending *p = calloc(1, sizeof(*p));
+    struct IpcPending* p = calloc(1, sizeof(*p));
     if (p == NULL) return "OOM";
 
     p->action = action;
@@ -501,7 +501,7 @@ static const char *queue_action(IpcAction action, intptr_t arg) {
     return NULL;
 }
 
-static const char *queue_space_action(IpcAction action, const char *arg) {
+static const char* queue_space_action(IpcAction action, const char* arg) {
     int s;
     if (!parse_space(arg, &s)) return "bad space";
     return queue_action(action, (intptr_t)s);
@@ -533,70 +533,70 @@ static void after_set(enum IpcAfter a) {
 
 static int space_window_count(int space);
 
-static const char *get_layout(const char *arg, struct Value *out) {
+static const char* get_layout(const char* arg, struct Value* out) {
     (void)arg;
 
     *out = v_str(ns_layout_name(wm.layout));
     return NULL;
 }
 
-static const char *get_current_space(const char *arg, struct Value *out) {
+static const char* get_current_space(const char* arg, struct Value* out) {
     (void)arg;
 
-    struct Output *o = output_focused();
+    struct Output* o = output_focused();
     *out = v_int(o ? o->current_space : 0);
     return NULL;
 }
 
-static const char *get_space_window_count(const char *arg, struct Value *out) {
+static const char* get_space_window_count(const char* arg, struct Value* out) {
     int s;
     if (!parse_space(arg, &s)) return "bad space";
     *out = v_int(space_window_count(s));
     return NULL;
 }
 
-static const char *get_space_urgent(const char *arg, struct Value *out) {
+static const char* get_space_urgent(const char* arg, struct Value* out) {
     int s;
     if (!parse_space(arg, &s)) return "bad space";
-    struct Output *o = output_focused();
+    struct Output* o = output_focused();
     *out = v_bool(o ? o->space_urgent[s] : false);
     return NULL;
 }
 
-static const char *get_focused_title(const char *arg, struct Value *out) {
+static const char* get_focused_title(const char* arg, struct Value* out) {
     (void)arg;
 
-    struct Window *w = window_focused();
+    struct Window* w = window_focused();
     *out = v_str(w ? w->title : NULL);
     return NULL;
 }
 
-static const char *get_focused_app_id(const char *arg, struct Value *out) {
+static const char* get_focused_app_id(const char* arg, struct Value* out) {
     (void)arg;
 
-    struct Window *w = window_focused();
+    struct Window* w = window_focused();
     *out = v_str(w ? w->app_id : NULL);
     return NULL;
 }
 
-static const char *get_mfact(const char *arg, struct Value *out) {
+static const char* get_mfact(const char* arg, struct Value* out) {
     (void)arg;
 
     *out = v_float(wm.mfact);
     return NULL;
 }
 
-static const char *set_layout(const char *value) {
+static const char* set_layout(const char* value) {
     enum Layout l;
     if (!ns_parse_layout_name(value, &l)) return "bad layout";
     return queue_action(act_set_layout, (intptr_t)l);
 }
 
-static const char *set_current_space(const char *value) {
+static const char* set_current_space(const char* value) {
     return queue_space_action(act_switch_space, value);
 }
 
-static const char *set_mfact(const char *value) {
+static const char* set_mfact(const char* value) {
     float v;
     if (!ns_parse_float(value, &v) || v <= 0.0f || v >= 1.0f)
         return "bad value";
@@ -607,13 +607,13 @@ static const char *set_mfact(const char *value) {
     return NULL;
 }
 
-static const char *get_wallpaper(const char *arg, struct Value *out) {
+static const char* get_wallpaper(const char* arg, struct Value* out) {
     (void)arg;
     *out = v_str(wm.wallpaper.path);
     return NULL;
 }
 
-static const char *set_wallpaper(const char *value) {
+static const char* set_wallpaper(const char* value) {
     if (value[0] == '\0') return "bad value";
     if (!wm_set_wallpaper_path(value)) return "could not load";
 
@@ -621,16 +621,16 @@ static const char *set_wallpaper(const char *value) {
     return NULL;
 }
 
-static int window_pid(const struct Window *w) {
+static int window_pid(const struct Window* w) {
 #ifdef XWAYLAND
     if (w->is_xwayland) {
         return w->xwayland_surface != NULL ? (int)w->xwayland_surface->pid : 0;
     }
 #endif
-    const struct wlr_surface *s = w->xdg_toplevel->base->surface;
+    const struct wlr_surface* s = w->xdg_toplevel->base->surface;
     if (s == NULL || s->resource == NULL) return 0;
 
-    struct wl_client *client = wl_resource_get_client(s->resource);
+    struct wl_client* client = wl_resource_get_client(s->resource);
     if (client == NULL) return 0;
 
     pid_t pid = 0;
@@ -642,13 +642,13 @@ static int window_pid(const struct Window *w) {
 }
 
 static void
-inspect_window(struct IpcClient *c, const struct Window *w, bool focused) {
-    const char *monitor = NULL;
+inspect_window(struct IpcClient* c, const struct Window* w, bool focused) {
+    const char* monitor = NULL;
     if (w->output != NULL && w->output->wlr_output != NULL) {
         monitor = w->output->wlr_output->name;
     }
 
-    const char *ftl_id =
+    const char* ftl_id =
         w->foreign_handle != NULL ? w->foreign_handle->identifier : NULL;
 
     line_printf("CLIENT %llu pid %d", (unsigned long long)w->id, window_pid(w));
@@ -684,14 +684,14 @@ inspect_window(struct IpcClient *c, const struct Window *w, bool focused) {
     line_send(c);
 }
 
-static void cmd_inspect_windows(struct IpcClient *c) {
+static void cmd_inspect_windows(struct IpcClient* c) {
     size_t count = 0;
-    struct Window *w;
+    struct Window* w;
     wl_list_for_each(w, &wm.windows, link) {
         if (!w->closed) count++;
     }
 
-    struct Window *focused = window_focused();
+    struct Window* focused = window_focused();
     wl_list_for_each(w, &wm.windows, link) {
         if (w->closed) continue;
         inspect_window(c, w, w == focused);
@@ -701,7 +701,7 @@ static void cmd_inspect_windows(struct IpcClient *c) {
     line_send(c);
 }
 
-static void cmd_inspect(struct IpcClient *c, char *args) {
+static void cmd_inspect(struct IpcClient* c, char* args) {
     if (args != NULL && strcasecmp(args, "WINDOWS") == 0) {
         cmd_inspect_windows(c);
         return;
@@ -711,20 +711,20 @@ static void cmd_inspect(struct IpcClient *c, char *args) {
 }
 
 #define DEFINE_DECO_COLOR(keyname)                                             \
-    static const char *get_##keyname(const char *arg, struct Value *out) {     \
+    static const char* get_##keyname(const char* arg, struct Value* out) {     \
         static char hex[10];                                                   \
         (void)arg;                                                             \
         *out = v_str(color_to_hex(wm.keyname, hex));                           \
         return NULL;                                                           \
     }                                                                          \
-    static const char *set_##keyname(const char *value) {                      \
+    static const char* set_##keyname(const char* value) {                      \
         if (!ns_parse_hex_color(value, wm.keyname)) return "bad color";        \
         emit_kv(NULL, "EVT", #keyname, v_str(value));                          \
         deco_refresh_colors();                                                 \
         return NULL;                                                           \
     }
 
-static const char *color_to_hex(const float c[4], char buf[10]) {
+static const char* color_to_hex(const float c[4], char buf[10]) {
     unsigned int r = (unsigned int)(c[0] * 255.0f + 0.5f);
     unsigned int g = (unsigned int)(c[1] * 255.0f + 0.5f);
     unsigned int b = (unsigned int)(c[2] * 255.0f + 0.5f);
@@ -747,10 +747,10 @@ DEFINE_DECO_COLOR(deco_color_button_active)
 #undef DEFINE_DECO_COLOR
 
 static const struct SpecialOps {
-    const char *name;
+    const char* name;
     bool dump;
-    const char *(*get)(const char *arg, struct Value *out); // NULL: none
-    const char *(*set)(const char *value);                  // NULL: none
+    const char* (*get)(const char* arg, struct Value* out); // NULL: none
+    const char* (*set)(const char* value);                  // NULL: none
 } special_ops[] = {
     {                    "layout",  true,                     get_layout,set_layout                                                                         },
     {             "current_space",  true,              get_current_space,     set_current_space},
@@ -769,19 +769,19 @@ static const struct SpecialOps {
      set_deco_color_button_active                                                              },
 };
 
-static const struct SpecialOps *special_find(const char *name) {
+static const struct SpecialOps* special_find(const char* name) {
     for (size_t i = 0; i < ARRAY_LEN(special_ops); i++) {
         if (!strcmp(special_ops[i].name, name)) return &special_ops[i];
     }
     return NULL;
 }
 
-typedef bool (*KeyVisitor)(const char *name, struct Value v, void *ud);
+typedef bool (*KeyVisitor)(const char* name, struct Value v, void* ud);
 
 static bool special_visit(
-    const char *name, unsigned access, bool all_keys, KeyVisitor visit, void *ud
+    const char* name, unsigned access, bool all_keys, KeyVisitor visit, void* ud
 ) {
-    const struct SpecialOps *op = special_find(name);
+    const struct SpecialOps* op = special_find(name);
     struct Value v;
 
     if (op == NULL || !op->dump || op->get == NULL) return false;
@@ -790,7 +790,7 @@ static bool special_visit(
     return visit(name, v, ud);
 }
 
-static bool keys_visit(KeyVisitor visit, void *ud, bool all_keys) {
+static bool keys_visit(KeyVisitor visit, void* ud, bool all_keys) {
 #define IPC_KEY_INT(name, access, after, desc, field, min, max)                \
     if ((all_keys || ((access) & IPC_A_R))                                     \
         && visit(name, v_int((long)(field)), ud))                              \
@@ -823,20 +823,20 @@ static bool keys_visit(KeyVisitor visit, void *ud, bool all_keys) {
     return false;
 }
 
-static const char *
-special_get(struct IpcClient *c, const char *name, const char *arg) {
-    const struct SpecialOps *op = special_find(name);
+static const char*
+special_get(struct IpcClient* c, const char* name, const char* arg) {
+    const struct SpecialOps* op = special_find(name);
     struct Value v;
 
     if (op == NULL || op->get == NULL) return "unknown key";
 
-    const char *err = op->get(arg, &v);
+    const char* err = op->get(arg, &v);
     if (err) return err;
     return reply_value(c, v);
 }
 
-static const char *
-get_key(struct IpcClient *c, const char *key, const char *arg) {
+static const char*
+get_key(struct IpcClient* c, const char* key, const char* arg) {
 #define IPC_KEY_INT(name, access, after, desc, field, min, max)                \
     if (((access) & IPC_A_R) && !strcmp(key, name))                            \
         return reply_value(c, v_int((long)(field)));
@@ -869,16 +869,16 @@ get_key(struct IpcClient *c, const char *key, const char *arg) {
     return "unknown key";
 }
 
-static const char *
-special_set(const char *name, unsigned access, const char *value) {
-    const struct SpecialOps *op = special_find(name);
+static const char*
+special_set(const char* name, unsigned access, const char* value) {
+    const struct SpecialOps* op = special_find(name);
     if (!(access & IPC_A_W) || op == NULL || op->set == NULL)
         return "unknown/read-only key";
     return op->set(value);
 }
 
 // Returns NULL/error text
-static const char *set_key(const char *key, const char *value) {
+static const char* set_key(const char* key, const char* value) {
 #define IPC_KEY_INT(name, access, after, desc, field, min, max)                \
     if (((access) & IPC_A_W) && !strcmp(key, name)) {                          \
         long v;                                                                \
@@ -928,8 +928,8 @@ static const char *set_key(const char *key, const char *value) {
     return "unknown/read-only key";
 }
 
-static void check_special(const char *name, unsigned access) {
-    const struct SpecialOps *op = special_find(name);
+static void check_special(const char* name, unsigned access) {
+    const struct SpecialOps* op = special_find(name);
 
 #ifndef WALLPAPER
     if (!strcmp(name, "wallpaper_path")) return;
@@ -966,14 +966,14 @@ static void verify_special_keys(void) {
 #undef IPC_KEY_SPECIAL
 }
 
-static uint64_t window_id(const struct Window *w) { return w->id; }
+static uint64_t window_id(const struct Window* w) { return w->id; }
 
 static int space_window_count(int space) {
-    struct Output *o = output_focused();
+    struct Output* o = output_focused();
     if (o == NULL) return 0;
 
     int n = 0;
-    struct Window *w;
+    struct Window* w;
     wl_list_for_each(w, &wm.windows, link) {
         if (!w->closed && w->mapped && w->output == o && w->space == space) n++;
     }
@@ -981,15 +981,15 @@ static int space_window_count(int space) {
     return n;
 }
 
-static void emit_space_counts(struct IpcClient *to) {
+static void emit_space_counts(struct IpcClient* to) {
     for (int s = 0; s < SPACE_COUNT; s++) {
         line_printf("EVT space_window_count %d %d", s, space_window_count(s));
         line_send(to);
     }
 }
 
-static void emit_focus(struct IpcClient *to) {
-    struct Window *w = window_focused();
+static void emit_focus(struct IpcClient* to) {
+    struct Window* w = window_focused();
 
     line_printf("EVT focused %llu", (unsigned long long)(w ? window_id(w) : 0));
     line_send(to);
@@ -997,8 +997,8 @@ static void emit_focus(struct IpcClient *to) {
     emit_kv(to, "EVT", "focused_app_id", v_str(w ? w->app_id : NULL));
 }
 
-static void emit_window(struct IpcClient *to, const struct Window *w) {
-    const struct Icon *ic = w->icon;
+static void emit_window(struct IpcClient* to, const struct Window* w) {
+    const struct Icon* ic = w->icon;
 
     line_printf(
         "EVT window %llu space %d minimized %d title ",
@@ -1025,30 +1025,30 @@ static void emit_window(struct IpcClient *to, const struct Window *w) {
     }
 }
 
-static void emit_window_event(const char *name, const struct Window *w) {
+static void emit_window_event(const char* name, const struct Window* w) {
     line_printf("EVT %s %llu", name, (unsigned long long)window_id(w));
     line_send(NULL);
 }
 
 struct DumpCtx {
-    const char *tag;
-    struct IpcClient *to;
+    const char* tag;
+    struct IpcClient* to;
     bool all_keys;
 };
 
-static bool visit_dump(const char *name, struct Value v, void *ud) {
-    const struct DumpCtx *d = ud;
+static bool visit_dump(const char* name, struct Value v, void* ud) {
+    const struct DumpCtx* d = ud;
     emit_kv(d->to, d->tag, name, v);
     return false;
 }
 
-static void emit_all_state(struct IpcClient *to) {
+static void emit_all_state(struct IpcClient* to) {
     struct DumpCtx d = {"EVT", to, true};
     keys_visit(visit_dump, &d, d.all_keys);
     emit_space_counts(to);
     emit_focus(to);
 
-    struct Window *w;
+    struct Window* w;
     wl_list_for_each(w, &wm.windows, link) {
         if (!w->closed && w->mapped) emit_window(to, w);
     }
@@ -1064,7 +1064,7 @@ void ipc_notify_layout(void) {
 
 void ipc_notify_space(void) {
     if (!ipc_initialized) return;
-    struct Output *o = output_focused();
+    struct Output* o = output_focused();
     if (o != NULL) {
         emit_kv(NULL, "EVT", "current_space", v_int(o->current_space));
     }
@@ -1082,7 +1082,7 @@ void ipc_notify_kb_layout(void) {
     emit_kv(NULL, "EVT", "kb_layout", v_str(wm.kb_layout));
 }
 
-void ipc_notify_window_opened(struct Window *w) {
+void ipc_notify_window_opened(struct Window* w) {
     if (!ipc_initialized || !w) return;
     emit_window_event("window_opened", w);
     emit_window(NULL, w);
@@ -1090,14 +1090,14 @@ void ipc_notify_window_opened(struct Window *w) {
     ipc_notify_focus();
 }
 
-void ipc_notify_window_closed(struct Window *w) {
+void ipc_notify_window_closed(struct Window* w) {
     if (!ipc_initialized || !w) return;
     emit_window_event("window_closed", w);
     ipc_notify_space();
     ipc_notify_focus();
 }
 
-void ipc_notify_window_meta(struct Window *w) {
+void ipc_notify_window_meta(struct Window* w) {
     if (!ipc_initialized || !w) return;
     emit_window(NULL, w);
     if (w == window_focused()) ipc_notify_focus();
@@ -1111,7 +1111,7 @@ void ipc_notify_all_state(void) {
 void ipc_flush_pending(void) {
     if (!ipc_initialized) return;
 
-    struct IpcClient *c;
+    struct IpcClient* c;
     wl_list_for_each(c, &ipc_clients, link) {
         if (!c->dead) client_flush(c);
     }
@@ -1119,56 +1119,56 @@ void ipc_flush_pending(void) {
     reap_dead_clients();
 }
 
-static void cmd_ping(struct IpcClient *c, char *args) {
+static void cmd_ping(struct IpcClient* c, char* args) {
     (void)args;
     respond(c, NULL);
 }
 
-static void cmd_quit(struct IpcClient *c, char *args) {
+static void cmd_quit(struct IpcClient* c, char* args) {
     (void)args;
     c->dead = true;
 }
 
-static void cmd_config(struct IpcClient *c, char *args) {
+static void cmd_config(struct IpcClient* c, char* args) {
     (void)args;
     struct DumpCtx d = {"CFG", c, false};
     keys_visit(visit_dump, &d, d.all_keys);
     respond(c, NULL);
 }
 
-static void cmd_subscribe(struct IpcClient *c, char *args) {
+static void cmd_subscribe(struct IpcClient* c, char* args) {
     (void)args;
     respond(c, NULL);
     emit_all_state(c);
     c->subscribed = true;
 }
 
-static void cmd_unsubscribe(struct IpcClient *c, char *args) {
+static void cmd_unsubscribe(struct IpcClient* c, char* args) {
     (void)args;
     c->subscribed = false;
     respond(c, NULL);
 }
 
-static void cmd_get(struct IpcClient *c, char *args) {
+static void cmd_get(struct IpcClient* c, char* args) {
     if (!args) {
         respond(c, "key is missing");
         return;
     }
 
-    const char *key = args;
-    const char *arg = split_token(args);
+    const char* key = args;
+    const char* arg = split_token(args);
 
-    const char *err = get_key(c, key, arg);
+    const char* err = get_key(c, key, arg);
     if (err) respond(c, err);
 }
 
-static void cmd_set(struct IpcClient *c, char *args) {
+static void cmd_set(struct IpcClient* c, char* args) {
     if (!args) {
         respond(c, "key is missing");
         return;
     }
 
-    char *value = split_token(args);
+    char* value = split_token(args);
     if (!value) {
         respond(c, "value is missing");
         return;
@@ -1177,7 +1177,7 @@ static void cmd_set(struct IpcClient *c, char *args) {
     respond(c, set_key(args, value));
 }
 
-static void cmd_activate(struct IpcClient *c, char *args) {
+static void cmd_activate(struct IpcClient* c, char* args) {
     uint64_t id;
     if (!parse_u64(args, &id)) {
         respond(c, "bad window id");
@@ -1192,7 +1192,7 @@ static void cmd_activate(struct IpcClient *c, char *args) {
     respond(c, queue_action(act_activate_window, (intptr_t)id));
 }
 
-static void cmd_window_close(struct IpcClient *c, char *args) {
+static void cmd_window_close(struct IpcClient* c, char* args) {
     uint64_t id;
     if (!parse_u64(args, &id)) {
         respond(c, "bad window id");
@@ -1207,7 +1207,7 @@ static void cmd_window_close(struct IpcClient *c, char *args) {
     respond(c, queue_action(act_close_window, (intptr_t)id));
 }
 
-static void cmd_minimize(struct IpcClient *c, char *args) {
+static void cmd_minimize(struct IpcClient* c, char* args) {
     uint64_t id;
     if (!parse_u64(args, &id)) {
         respond(c, "bad window id");
@@ -1222,13 +1222,13 @@ static void cmd_minimize(struct IpcClient *c, char *args) {
     respond(c, queue_action(act_minimize_window, (intptr_t)id));
 }
 
-static void cmd_restore_last(struct IpcClient *c, char *args) {
+static void cmd_restore_last(struct IpcClient* c, char* args) {
     (void)args;
 
     respond(c, queue_action(act_restore_last_minimized, 0));
 }
 
-static void b64_encode(const uint8_t *src, size_t len, char *dst) {
+static void b64_encode(const uint8_t* src, size_t len, char* dst) {
     size_t i = 0, j = 0;
     for (; i + 3 <= len; i += 3) {
         uint32_t v = ((uint32_t)src[i] << 16) | ((uint32_t)src[i + 1] << 8)
@@ -1257,7 +1257,7 @@ static void b64_encode(const uint8_t *src, size_t len, char *dst) {
     dst[j] = '\0';
 }
 
-static const char *format_name(uint32_t fmt) {
+static const char* format_name(uint32_t fmt) {
     switch (fmt) {
         case DRM_FORMAT_ARGB8888: return "argb8888";
         case DRM_FORMAT_XRGB8888: return "xrgb8888";
@@ -1267,20 +1267,20 @@ static const char *format_name(uint32_t fmt) {
     }
 }
 
-static void cmd_geticon(struct IpcClient *c, char *args) {
+static void cmd_geticon(struct IpcClient* c, char* args) {
     uint64_t id;
     if (!parse_u64(args, &id)) {
         respond(c, "bad window id");
         return;
     }
 
-    struct Window *w = window_from_id(id);
+    struct Window* w = window_from_id(id);
     if (w == NULL) {
         respond(c, "no such window");
         return;
     }
 
-    const struct Icon *ic = w->icon;
+    const struct Icon* ic = w->icon;
     if (ic == NULL || ic->buffer_count == 0) {
         line_lit("OK 0");
         line_send(c);
@@ -1305,7 +1305,7 @@ static void cmd_geticon(struct IpcClient *c, char *args) {
     line_send(c);
 
     for (size_t i = 0; i < ic->buffer_count && !c->dead; i++) {
-        const struct IconBuffer *b = &ic->buffers[i];
+        const struct IconBuffer* b = &ic->buffers[i];
         size_t raw = (size_t)b->size * (size_t)b->size * 4u;
         size_t chunks = (raw + ICON_CHUNK_RAW - 1) / ICON_CHUNK_RAW;
 
@@ -1315,7 +1315,7 @@ static void cmd_geticon(struct IpcClient *c, char *args) {
             if (rem > ICON_CHUNK_RAW) rem = ICON_CHUNK_RAW;
 
             size_t enc_len = b64_len(rem);
-            char *enc = malloc(enc_len + 1);
+            char* enc = malloc(enc_len + 1);
             if (enc == NULL) {
                 c->dead = true;
                 break;
@@ -1336,9 +1336,9 @@ static void cmd_geticon(struct IpcClient *c, char *args) {
     }
 }
 
-static void cmd_dpms(struct IpcClient *c, char *args) {
+static void cmd_dpms(struct IpcClient* c, char* args) {
     static const struct {
-        const char *name;
+        const char* name;
         int mode;
     } modes[] = {
         {   "off", 0},
@@ -1351,7 +1351,7 @@ static void cmd_dpms(struct IpcClient *c, char *args) {
         return;
     }
 
-    char *output = split_token(args);
+    char* output = split_token(args);
 
     int mode = -1;
     for (size_t i = 0; i < ARRAY_LEN(modes); i++) {
@@ -1372,8 +1372,8 @@ static void cmd_dpms(struct IpcClient *c, char *args) {
 }
 
 static const struct Verb {
-    const char *name;
-    void (*handler)(struct IpcClient *, char *args);
+    const char* name;
+    void (*handler)(struct IpcClient*, char* args);
 } verbs[] = {
     {           "PING",         cmd_ping},
     {           "QUIT",         cmd_quit},
@@ -1392,7 +1392,7 @@ static const struct Verb {
 };
 
 static const struct QueuedVerb {
-    const char *name;
+    const char* name;
     IpcAction action;
     bool takes_space;
 } queued_verbs[] = {
@@ -1402,7 +1402,7 @@ static const struct QueuedVerb {
     {        "CLOSE",         act_close, false},
 };
 
-static void dispatch_line(struct IpcClient *c, char *text) {
+static void dispatch_line(struct IpcClient* c, char* text) {
     text = skip_ws(text);
 
     size_t len = strlen(text);
@@ -1414,7 +1414,7 @@ static void dispatch_line(struct IpcClient *c, char *text) {
 
     if (len == 0) return;
 
-    char *args = split_token(text);
+    char* args = split_token(text);
 
     for (size_t i = 0; i < ARRAY_LEN(verbs); i++) {
         if (!strcmp(text, verbs[i].name)) {
@@ -1424,7 +1424,7 @@ static void dispatch_line(struct IpcClient *c, char *text) {
     }
 
     for (size_t i = 0; i < ARRAY_LEN(queued_verbs); i++) {
-        const struct QueuedVerb *v = &queued_verbs[i];
+        const struct QueuedVerb* v = &queued_verbs[i];
         if (strcmp(text, v->name) != 0) continue;
         respond(
             c, v->takes_space ? queue_space_action(v->action, args)
@@ -1436,7 +1436,7 @@ static void dispatch_line(struct IpcClient *c, char *text) {
     respond(c, "unknown command");
 }
 
-static void client_read(struct IpcClient *c) {
+static void client_read(struct IpcClient* c) {
     if (c->dead || c->read_closed) return;
 
     ssize_t n;
@@ -1457,7 +1457,7 @@ static void client_read(struct IpcClient *c) {
     c->inlen += (size_t)n;
 
     size_t start = 0;
-    char *nl;
+    char* nl;
     while (!c->dead && (nl = memchr(c->inbuf + start, '\n', c->inlen - start))
     ) {
         *nl = '\0';
@@ -1475,9 +1475,9 @@ static void client_read(struct IpcClient *c) {
     if (c->inlen == sizeof(c->inbuf)) c->dead = true; // line too long
 }
 
-static int client_event_handler(int fd, uint32_t mask, void *data) {
+static int client_event_handler(int fd, uint32_t mask, void* data) {
     (void)fd;
-    struct IpcClient *c = data;
+    struct IpcClient* c = data;
 
     if (mask & WL_EVENT_ERROR) c->dead = true;
     if (!c->dead && (mask & (WL_EVENT_READABLE | WL_EVENT_HANGUP)))
@@ -1489,7 +1489,7 @@ static int client_event_handler(int fd, uint32_t mask, void *data) {
     return 0;
 }
 
-static void reject_client(int fd, const char *msg) {
+static void reject_client(int fd, const char* msg) {
     if (set_nosigpipe(fd)) (void)send(fd, msg, strlen(msg), 0);
     close(fd);
 }
@@ -1530,7 +1530,7 @@ static void accept_clients(void) {
             continue;
         }
 
-        struct IpcClient *c = calloc(1, sizeof(*c));
+        struct IpcClient* c = calloc(1, sizeof(*c));
         if (!c) {
             close(fd);
             return;
@@ -1549,7 +1549,7 @@ static void accept_clients(void) {
     }
 }
 
-static int server_event_handler(int fd, uint32_t mask, void *data) {
+static int server_event_handler(int fd, uint32_t mask, void* data) {
     (void)fd;
     (void)data;
 
@@ -1572,17 +1572,17 @@ static int socket_fail(int fd, bool unlink_path) {
     return -1;
 }
 
-static bool socket_in_use(const struct sockaddr_un *addr, socklen_t len) {
+static bool socket_in_use(const struct sockaddr_un* addr, socklen_t len) {
     int probe = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (probe < 0) return false;
 
-    bool live = connect(probe, (const struct sockaddr *)addr, len) == 0;
+    bool live = connect(probe, (const struct sockaddr*)addr, len) == 0;
     close(probe);
     return live;
 }
 
 static int make_socket(void) {
-    const char *runtime = getenv("XDG_RUNTIME_DIR");
+    const char* runtime = getenv("XDG_RUNTIME_DIR");
     if (!runtime || !*runtime) {
         log_warn("XDG_RUNTIME_DIR is not set");
         return -1;
@@ -1626,7 +1626,7 @@ static int make_socket(void) {
     unlink(ipc_path);
 
     mode_t old_umask = umask(0177);
-    int rc = bind(fd, (struct sockaddr *)&addr, addrlen);
+    int rc = bind(fd, (struct sockaddr*)&addr, addrlen);
     int bind_errno = errno;
     umask(old_umask);
 
@@ -1661,7 +1661,7 @@ static void register_server_source(void) {
         log_warn("Failed to register IPC socket with the event loop");
 }
 
-void ipc_attach_event_loop(struct wl_event_loop *loop) {
+void ipc_attach_event_loop(struct wl_event_loop* loop) {
     ipc_loop = loop;
     register_server_source();
 

@@ -69,41 +69,41 @@ static bool swallow_take(uint32_t keycode) {
 }
 
 struct DeviceEntry {
-    struct wlr_input_device *device;
+    struct wlr_input_device* device;
     struct wl_listener destroy;
     struct wl_list link;
 };
 
 static struct wl_list input_devices;
 
-static void device_entry_destroy(struct wl_listener *l, void *data) {
+static void device_entry_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct DeviceEntry *e = wl_container_of(l, e, destroy);
+    struct DeviceEntry* e = wl_container_of(l, e, destroy);
     wl_list_remove(&e->destroy.link);
     wl_list_remove(&e->link);
     free(e);
 }
 
 void seat_foreach_input_device(
-    void (*fn)(struct wlr_input_device *, void *), void *data
+    void (*fn)(struct wlr_input_device*, void*), void* data
 ) {
-    struct DeviceEntry *e;
+    struct DeviceEntry* e;
     wl_list_for_each(e, &input_devices, link) { fn(e->device, data); }
 }
 
-void seat_spawn(const void *arg) { spawn((const char *const *)arg); }
-void seat_spawn_shell(const char *cmdline) { spawn_shell(cmdline); }
+void seat_spawn(const void* arg) { spawn((const char* const*)arg); }
+void seat_spawn_shell(const char* cmdline) { spawn_shell(cmdline); }
 
 static void resize_mode_adjust(int32_t dx, int32_t dy);
 
 static struct {
     bool active;
-    struct Window *window;
+    struct Window* window;
     int32_t base_w, base_h;
 } resize_mode;
 
-static struct wl_event_source *resize_repeat_source;
+static struct wl_event_source* resize_repeat_source;
 static uint32_t resize_repeat_keycode; // 0 is idle
 static int32_t resize_repeat_dx;
 static int32_t resize_repeat_dy;
@@ -115,7 +115,7 @@ static void resize_repeat_stop(void) {
     resize_repeat_keycode = 0;
 }
 
-static int resize_repeat_fire(void *data) {
+static int resize_repeat_fire(void* data) {
     (void)data;
 
     if (!resize_mode.active) {
@@ -157,7 +157,7 @@ static void resize_mode_exit(void) {
     resize_repeat_stop();
 }
 
-void seat_resize_mode_window_destroyed(struct Window *w) {
+void seat_resize_mode_window_destroyed(struct Window* w) {
     if (resize_mode.active && resize_mode.window == w) resize_mode_exit();
 }
 
@@ -167,7 +167,7 @@ static void resize_mode_toggle(void) {
         return;
     }
 
-    struct Window *w = window_focused();
+    struct Window* w = window_focused();
     if (w == NULL || w->closed || !w->mapped || w->space_hidden) return;
     if (w->fullscreen) return;
 
@@ -210,7 +210,7 @@ static bool resize_mode_handle_key(uint32_t keycode, xkb_keysym_t sym) {
     return true;
 }
 
-static bool apply_size_per_pixels(struct Window *w, int32_t px_delta) {
+static bool apply_size_per_pixels(struct Window* w, int32_t px_delta) {
     if (px_delta == 0) return false;
 
     int32_t cur_w = (w->prop_valid && w->prop_w > 0) ? w->prop_w : w->width;
@@ -236,7 +236,7 @@ static bool apply_size_per_pixels(struct Window *w, int32_t px_delta) {
 static bool apply_mfact_pixels(int32_t px_delta, bool vertical) {
     if (px_delta == 0) return false;
 
-    struct Output *o = output_primary();
+    struct Output* o = output_primary();
     if (o == NULL) return false;
 
     int32_t ref = vertical ? o->height : o->width;
@@ -261,7 +261,7 @@ static bool apply_mfact_pixels(int32_t px_delta, bool vertical) {
 }
 
 static void resize_mode_adjust(int32_t dx, int32_t dy) {
-    struct Window *w = resize_mode.window;
+    struct Window* w = resize_mode.window;
     if (w == NULL || w->closed || !w->mapped || w->space_hidden) {
         resize_mode_exit();
         return;
@@ -365,16 +365,16 @@ void seat_finish(void) {
     }
 }
 
-static void seat_action(enum Action action, const void *arg) {
+static void seat_action(enum Action action, const void* arg) {
     switch (action) {
         case ACTION_NONE: break;
         case ACTION_SPAWN: seat_spawn(arg); break;
-        case ACTION_SPAWN_SHELL: seat_spawn_shell((const char *)arg); break;
+        case ACTION_SPAWN_SHELL: seat_spawn_shell((const char*)arg); break;
         case ACTION_CLOSE:
             {
-                struct Window *focused = window_focused();
+                struct Window* focused = window_focused();
                 if (focused != NULL) {
-                    struct Window *next = wm_focus_stack_top_except(focused);
+                    struct Window* next = wm_focus_stack_top_except(focused);
                     window_close(focused);
 
                     if (next != NULL) seat_focus(next);
@@ -385,7 +385,7 @@ static void seat_action(enum Action action, const void *arg) {
 
         case ACTION_FOCUS_NEXT:
             {
-                struct Window *next = wm_next_window(window_focused());
+                struct Window* next = wm_next_window(window_focused());
                 if (next != NULL) {
                     seat_focus(next);
                     if (!layouts_is_tiled(wm.layout)) window_raise(next);
@@ -400,7 +400,7 @@ static void seat_action(enum Action action, const void *arg) {
         case ACTION_RESTORE_MINIMIZED: wm_restore_last_minimized(); break;
         case ACTION_FULLSCREEN:
             {
-                struct Window *focused = window_focused();
+                struct Window* focused = window_focused();
                 if (focused != NULL) {
                     window_set_fullscreen(focused, !focused->fullscreen);
                 }
@@ -460,7 +460,7 @@ static void seat_action(enum Action action, const void *arg) {
 
 static bool handle_keybinding(xkb_keysym_t sym, uint32_t mods) {
     for (size_t i = 0; i < config.bind_count; i++) {
-        const struct UserBind *ub = &config.binds[i];
+        const struct UserBind* ub = &config.binds[i];
         if (ub->key != sym || ub->mods != mods) continue;
         seat_action(ub->action, ub->arg);
         return true;
@@ -469,11 +469,11 @@ static bool handle_keybinding(xkb_keysym_t sym, uint32_t mods) {
     return false;
 }
 
-static void keyboard_handle_modifiers(struct wl_listener *l, void *data) {
+static void keyboard_handle_modifiers(struct wl_listener* l, void* data) {
     (void)data;
 
     server_notify_activity();
-    struct Keyboard *kb = wl_container_of(l, kb, modifiers);
+    struct Keyboard* kb = wl_container_of(l, kb, modifiers);
     wlr_seat_set_keyboard(server.seat, kb->wlr_keyboard);
     wlr_seat_keyboard_notify_modifiers(
         server.seat, &kb->wlr_keyboard->modifiers
@@ -487,11 +487,11 @@ static bool is_modifier_sym(xkb_keysym_t s) {
         || s == XKB_KEY_ISO_Level3_Shift || s == XKB_KEY_Mode_switch;
 }
 
-static void keyboard_handle_key(struct wl_listener *l, void *data) {
+static void keyboard_handle_key(struct wl_listener* l, void* data) {
     server_notify_activity();
 
-    struct Keyboard *kb = wl_container_of(l, kb, key);
-    struct wlr_keyboard_key_event *ev = data;
+    struct Keyboard* kb = wl_container_of(l, kb, key);
+    struct wlr_keyboard_key_event* ev = data;
 
     wlr_seat_set_keyboard(server.seat, kb->wlr_keyboard);
 
@@ -506,19 +506,19 @@ static void keyboard_handle_key(struct wl_listener *l, void *data) {
 
     // xkb keycodes are evdev codes + 8.
     uint32_t keycode = ev->keycode + 8;
-    const xkb_keysym_t *syms = NULL;
+    const xkb_keysym_t* syms = NULL;
     int nsyms =
         xkb_state_key_get_syms(kb->wlr_keyboard->xkb_state, keycode, &syms);
 
     // Level-0 (unshifted) keysym for keybind lookup (yields XKB_KEY_exclam
     // instead of XKB_KEY_1).
     xkb_keysym_t layout_sym = XKB_KEY_NoSymbol;
-    struct xkb_keymap *keymap = kb->wlr_keyboard->keymap;
+    struct xkb_keymap* keymap = kb->wlr_keyboard->keymap;
     if (keymap != NULL) {
         xkb_layout_index_t layout =
             xkb_state_key_get_layout(kb->wlr_keyboard->xkb_state, keycode);
 
-        const xkb_keysym_t *layout_syms = NULL;
+        const xkb_keysym_t* layout_syms = NULL;
         if (xkb_keymap_key_get_syms_by_level(
                 keymap, keycode, layout, 0, &layout_syms
             )
@@ -581,10 +581,10 @@ static void keyboard_handle_key(struct wl_listener *l, void *data) {
     }
 }
 
-static void keyboard_handle_destroy(struct wl_listener *l, void *data) {
+static void keyboard_handle_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Keyboard *kb = wl_container_of(l, kb, destroy);
+    struct Keyboard* kb = wl_container_of(l, kb, destroy);
     wl_list_remove(&kb->modifiers.link);
     wl_list_remove(&kb->key.link);
     wl_list_remove(&kb->destroy.link);
@@ -592,8 +592,8 @@ static void keyboard_handle_destroy(struct wl_listener *l, void *data) {
     free(kb);
 }
 
-void seat_handle_new_input(struct wlr_input_device *device) {
-    struct DeviceEntry *entry = calloc(1, sizeof(*entry));
+void seat_handle_new_input(struct wlr_input_device* device) {
+    struct DeviceEntry* entry = calloc(1, sizeof(*entry));
     if (entry == NULL) return;
 
     entry->device = device;
@@ -605,7 +605,7 @@ void seat_handle_new_input(struct wlr_input_device *device) {
     switch (device->type) {
         case WLR_INPUT_DEVICE_KEYBOARD:
             {
-                struct Keyboard *kb = calloc(1, sizeof(*kb));
+                struct Keyboard* kb = calloc(1, sizeof(*kb));
                 if (kb == NULL) break;
                 kb->wlr_keyboard = wlr_keyboard_from_input_device(device);
 
@@ -649,17 +649,17 @@ void seat_handle_new_input(struct wlr_input_device *device) {
     wlr_seat_set_capabilities(server.seat, caps);
 }
 
-void seat_update_decorations(const struct Window *focused) {
-    struct Window *w;
+void seat_update_decorations(const struct Window* focused) {
+    struct Window* w;
     wl_list_for_each(w, &wm.windows, link) {
         if (w->closed) continue;
         deco_update_active(w, w == focused); // no-op without a decoration
     }
 }
 
-static struct Window *seat_window_for_surface(const struct wlr_surface *surface
+static struct Window* seat_window_for_surface(const struct wlr_surface* surface
 ) {
-    struct Window *w;
+    struct Window* w;
     wl_list_for_each(w, &wm.windows, link) {
         if (!w->closed && window_wlr_surface(w) == surface) return w;
     }
@@ -667,7 +667,7 @@ static struct Window *seat_window_for_surface(const struct wlr_surface *surface
     return NULL;
 }
 
-void seat_focus(struct Window *window) {
+void seat_focus(struct Window* window) {
     if (server.locked) {
         if (window != NULL) {
             wl_list_remove(&window->focus_link);
@@ -679,17 +679,17 @@ void seat_focus(struct Window *window) {
 
     if (window == NULL) window = wm_focus_stack_top();
 
-    struct wlr_surface *want = window ? window_wlr_surface(window) : NULL;
+    struct wlr_surface* want = window ? window_wlr_surface(window) : NULL;
     if (window != NULL && want == NULL) return;
 
-    struct wlr_surface *prev = server.seat->keyboard_state.focused_surface;
+    struct wlr_surface* prev = server.seat->keyboard_state.focused_surface;
     if (prev == want) {
         seat_update_decorations(window);
         return;
     }
 
     if (prev != NULL) {
-        struct Window *pw = seat_window_for_surface(prev);
+        struct Window* pw = seat_window_for_surface(prev);
         if (pw != NULL) window_set_activated(pw, false);
     }
 
@@ -698,7 +698,7 @@ void seat_focus(struct Window *window) {
 
         window_set_activated(window, true);
 
-        struct wlr_keyboard *kb = wlr_seat_get_keyboard(server.seat);
+        struct wlr_keyboard* kb = wlr_seat_get_keyboard(server.seat);
         wlr_seat_keyboard_notify_enter(
             server.seat, want, kb ? kb->keycodes : NULL,
             kb ? kb->num_keycodes : 0, kb ? &kb->modifiers : NULL
@@ -722,10 +722,10 @@ void seat_focus(struct Window *window) {
 void seat_refocus_after_drag(void) {
     if (server.cursor == NULL) return;
 
-    struct wlr_surface *surface = NULL;
+    struct wlr_surface* surface = NULL;
     double sx = 0, sy = 0;
 
-    struct Window *target =
+    struct Window* target =
         window_at(server.cursor->x, server.cursor->y, &surface, &sx, &sy);
 
     if (target == NULL || target->closed || !target->mapped

@@ -35,7 +35,7 @@
 #define EDGE_GRAB_PX 6
 
 struct InteractiveOp {
-    struct Window *window;
+    struct Window* window;
     enum SeatOp op;
 
     uint32_t edges;
@@ -53,20 +53,20 @@ struct InteractiveOp {
 };
 
 static struct InteractiveOp interactive;
-static struct Window *hovered_window;
+static struct Window* hovered_window;
 static unsigned buttons_down;
 
-static struct Window *pointer_grab_window;
+static struct Window* pointer_grab_window;
 static double pointer_grab_lx, pointer_grab_ly; // global cursor at press
 static double pointer_grab_sx, pointer_grab_sy; // surface at press
 static uint64_t last_activity_ms;
-static struct wl_event_source *hide_timer;
+static struct wl_event_source* hide_timer;
 static bool hide_timer_armed, hide_idle_on, hide_typing_on, cursor_hidden,
     edge_cursor_active;
 
 bool cursor_is_hidden(void) { return cursor_hidden; }
 
-static void set_xcursor(const char *name) {
+static void set_xcursor(const char* name) {
     if (cursor_hidden) return;
     wlr_cursor_set_xcursor(server.cursor, server.cursor_mgr, name);
 }
@@ -74,10 +74,10 @@ static void set_xcursor(const char *name) {
 static void drag_icon_update_position(void) {
     if (server.seat == NULL || server.seat->drag == NULL) return;
 
-    struct wlr_drag_icon *icon = server.seat->drag->icon;
+    struct wlr_drag_icon* icon = server.seat->drag->icon;
     if (icon == NULL || icon->data == NULL) return;
 
-    struct wlr_scene_tree *tree = icon->data;
+    struct wlr_scene_tree* tree = icon->data;
     wlr_scene_node_set_position(
         &tree->node, (int32_t)round(server.cursor->x),
         (int32_t)round(server.cursor->y)
@@ -85,10 +85,10 @@ static void drag_icon_update_position(void) {
 }
 
 static void interactive_apply(double cx, double cy) {
-    struct InteractiveOp *g = &interactive;
+    struct InteractiveOp* g = &interactive;
     if (!g->active || g->window == NULL || g->window->closed) return;
 
-    struct Window *v = g->window;
+    struct Window* v = g->window;
 
     int32_t dcx = (int32_t)(cx - g->cursor_start_x);
     int32_t dcy = (int32_t)(cy - g->cursor_start_y);
@@ -115,7 +115,7 @@ static void interactive_apply(double cx, double cy) {
         v->saved_x = nx;
         v->saved_y = ny;
 
-        struct Window *child;
+        struct Window* child;
         wl_list_for_each(child, &wm.windows, link) {
             if (child->closed || !child->mapped || child->space_hidden)
                 continue;
@@ -188,7 +188,7 @@ static void interactive_apply(double cx, double cy) {
 }
 
 void cursor_begin_interactive(
-    struct Window *window, enum SeatOp op, uint32_t edges
+    struct Window* window, enum SeatOp op, uint32_t edges
 ) {
     if (server.locked || interactive.active) return;
     if (window == NULL || window->closed) return;
@@ -227,7 +227,7 @@ void cursor_begin_interactive(
 void cursor_end_interactive(void) {
     if (!interactive.active) return;
 
-    struct Window *was = interactive.window;
+    struct Window* was = interactive.window;
     bool was_resize = (interactive.op == SEAT_OP_RESIZE);
 
     interactive.active = false;
@@ -245,13 +245,13 @@ void cursor_end_interactive(void) {
     wm_mark_layout_dirty();
 }
 
-void cursor_end_interactive_for(struct Window *window) {
+void cursor_end_interactive_for(struct Window* window) {
     if (!interactive.active) return;
     if (interactive.window == window) cursor_end_interactive();
 }
 
 // Handles window's mid-drag destroy.
-void cursor_window_destroyed(struct Window *window) {
+void cursor_window_destroyed(struct Window* window) {
     if (hovered_window == window) hovered_window = NULL;
     if (pointer_grab_window == window) pointer_grab_window = NULL;
     cursor_end_interactive_for(window);
@@ -259,14 +259,14 @@ void cursor_window_destroyed(struct Window *window) {
 
 bool cursor_is_interactive(void) { return interactive.active; }
 
-static void focus_window(struct Window *w) {
+static void focus_window(struct Window* w) {
     if (w == NULL || w->closed || w->space_hidden || !w->mapped) return;
     if (server.locked) return;
     seat_focus(w); // no-ops if `w` already holds keyboard focus
 }
 
-static void focus_follow_on_motion(struct Window *under) {
-    struct Window *prev = hovered_window;
+static void focus_follow_on_motion(struct Window* under) {
+    struct Window* prev = hovered_window;
     hovered_window = under; // always track, even when not activating
 
     if (!config.focus_follow || under == NULL) return;
@@ -301,7 +301,7 @@ static void send_grabbed_motion(void) {
     );
 }
 
-static uint32_t edge_zone(struct Window *w, double cx, double cy) {
+static uint32_t edge_zone(struct Window* w, double cx, double cy) {
     if (w == NULL || w->closed || !w->mapped || w->space_hidden) return 0;
     if (w->fullscreen || layouts_is_tiled(wm.layout)) return 0;
     if (w->width <= 0 || w->height <= 0) return 0;
@@ -324,7 +324,7 @@ static uint32_t edge_zone(struct Window *w, double cx, double cy) {
     return edges;
 }
 
-static const char *xcursor_for_edges(uint32_t edges) {
+static const char* xcursor_for_edges(uint32_t edges) {
     switch (edges) {
         case WLR_EDGE_LEFT | WLR_EDGE_TOP: return "nw-resize";
         case WLR_EDGE_RIGHT | WLR_EDGE_TOP: return "ne-resize";
@@ -344,10 +344,10 @@ static void cursor_manage_focus(bool motion) {
         return;
     }
 
-    struct wlr_surface *surface = NULL;
+    struct wlr_surface* surface = NULL;
     double sx = 0, sy = 0;
 
-    struct Window *under =
+    struct Window* under =
         window_at(server.cursor->x, server.cursor->y, &surface, &sx, &sy);
 
     if (motion) focus_follow_on_motion(surface != NULL ? under : NULL);
@@ -360,7 +360,7 @@ static void cursor_manage_focus(bool motion) {
     }
 
     uint32_t edges = edge_zone(under, server.cursor->x, server.cursor->y);
-    const char *xc = xcursor_for_edges(edges);
+    const char* xc = xcursor_for_edges(edges);
 
     if (xc != NULL) {
         set_xcursor(xc);
@@ -386,7 +386,7 @@ void cursor_refresh_focus(void) {
 static uint32_t current_keyboard_modifiers(void) {
     uint32_t mods = 0;
 
-    struct Keyboard *kb;
+    struct Keyboard* kb;
     wl_list_for_each(kb, &server.keyboards, link) {
         mods = wlr_keyboard_get_modifiers(kb->wlr_keyboard);
         if (mods != 0) break;
@@ -422,7 +422,7 @@ static void show_cursor(void) {
     cursor_refresh_focus();
 }
 
-static int hide_timer_cb(void *data) {
+static int hide_timer_cb(void* data) {
     (void)data;
 
     hide_timer_armed = false;
@@ -440,7 +440,7 @@ static int hide_timer_cb(void *data) {
     return 0;
 }
 
-void cursor_hide_init(struct wl_event_loop *loop) {
+void cursor_hide_init(struct wl_event_loop* loop) {
     hide_typing_on = CFG_CURSOR_HIDE_TYPING;
     hide_idle_on = CFG_CURSOR_HIDE_IDLE;
 
@@ -482,12 +482,12 @@ static void cursor_wake(void) {
     if (cursor_hidden) show_cursor();
 }
 
-void cursor_handle_motion(struct wl_listener *l, void *data) {
+void cursor_handle_motion(struct wl_listener* l, void* data) {
     (void)l;
 
     server_notify_activity();
     cursor_wake();
-    struct wlr_pointer_motion_event *ev = data;
+    struct wlr_pointer_motion_event* ev = data;
 
     wlr_cursor_move(
         server.cursor, &ev->pointer->base, ev->delta_x, ev->delta_y
@@ -505,12 +505,12 @@ void cursor_handle_motion(struct wl_listener *l, void *data) {
     cursor_manage_focus(true);
 }
 
-void cursor_handle_motion_absolute(struct wl_listener *l, void *data) {
+void cursor_handle_motion_absolute(struct wl_listener* l, void* data) {
     (void)l;
 
     server_notify_activity();
     cursor_wake();
-    struct wlr_pointer_motion_absolute_event *ev = data;
+    struct wlr_pointer_motion_absolute_event* ev = data;
 
     wlr_cursor_warp_absolute(server.cursor, &ev->pointer->base, ev->x, ev->y);
 
@@ -526,12 +526,12 @@ void cursor_handle_motion_absolute(struct wl_listener *l, void *data) {
     cursor_manage_focus(true);
 }
 
-void cursor_handle_button(struct wl_listener *l, void *data) {
+void cursor_handle_button(struct wl_listener* l, void* data) {
     (void)l;
 
     server_notify_activity();
     cursor_wake();
-    struct wlr_pointer_button_event *ev = data;
+    struct wlr_pointer_button_event* ev = data;
 
     const bool pressed = ev->state == WL_POINTER_BUTTON_STATE_PRESSED;
     const uint32_t mods = current_keyboard_modifiers();
@@ -572,14 +572,14 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
     // Pointer bindings (SUPER+click move/resize)
     if (pressed && !server.locked && !layouts_is_tiled(wm.layout)) {
         for (size_t i = 0; i < cfg_pointer_binds_len; i++) {
-            const struct PointerDef *pb = &cfg_pointer_binds[i];
+            const struct PointerDef* pb = &cfg_pointer_binds[i];
 
             if (pb->button != ev->button) continue;
             if (pb->mods != mods) continue;
 
-            struct wlr_surface *surf = NULL;
+            struct wlr_surface* surf = NULL;
             double sx = 0, sy = 0;
-            struct Window *under =
+            struct Window* under =
                 window_at(server.cursor->x, server.cursor->y, &surf, &sx, &sy);
 
             if (under == NULL || under->closed || under->space_hidden) break;
@@ -610,9 +610,9 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
     // Plain left-click on a floating window's edge starts a resize.
     if (ev->state == WL_POINTER_BUTTON_STATE_PRESSED && !server.locked
         && ev->button == BTN_LEFT && mods == 0) {
-        struct wlr_surface *surf = NULL;
+        struct wlr_surface* surf = NULL;
         double sx = 0, sy = 0;
-        struct Window *under =
+        struct Window* under =
             window_at(server.cursor->x, server.cursor->y, &surf, &sx, &sy);
 
         uint32_t edges = edge_zone(under, server.cursor->x, server.cursor->y);
@@ -626,9 +626,9 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
 
     // On-press focus
     if (ev->state == WL_POINTER_BUTTON_STATE_PRESSED && !server.locked) {
-        struct wlr_surface *surf = NULL;
+        struct wlr_surface* surf = NULL;
         double sx = 0, sy = 0;
-        struct Window *under =
+        struct Window* under =
             window_at(server.cursor->x, server.cursor->y, &surf, &sx, &sy);
 
         focus_window(under);
@@ -640,9 +640,9 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
 
     // Store pointer origins
     if (ev->state == WL_POINTER_BUTTON_STATE_PRESSED && buttons_down == 0) {
-        struct wlr_surface *surf = NULL;
+        struct wlr_surface* surf = NULL;
         double sx = 0, sy = 0;
-        struct Window *under =
+        struct Window* under =
             window_at(server.cursor->x, server.cursor->y, &surf, &sx, &sy);
 
         if (under != NULL && !under->closed && !under->space_hidden
@@ -669,14 +669,14 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
     }
 }
 
-void cursor_handle_axis(struct wl_listener *l, void *data) {
+void cursor_handle_axis(struct wl_listener* l, void* data) {
     (void)l;
 
     server_notify_activity();
     cursor_wake();
     if (interactive.active) return;
 
-    struct wlr_pointer_axis_event *ev = data;
+    struct wlr_pointer_axis_event* ev = data;
 
     wlr_seat_pointer_notify_axis(
         server.seat, ev->time_msec, ev->orientation, ev->delta,
@@ -684,7 +684,7 @@ void cursor_handle_axis(struct wl_listener *l, void *data) {
     );
 }
 
-void cursor_handle_frame(struct wl_listener *l, void *data) {
+void cursor_handle_frame(struct wl_listener* l, void* data) {
     (void)l;
     (void)data;
 

@@ -9,8 +9,8 @@
 
 #define LOG_TOPIC "keymap"
 
-static struct xkb_context *xkb_context = NULL;
-static struct xkb_keymap *xkb_keymap = NULL;
+static struct xkb_context* xkb_context = NULL;
+static struct xkb_keymap* xkb_keymap = NULL;
 static KeymapLayoutCallback on_layout_change = NULL;
 
 void keymap_set_layout_callback(KeymapLayoutCallback cb) {
@@ -57,7 +57,7 @@ void keymap_destroy(void) {
     on_layout_change = NULL;
 }
 
-void keymap_apply(struct wlr_keyboard *keyboard) {
+void keymap_apply(struct wlr_keyboard* keyboard) {
     if (keyboard == NULL || xkb_keymap == NULL) return;
     wlr_keyboard_set_keymap(keyboard, xkb_keymap);
     wlr_keyboard_set_repeat_info(
@@ -67,11 +67,11 @@ void keymap_apply(struct wlr_keyboard *keyboard) {
     keymap_notify_layout(keyboard);
 }
 
-void keymap_notify_layout(struct wlr_keyboard *keyboard) {
+void keymap_notify_layout(struct wlr_keyboard* keyboard) {
     if (keyboard == NULL || keyboard->xkb_state == NULL) return;
     if (on_layout_change == NULL) return;
 
-    struct xkb_keymap *km =
+    struct xkb_keymap* km =
         keyboard->keymap != NULL ? keyboard->keymap : xkb_keymap;
 
     if (km == NULL) return;
@@ -82,7 +82,7 @@ void keymap_notify_layout(struct wlr_keyboard *keyboard) {
 
     if (idx >= xkb_keymap_num_layouts(km)) return;
 
-    const char *name = xkb_keymap_layout_get_name(km, idx);
+    const char* name = xkb_keymap_layout_get_name(km, idx);
     if (name == NULL || name[0] == '\0') return;
 
     on_layout_change(name);

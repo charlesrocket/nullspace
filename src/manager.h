@@ -31,7 +31,7 @@ struct WindowManager {
     int32_t tiled_gap_outer_h, tiled_gap_outer_v, tiled_gap_inner_h,
         tiled_gap_inner_v, nmasters;
 
-    char *kb_layout;
+    char* kb_layout;
 
     enum Layout layout, space_layouts[SPACE_COUNT];
 
@@ -52,24 +52,24 @@ void wm_finish(void);
 void wm_set_layout(enum Layout layout);
 
 void wm_switch_space(int space);
-void wm_switch_space_on(struct Output *out, int space);
-void wm_move_window_to_space(struct Window *window, int space);
-void wm_minimize_window(struct Window *window);
-void wm_restore_window(struct Window *window);
-void wm_assign_new_window_space(struct Window *window, int space);
-void wm_set_kb_layout(const char *layout);
+void wm_switch_space_on(struct Output* out, int space);
+void wm_move_window_to_space(struct Window* window, int space);
+void wm_minimize_window(struct Window* window);
+void wm_restore_window(struct Window* window);
+void wm_assign_new_window_space(struct Window* window, int space);
+void wm_set_kb_layout(const char* layout);
 void wm_mark_layout_dirty(void);
 void wm_mark_space_urgent(int space);
-void wm_mark_space_urgent_on(struct Output *out, int space);
+void wm_mark_space_urgent_on(struct Output* out, int space);
 
 bool wm_animation_active(void);
 void wm_animation_tick_all(void);
 
-struct Window *wm_focus_stack_top(void);
-struct Window *wm_next_window(struct Window *window);
-struct Window *wm_focus_stack_top_except(struct Window *skip);
+struct Window* wm_focus_stack_top(void);
+struct Window* wm_next_window(struct Window* window);
+struct Window* wm_focus_stack_top_except(struct Window* skip);
 
-bool wm_set_wallpaper_path(const char *path);
+bool wm_set_wallpaper_path(const char* path);
 void wm_invalidate_wallpaper(void);
 
-struct Window *wm_restore_last_minimized(void);
+struct Window* wm_restore_last_minimized(void);

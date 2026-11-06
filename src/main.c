@@ -38,11 +38,11 @@
 #define HEADLESS_WIDTH  1280
 #define HEADLESS_HEIGHT 720
 
-static void headless_size(unsigned int *w, unsigned int *h) {
+static void headless_size(unsigned int* w, unsigned int* h) {
     *w = HEADLESS_WIDTH;
     *h = HEADLESS_HEIGHT;
 
-    const char *s = getenv("NULLSPACE_HEADLESS_SIZE"); // "1920x1080"
+    const char* s = getenv("NULLSPACE_HEADLESS_SIZE"); // "1920x1080"
     unsigned int ww, hh;
     if (s != NULL && sscanf(s, "%dx%d", &ww, &hh) == 2 && ww > 0 && hh > 0) {
         *w = ww;
@@ -50,14 +50,14 @@ static void headless_size(unsigned int *w, unsigned int *h) {
     }
 }
 
-static int on_term(int sig, void *data) {
+static int on_term(int sig, void* data) {
     (void)sig;
 
     wl_display_terminate(data);
     return 0;
 }
 
-static void spawn_startup(void *d) {
+static void spawn_startup(void* d) {
     // TODO
     (void)d;
 
@@ -71,8 +71,8 @@ static void on_sigchld(int sig) {
     while (waitpid(-1, NULL, WNOHANG) > 0) {}
 }
 
-static void create_default_output(struct wlr_backend *backend, void *data) {
-    bool *done = data;
+static void create_default_output(struct wlr_backend* backend, void* data) {
+    bool* done = data;
     if (*done) { return; }
 
     if (wlr_backend_is_wl(backend)) {
@@ -97,7 +97,7 @@ static void create_default_output(struct wlr_backend *backend, void *data) {
 #endif
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char* argv[]) {
     (void)argc;
     (void)argv;
 
@@ -114,10 +114,10 @@ int main(int argc, char *argv[]) {
     sigemptyset(&sa_chld.sa_mask);
     sigaction(SIGCHLD, &sa_chld, NULL);
 
-    const char *outer_wl = getenv("WAYLAND_DISPLAY");
-    char *saved_wl = outer_wl ? strdup(outer_wl) : NULL;
+    const char* outer_wl = getenv("WAYLAND_DISPLAY");
+    char* saved_wl = outer_wl ? strdup(outer_wl) : NULL;
 
-    struct wl_display *display = wl_display_create();
+    struct wl_display* display = wl_display_create();
     if (display == NULL) {
         log_err("Failed to create wl_display");
         free(saved_wl);
@@ -125,7 +125,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    struct wl_event_loop *loop = wl_display_get_event_loop(display);
+    struct wl_event_loop* loop = wl_display_get_event_loop(display);
     wl_event_loop_add_signal(loop, SIGTERM, on_term, display);
     wl_event_loop_add_signal(loop, SIGINT, on_term, display);
 
@@ -150,7 +150,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    const char *socket = wl_display_add_socket_auto(display);
+    const char* socket = wl_display_add_socket_auto(display);
     if (socket == NULL) {
         log_err("Failed to create Wayland socket (is XDG_RUNTIME_DIR set?)");
         server_finish();

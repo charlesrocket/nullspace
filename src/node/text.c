@@ -20,31 +20,31 @@
 
 struct cairo_buffer {
     struct wlr_buffer base;
-    cairo_surface_t *surface;
-    void *data;
+    cairo_surface_t* surface;
+    void* data;
     size_t stride;
 };
 
-static void cairo_buffer_destroy(struct wlr_buffer *wlr_buffer) {
-    struct cairo_buffer *buf = wl_container_of(wlr_buffer, buf, base);
+static void cairo_buffer_destroy(struct wlr_buffer* wlr_buffer) {
+    struct cairo_buffer* buf = wl_container_of(wlr_buffer, buf, base);
     cairo_surface_destroy(buf->surface);
     free(buf->data);
     free(buf);
 }
 
 static bool cairo_buffer_begin_data_ptr_access(
-    struct wlr_buffer *wlr_buffer, uint32_t flags, void **data,
-    uint32_t *format, size_t *stride
+    struct wlr_buffer* wlr_buffer, uint32_t flags, void** data,
+    uint32_t* format, size_t* stride
 ) {
     (void)flags;
-    struct cairo_buffer *buf = wl_container_of(wlr_buffer, buf, base);
+    struct cairo_buffer* buf = wl_container_of(wlr_buffer, buf, base);
     *data = buf->data;
     *format = DRM_FORMAT_ARGB8888;
     *stride = buf->stride;
     return true;
 }
 
-static void cairo_buffer_end_data_ptr_access(struct wlr_buffer *wlr_buffer) {
+static void cairo_buffer_end_data_ptr_access(struct wlr_buffer* wlr_buffer) {
     (void)wlr_buffer;
 }
 
@@ -54,10 +54,10 @@ static const struct wlr_buffer_impl cairo_buffer_impl = {
     .end_data_ptr_access = cairo_buffer_end_data_ptr_access,
 };
 
-static struct cairo_buffer *cairo_buffer_create(int width, int height) {
+static struct cairo_buffer* cairo_buffer_create(int width, int height) {
     if (width <= 0 || height <= 0) return NULL;
 
-    struct cairo_buffer *buf = calloc(1, sizeof(*buf));
+    struct cairo_buffer* buf = calloc(1, sizeof(*buf));
     if (!buf) return NULL;
 
     buf->stride = (size_t)width * 4;
@@ -87,16 +87,16 @@ static struct cairo_buffer *cairo_buffer_create(int width, int height) {
     return buf;
 }
 
-static void handle_buffer_node_destroy(struct wl_listener *l, void *data) {
+static void handle_buffer_node_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct text_node *node = wl_container_of(l, node, node_destroy);
+    struct text_node* node = wl_container_of(l, node, node_destroy);
     wl_list_remove(&node->node_destroy.link);
     node->buffer_node = NULL;
 }
 
-static cairo_font_options_t *make_font_options(void) {
-    cairo_font_options_t *o = cairo_font_options_create();
+static cairo_font_options_t* make_font_options(void) {
+    cairo_font_options_t* o = cairo_font_options_create();
 
     cairo_font_options_set_antialias(o, CAIRO_ANTIALIAS_GRAY);
     cairo_font_options_set_subpixel_order(o, CAIRO_SUBPIXEL_ORDER_DEFAULT);
@@ -106,13 +106,13 @@ static cairo_font_options_t *make_font_options(void) {
     return o;
 }
 
-struct text_node *text_node_create(
-    struct wlr_scene_tree *parent, const char *font_desc, const float color[4],
+struct text_node* text_node_create(
+    struct wlr_scene_tree* parent, const char* font_desc, const float color[4],
     int scale
 ) {
     if (scale < 1) scale = 1;
 
-    struct text_node *node = calloc(1, sizeof(*node));
+    struct text_node* node = calloc(1, sizeof(*node));
     if (!node) return NULL;
 
     node->buffer_node = wlr_scene_buffer_create(parent, NULL);
@@ -145,21 +145,21 @@ struct text_node *text_node_create(
     return node;
 }
 
-static void measure_natural(struct text_node *node) {
+static void measure_natural(struct text_node* node) {
     node->natural_w = 0;
     node->natural_h = 0;
 
     if (!node->text || node->text[0] == '\0' || !node->font) return;
 
-    cairo_surface_t *scratch =
+    cairo_surface_t* scratch =
         cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1, 1);
 
-    cairo_t *cr = cairo_create(scratch);
+    cairo_t* cr = cairo_create(scratch);
     cairo_set_antialias(cr, CAIRO_ANTIALIAS_GRAY);
 
-    PangoLayout *layout = pango_cairo_create_layout(cr);
+    PangoLayout* layout = pango_cairo_create_layout(cr);
 
-    cairo_font_options_t *opts = make_font_options();
+    cairo_font_options_t* opts = make_font_options();
     pango_cairo_context_set_font_options(
         pango_layout_get_context(layout), opts
     );
@@ -181,7 +181,7 @@ static void measure_natural(struct text_node *node) {
     cairo_surface_destroy(scratch);
 }
 
-static void render(struct text_node *node) {
+static void render(struct text_node* node) {
     if (!node || !node->buffer_node) return;
 
     if (!node->text || node->text[0] == '\0' || !node->font) {
@@ -194,20 +194,20 @@ static void render(struct text_node *node) {
         return;
     }
 
-    cairo_surface_t *scratch =
+    cairo_surface_t* scratch =
         cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1, 1);
 
-    cairo_t *scratch_cr = cairo_create(scratch);
+    cairo_t* scratch_cr = cairo_create(scratch);
     cairo_set_antialias(scratch_cr, CAIRO_ANTIALIAS_GRAY);
 
-    PangoLayout *layout = pango_cairo_create_layout(scratch_cr);
+    PangoLayout* layout = pango_cairo_create_layout(scratch_cr);
 
-    cairo_font_options_t *opts = make_font_options();
+    cairo_font_options_t* opts = make_font_options();
     pango_cairo_context_set_font_options(
         pango_layout_get_context(layout), opts
     );
 
-    PangoFontDescription *font = pango_font_description_copy(node->font);
+    PangoFontDescription* font = pango_font_description_copy(node->font);
     int sz = pango_font_description_get_size(font);
     if (pango_font_description_get_size_is_absolute(font)) {
         pango_font_description_set_absolute_size(font, sz * node->scale);
@@ -255,7 +255,7 @@ static void render(struct text_node *node) {
         node->buffer = NULL;
         node->surface = NULL;
 
-        struct cairo_buffer *cbuf = cairo_buffer_create(surf_w, surf_h);
+        struct cairo_buffer* cbuf = cairo_buffer_create(surf_w, surf_h);
         if (!cbuf) {
             cairo_font_options_destroy(opts);
             g_object_unref(layout);
@@ -268,7 +268,7 @@ static void render(struct text_node *node) {
         node->surface = cbuf->surface;
     }
 
-    cairo_t *draw_cr = cairo_create(node->surface);
+    cairo_t* draw_cr = cairo_create(node->surface);
     cairo_set_font_options(draw_cr, opts);
     cairo_font_options_destroy(opts);
     cairo_set_antialias(draw_cr, CAIRO_ANTIALIAS_GRAY);
@@ -299,13 +299,13 @@ static void render(struct text_node *node) {
     cairo_surface_destroy(scratch);
 }
 
-void text_node_set_text(struct text_node *node, const char *text) {
+void text_node_set_text(struct text_node* node, const char* text) {
     if (!node) return;
 
-    const char *want = text ? text : "";
+    const char* want = text ? text : "";
     if (node->text && strcmp(node->text, want) == 0) return;
 
-    char *copy = strdup(want);
+    char* copy = strdup(want);
     if (!copy) return;
 
     free(node->text);
@@ -315,7 +315,7 @@ void text_node_set_text(struct text_node *node, const char *text) {
     if (node->buffer_node) render(node);
 }
 
-void text_node_set_color(struct text_node *node, const float color[4]) {
+void text_node_set_color(struct text_node* node, const float color[4]) {
     if (!node) return;
     if (memcmp(node->color, color, sizeof(node->color)) == 0) return;
 
@@ -323,7 +323,7 @@ void text_node_set_color(struct text_node *node, const float color[4]) {
     if (node->buffer_node) render(node);
 }
 
-void text_node_set_max_width(struct text_node *node, int max_width) {
+void text_node_set_max_width(struct text_node* node, int max_width) {
     if (!node) return;
     if (max_width < 0) max_width = 0;
     if (node->max_width == max_width) return;
@@ -332,16 +332,16 @@ void text_node_set_max_width(struct text_node *node, int max_width) {
     if (node->buffer_node) render(node);
 }
 
-int text_node_natural_width(const struct text_node *node) {
+int text_node_natural_width(const struct text_node* node) {
     return node ? node->natural_w : 0;
 }
 
-void text_node_get_size(struct text_node *node, int *w, int *h) {
+void text_node_get_size(struct text_node* node, int* w, int* h) {
     if (w) *w = node ? node->rendered_w : 0;
     if (h) *h = node ? node->rendered_h : 0;
 }
 
-void text_node_destroy(struct text_node *node) {
+void text_node_destroy(struct text_node* node) {
     if (!node) return;
 
     if (node->buffer_node) wlr_scene_node_destroy(&node->buffer_node->node);

@@ -20,18 +20,18 @@
 
 struct BgEffectRect {
     struct wl_list link;
-    struct wlr_scene_blur *blur;
+    struct wlr_scene_blur* blur;
     struct wl_listener destroy;
 };
 
 struct BgEffectSurface {
-    struct wl_resource *resource; // ?NULL
-    struct wlr_surface *surface;  // ?NULL
+    struct wl_resource* resource; // ?NULL
+    struct wlr_surface* surface;  // ?NULL
 
     struct wl_listener surface_destroy;
     struct wl_listener surface_commit;
 
-    struct wlr_scene_tree *blur_tree;
+    struct wlr_scene_tree* blur_tree;
     struct wl_listener blur_tree_destroy;
 
     struct wl_list rects;
@@ -44,22 +44,22 @@ struct BgEffectSurface {
 };
 
 static struct wl_list bg_effect_surfaces;
-static struct wl_global *bg_effect_global;
+static struct wl_global* bg_effect_global;
 
 static const struct ext_background_effect_surface_v1_interface surface_impl;
 static const struct ext_background_effect_manager_v1_interface manager_impl;
 
-static struct wlr_scene_node *
-find_surface_node(struct wlr_scene_tree *root, struct wlr_surface *surface) {
-    struct wlr_scene_node *child;
+static struct wlr_scene_node*
+find_surface_node(struct wlr_scene_tree* root, struct wlr_surface* surface) {
+    struct wlr_scene_node* child;
     wl_list_for_each(child, &root->children, link) {
         if (child->type == WLR_SCENE_NODE_TREE) {
-            struct wlr_scene_node *found =
+            struct wlr_scene_node* found =
                 find_surface_node(wlr_scene_tree_from_node(child), surface);
 
             if (found != NULL) return found;
         } else if (child->type == WLR_SCENE_NODE_BUFFER) {
-            struct wlr_scene_surface *ss = wlr_scene_surface_try_from_buffer(
+            struct wlr_scene_surface* ss = wlr_scene_surface_try_from_buffer(
                 wlr_scene_buffer_from_node(child)
             );
 
@@ -70,40 +70,40 @@ find_surface_node(struct wlr_scene_tree *root, struct wlr_surface *surface) {
     return NULL;
 }
 
-static void handle_rect_destroy(struct wl_listener *l, void *data) {
+static void handle_rect_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct BgEffectRect *r = wl_container_of(l, r, destroy);
+    struct BgEffectRect* r = wl_container_of(l, r, destroy);
     wl_list_remove(&r->destroy.link);
     wl_list_remove(&r->link);
     free(r);
 }
 
-static void clear_rects(struct BgEffectSurface *bg) {
+static void clear_rects(struct BgEffectSurface* bg) {
     struct BgEffectRect *r, *tmp;
     wl_list_for_each_safe(r, tmp, &bg->rects, link) {
         wlr_scene_node_destroy(&r->blur->node);
     }
 }
 
-static void handle_blur_tree_destroy(struct wl_listener *l, void *data) {
+static void handle_blur_tree_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct BgEffectSurface *bg = wl_container_of(l, bg, blur_tree_destroy);
+    struct BgEffectSurface* bg = wl_container_of(l, bg, blur_tree_destroy);
     wl_list_remove(&bg->blur_tree_destroy.link);
     bg->blur_tree = NULL;
 }
 
-static struct wlr_scene_tree *ensure_blur_tree(struct BgEffectSurface *bg) {
+static struct wlr_scene_tree* ensure_blur_tree(struct BgEffectSurface* bg) {
     if (bg->blur_tree != NULL) return bg->blur_tree;
     if (bg->surface == NULL) return NULL;
 
-    struct wlr_scene_node *surface_node =
+    struct wlr_scene_node* surface_node =
         find_surface_node(&server.scene->tree, bg->surface);
 
     if (surface_node == NULL || surface_node->parent == NULL) return NULL;
 
-    struct wlr_scene_tree *blur_tree =
+    struct wlr_scene_tree* blur_tree =
         wlr_scene_tree_create(surface_node->parent);
 
     if (blur_tree == NULL) return NULL;
@@ -118,7 +118,7 @@ static struct wlr_scene_tree *ensure_blur_tree(struct BgEffectSurface *bg) {
 }
 
 static void
-rect_set_mask(struct BgEffectRect *r, struct wlr_scene_node *surface_node) {
+rect_set_mask(struct BgEffectRect* r, struct wlr_scene_node* surface_node) {
     if (surface_node == NULL || surface_node->type != WLR_SCENE_NODE_BUFFER) {
         return;
     }
@@ -128,18 +128,18 @@ rect_set_mask(struct BgEffectRect *r, struct wlr_scene_node *surface_node) {
     );
 }
 
-static struct BgEffectRect *rect_create(
-    struct BgEffectSurface *bg, struct wlr_scene_tree *tree,
-    struct wlr_scene_node *surface_node, int x, int y, int w, int h
+static struct BgEffectRect* rect_create(
+    struct BgEffectSurface* bg, struct wlr_scene_tree* tree,
+    struct wlr_scene_node* surface_node, int x, int y, int w, int h
 ) {
-    struct wlr_scene_blur *blur = wlr_scene_blur_create(tree, w, h);
+    struct wlr_scene_blur* blur = wlr_scene_blur_create(tree, w, h);
     if (blur == NULL) return NULL;
 
     wlr_scene_node_set_position(&blur->node, x, y);
     wlr_scene_blur_set_strength(blur, CFG_BLUR_STRENGTH);
     wlr_scene_blur_set_alpha(blur, CFG_BLUR_ALPHA);
 
-    struct BgEffectRect *r = calloc(1, sizeof(*r));
+    struct BgEffectRect* r = calloc(1, sizeof(*r));
     if (r == NULL) {
         wlr_scene_node_destroy(&blur->node);
         return NULL;
@@ -156,8 +156,8 @@ static struct BgEffectRect *rect_create(
 }
 
 static bool background_compute_effective_region(
-    int surface_w, int surface_h, pixman_region32_t *current_blur,
-    pixman_region32_t *opaque, pixman_region32_t *out
+    int surface_w, int surface_h, pixman_region32_t* current_blur,
+    pixman_region32_t* opaque, pixman_region32_t* out
 ) {
     pixman_region32_init(out);
 
@@ -179,7 +179,7 @@ static bool background_compute_effective_region(
     return pixman_region32_not_empty(out);
 }
 
-static void blur_nodes_update(struct BgEffectSurface *bg) {
+static void blur_nodes_update(struct BgEffectSurface* bg) {
     if (bg->surface == NULL) return;
 
     int sw = bg->surface->current.width;
@@ -199,8 +199,8 @@ static void blur_nodes_update(struct BgEffectSurface *bg) {
         return;
     }
 
-    struct wlr_scene_tree *tree = ensure_blur_tree(bg);
-    struct wlr_scene_node *surface_node =
+    struct wlr_scene_tree* tree = ensure_blur_tree(bg);
+    struct wlr_scene_node* surface_node =
         find_surface_node(&server.scene->tree, bg->surface);
 
     if (tree == NULL || surface_node == NULL) return;
@@ -208,7 +208,7 @@ static void blur_nodes_update(struct BgEffectSurface *bg) {
     int x = surface_node->x;
     int y = surface_node->y;
 
-    struct BgEffectRect *cur = NULL;
+    struct BgEffectRect* cur = NULL;
     if (!wl_list_empty(&bg->rects)) {
         cur = wl_container_of(bg->rects.next, cur, link);
     }
@@ -234,7 +234,7 @@ static void blur_nodes_update(struct BgEffectSurface *bg) {
     bg->applied_h = sh;
 }
 
-static void detach_from_surface(struct BgEffectSurface *bg) {
+static void detach_from_surface(struct BgEffectSurface* bg) {
     if (bg->surface == NULL) return;
 
     wl_list_remove(&bg->surface_destroy.link);
@@ -247,10 +247,10 @@ static void detach_from_surface(struct BgEffectSurface *bg) {
     bg->surface = NULL;
 }
 
-static void handle_surface_commit(struct wl_listener *l, void *data) {
+static void handle_surface_commit(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct BgEffectSurface *bg = wl_container_of(l, bg, surface_commit);
+    struct BgEffectSurface* bg = wl_container_of(l, bg, surface_commit);
 
     if (!pixman_region32_equal(&bg->current_blur, &bg->pending_blur)) {
         pixman_region32_copy(&bg->current_blur, &bg->pending_blur);
@@ -259,15 +259,15 @@ static void handle_surface_commit(struct wl_listener *l, void *data) {
     blur_nodes_update(bg);
 }
 
-static void handle_surface_destroy(struct wl_listener *l, void *data) {
+static void handle_surface_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct BgEffectSurface *bg = wl_container_of(l, bg, surface_destroy);
+    struct BgEffectSurface* bg = wl_container_of(l, bg, surface_destroy);
     detach_from_surface(bg);
 }
 
-static void handle_resource_destroy(struct wl_resource *resource) {
-    struct BgEffectSurface *bg = wl_resource_get_user_data(resource);
+static void handle_resource_destroy(struct wl_resource* resource) {
+    struct BgEffectSurface* bg = wl_resource_get_user_data(resource);
     if (bg == NULL) return;
 
     wl_resource_set_user_data(resource, NULL);
@@ -282,19 +282,19 @@ static void handle_resource_destroy(struct wl_resource *resource) {
 }
 
 static void
-surface_handle_destroy(struct wl_client *client, struct wl_resource *resource) {
+surface_handle_destroy(struct wl_client* client, struct wl_resource* resource) {
     (void)client;
 
     wl_resource_destroy(resource);
 }
 
 static void surface_handle_set_blur_region(
-    struct wl_client *client, struct wl_resource *resource,
-    struct wl_resource *region_resource
+    struct wl_client* client, struct wl_resource* resource,
+    struct wl_resource* region_resource
 ) {
     (void)client;
 
-    struct BgEffectSurface *bg = wl_resource_get_user_data(resource);
+    struct BgEffectSurface* bg = wl_resource_get_user_data(resource);
     if (bg == NULL || bg->surface == NULL) {
         wl_resource_post_error(
             resource, EXT_BACKGROUND_EFFECT_SURFACE_V1_ERROR_SURFACE_DESTROYED,
@@ -307,7 +307,7 @@ static void surface_handle_set_blur_region(
     pixman_region32_clear(&bg->pending_blur);
 
     if (region_resource != NULL) {
-        const pixman_region32_t *region =
+        const pixman_region32_t* region =
             wlr_region_from_resource(region_resource);
 
         if (region != NULL) { pixman_region32_copy(&bg->pending_blur, region); }
@@ -320,18 +320,18 @@ static const struct ext_background_effect_surface_v1_interface surface_impl = {
 };
 
 static void
-manager_handle_destroy(struct wl_client *client, struct wl_resource *resource) {
+manager_handle_destroy(struct wl_client* client, struct wl_resource* resource) {
     (void)client;
     wl_resource_destroy(resource);
 }
 
 static void manager_handle_get_background_effect(
-    struct wl_client *client, struct wl_resource *resource, uint32_t id,
-    struct wl_resource *surface_resource
+    struct wl_client* client, struct wl_resource* resource, uint32_t id,
+    struct wl_resource* surface_resource
 ) {
-    struct wlr_surface *surface = wlr_surface_from_resource(surface_resource);
+    struct wlr_surface* surface = wlr_surface_from_resource(surface_resource);
 
-    struct BgEffectSurface *it;
+    struct BgEffectSurface* it;
     wl_list_for_each(it, &bg_effect_surfaces, link) {
         if (it->surface == surface) {
             wl_resource_post_error(
@@ -345,13 +345,13 @@ static void manager_handle_get_background_effect(
         }
     }
 
-    struct BgEffectSurface *bg = calloc(1, sizeof(*bg));
+    struct BgEffectSurface* bg = calloc(1, sizeof(*bg));
     if (bg == NULL) {
         wl_client_post_no_memory(client);
         return;
     }
 
-    struct wl_resource *res = wl_resource_create(
+    struct wl_resource* res = wl_resource_create(
         client, &ext_background_effect_surface_v1_interface, 1, id
     );
 
@@ -386,12 +386,12 @@ static const struct ext_background_effect_manager_v1_interface manager_impl = {
 };
 
 static void manager_bind(
-    struct wl_client *client, void *data, uint32_t version, uint32_t id
+    struct wl_client* client, void* data, uint32_t version, uint32_t id
 ) {
     (void)data;
     if (version > 1) version = 1;
 
-    struct wl_resource *resource = wl_resource_create(
+    struct wl_resource* resource = wl_resource_create(
         client, &ext_background_effect_manager_v1_interface, (int)version, id
     );
 
@@ -406,7 +406,7 @@ static void manager_bind(
     );
 }
 
-bool background_effect_init(struct wl_display *display) {
+bool background_effect_init(struct wl_display* display) {
     wl_list_init(&bg_effect_surfaces);
 
     bg_effect_global = wl_global_create(

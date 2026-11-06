@@ -23,7 +23,7 @@ static struct BakedCurve baked_open;
 static struct BakedCurve baked_close;
 static struct BakedCurve baked_space;
 
-static const struct BakedCurve *baked_for(enum AnimationType type) {
+static const struct BakedCurve* baked_for(enum AnimationType type) {
     switch (type) {
         case ANIM_NONE: return &baked_none;
         case ANIM_MOVE: return &baked_move;
@@ -40,7 +40,7 @@ static double bezier_component(double t, double p1, double p2) {
     return 3.0 * mt * mt * t * p1 + 3.0 * mt * t * t * p2 + t * t * t;
 }
 
-static void bake(struct BakedCurve *b, const struct AnimCurve *c) {
+static void bake(struct BakedCurve* b, const struct AnimCurve* c) {
     for (int i = 0; i < ANIM_BAKED_POINTS; i++) {
         double t = (double)i / (double)(ANIM_BAKED_POINTS - 1);
         b->x[i] = bezier_component(t, c->x1, c->x2);
@@ -60,7 +60,7 @@ double animation_ease(double t, enum AnimationType type) {
     if (t <= 0.0) return 0.0;
     if (t >= 1.0) return 1.0;
 
-    const struct BakedCurve *c = baked_for(type);
+    const struct BakedCurve* c = baked_for(type);
 
     // Binary search the segment that brackets the requested x (= t) and
     // linearly interpolate y.
@@ -88,8 +88,8 @@ int64_t animation_now_ms(void) {
 }
 
 void animation_start(
-    struct Animation *a, enum AnimationType type,
-    const struct AnimationBox *from, const struct AnimationBox *to,
+    struct Animation* a, enum AnimationType type,
+    const struct AnimationBox* from, const struct AnimationBox* to,
     int32_t duration_ms
 ) {
     a->type = type;
@@ -103,7 +103,7 @@ void animation_start(
     if (!a->running) a->current = *to;
 }
 
-bool animation_step(struct Animation *a, int64_t now_ms) {
+bool animation_step(struct Animation* a, int64_t now_ms) {
     if (!a->running) return false;
     if (a->duration_ms <= 0) {
         a->current = a->to;

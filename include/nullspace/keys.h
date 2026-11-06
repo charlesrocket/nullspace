@@ -22,11 +22,11 @@ enum IpcAfter {
 };
 
 struct IpcKeyMeta {
-    const char *name;
+    const char* name;
     enum IpcType type;
     enum IpcAccess access;
-    const char *range;
-    const char *desc;
+    const char* range;
+    const char* desc;
 };
 
 #define KEYS_TABLE(K_INT, K_FLOAT, K_BOOL, K_STR, K_SPECIAL)                   \

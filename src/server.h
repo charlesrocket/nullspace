@@ -33,18 +33,18 @@ struct Window;
 struct Output;
 
 struct NsServer {
-    struct wl_display *display;
-    struct wl_event_loop *event_loop;
+    struct wl_display* display;
+    struct wl_event_loop* event_loop;
 
-    struct wlr_backend *backend;
-    struct wlr_session *session;
-    struct wlr_renderer *renderer;
-    struct wlr_allocator *allocator;
-    struct wlr_compositor *compositor;
+    struct wlr_backend* backend;
+    struct wlr_session* session;
+    struct wlr_renderer* renderer;
+    struct wlr_allocator* allocator;
+    struct wlr_compositor* compositor;
 
-    struct wlr_output_layout *output_layout;
-    struct wlr_scene *scene;
-    struct wlr_scene_output_layout *scene_layout;
+    struct wlr_output_layout* output_layout;
+    struct wlr_scene* scene;
+    struct wlr_scene_output_layout* scene_layout;
 
     struct wlr_scene_tree *background_tree, // wallpaper
         *bottom_tree,                       // lower
@@ -57,26 +57,26 @@ struct NsServer {
         *content_tree,                      // session
         *lock_tree;                         // locked
 
-    struct wlr_scene_rect *lock_bg;
+    struct wlr_scene_rect* lock_bg;
 
-    struct wlr_xdg_activation_v1 *xdg_activation;
-    struct wlr_xdg_shell *xdg_shell;
-    struct wlr_xdg_decoration_manager_v1 *xdg_decoration;
+    struct wlr_xdg_activation_v1* xdg_activation;
+    struct wlr_xdg_shell* xdg_shell;
+    struct wlr_xdg_decoration_manager_v1* xdg_decoration;
 
-    struct wlr_seat *seat;
+    struct wlr_seat* seat;
 
-    struct wlr_cursor *cursor;
-    struct wlr_xcursor_manager *cursor_mgr;
-    struct wlr_layer_shell_v1 *layer_shell;
-    struct wlr_ext_foreign_toplevel_list_v1 *foreign_toplevel_list;
-    struct wlr_foreign_toplevel_manager_v1 *foreign_toplevel_manager;
-    struct wlr_cursor_shape_manager_v1 *cursor_shape_manager;
-    struct wlr_output_power_manager_v1 *output_power_manager;
-    struct wlr_idle_notifier_v1 *idle_notifier;
-    struct wlr_idle_inhibit_manager_v1 *idle_inhibit_manager;
+    struct wlr_cursor* cursor;
+    struct wlr_xcursor_manager* cursor_mgr;
+    struct wlr_layer_shell_v1* layer_shell;
+    struct wlr_ext_foreign_toplevel_list_v1* foreign_toplevel_list;
+    struct wlr_foreign_toplevel_manager_v1* foreign_toplevel_manager;
+    struct wlr_cursor_shape_manager_v1* cursor_shape_manager;
+    struct wlr_output_power_manager_v1* output_power_manager;
+    struct wlr_idle_notifier_v1* idle_notifier;
+    struct wlr_idle_inhibit_manager_v1* idle_inhibit_manager;
 
 #ifdef XWAYLAND
-    struct wlr_xwayland *xwayland;
+    struct wlr_xwayland* xwayland;
 #endif
 
     struct wl_listener cursor_motion, cursor_motion_absolute, cursor_button,
@@ -99,9 +99,9 @@ struct NodeTag {
     enum NodeType type;
 };
 
-struct NodeTag *node_tag_find(const struct wlr_scene_node *node);
+struct NodeTag* node_tag_find(const struct wlr_scene_node* node);
 
-int server_init(struct wl_display *display);
+int server_init(struct wl_display* display);
 void server_detach_listeners(void);
 void server_finish(void);
 void server_notify_activity(void);

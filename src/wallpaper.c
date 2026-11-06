@@ -38,7 +38,7 @@
 #define PNG_CACHE_LIMIT ((size_t)8 * 1024 * 1024)
 
 static struct Wallpaper {
-    uint8_t *image_pixels;
+    uint8_t* image_pixels;
     int image_width, image_height;
     bool loaded;
     struct wl_list outputs;
@@ -48,7 +48,7 @@ static struct Wallpaper {
 
 struct WpJob {
     struct wl_list link;
-    struct WallpaperOutput *wpo;
+    struct WallpaperOutput* wpo;
 
     uint32_t gen;
 
@@ -65,7 +65,7 @@ struct WpJob {
 };
 
 static struct {
-    struct wl_event_source *wake_source;
+    struct wl_event_source* wake_source;
     struct wl_list pending, completed;
 
     pthread_t thread;
@@ -83,7 +83,7 @@ static struct {
 };
 
 static void paint_default_pattern(
-    uint8_t *dst, int w, int h, int32_t bg_r, int32_t bg_g, int32_t bg_b,
+    uint8_t* dst, int w, int h, int32_t bg_r, int32_t bg_g, int32_t bg_b,
     int32_t dot_r, int32_t dot_g, int32_t dot_b, int32_t spacing,
     int32_t dot_radius
 ) {
@@ -94,7 +94,7 @@ static void paint_default_pattern(
 
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
-            uint8_t *dp = &dst[((size_t)y * (size_t)w + (size_t)x) * 4];
+            uint8_t* dp = &dst[((size_t)y * (size_t)w + (size_t)x) * 4];
             dp[0] = (uint8_t)bg_b;
             dp[1] = (uint8_t)bg_g;
             dp[2] = (uint8_t)bg_r;
@@ -123,7 +123,7 @@ static void paint_default_pattern(
                     if (dx * dx + dy * dy > dot_radius * dot_radius + 1)
                         continue;
 
-                    uint8_t *dp =
+                    uint8_t* dp =
                         &dst[((size_t)py * (size_t)w + (size_t)px) * 4];
 
                     dp[0] = (uint8_t)dot_b;
@@ -136,14 +136,14 @@ static void paint_default_pattern(
     }
 }
 
-static void put_px(uint8_t *p, uint8_t r, uint8_t g, uint8_t b) {
+static void put_px(uint8_t* p, uint8_t r, uint8_t g, uint8_t b) {
     p[0] = b;
     p[1] = g;
     p[2] = r;
     p[3] = 255;
 }
 
-static bool image_size_ok(const char *path, uint64_t w, uint64_t h) {
+static bool image_size_ok(const char* path, uint64_t w, uint64_t h) {
     if (w == 0 || h == 0 || w > MAX_DIMENSION || h > MAX_DIMENSION) {
         log_warn(
             "'%s' has unsupported dimensions (%" PRIu64 "x%" PRIu64 ")", path,
@@ -166,12 +166,12 @@ static bool image_size_ok(const char *path, uint64_t w, uint64_t h) {
 }
 
 struct ppm_buf {
-    const uint8_t *data;
+    const uint8_t* data;
     size_t size;
     size_t pos;
 };
 
-static int ppm_buf_token(struct ppm_buf *b, char *out, size_t out_size) {
+static int ppm_buf_token(struct ppm_buf* b, char* out, size_t out_size) {
     size_t len = 0;
 
     while (b->pos < b->size) {
@@ -208,11 +208,11 @@ static int ppm_buf_token(struct ppm_buf *b, char *out, size_t out_size) {
     return 0;
 }
 
-static bool ppm_buf_read_int(struct ppm_buf *b, int *out) {
+static bool ppm_buf_read_int(struct ppm_buf* b, int* out) {
     char token[64];
     if (ppm_buf_token(b, token, sizeof(token)) != 0) return false;
 
-    char *end;
+    char* end;
     errno = 0;
     long v = strtol(token, &end, 10);
 
@@ -225,7 +225,7 @@ static bool ppm_buf_read_int(struct ppm_buf *b, int *out) {
 }
 
 static bool
-read_whole_file(const char *path, uint8_t **out_data, size_t *out_size) {
+read_whole_file(const char* path, uint8_t** out_data, size_t* out_size) {
     int fd = open(path, O_RDONLY | O_NONBLOCK);
     if (fd < 0) {
         log_warn("Failed to open '%s': %s", path, strerror(errno));
@@ -252,7 +252,7 @@ read_whole_file(const char *path, uint8_t **out_data, size_t *out_size) {
     }
 
     size_t size = (size_t)st.st_size;
-    uint8_t *data = malloc(size);
+    uint8_t* data = malloc(size);
     if (data == NULL) {
         log_warn("OOM reading '%s'", path);
         close(fd);
@@ -288,8 +288,8 @@ read_whole_file(const char *path, uint8_t **out_data, size_t *out_size) {
 }
 
 static bool ppm_decode(
-    const char *path, const uint8_t *filebuf, size_t filebuf_size,
-    uint8_t **out_px, int *out_w, int *out_h
+    const char* path, const uint8_t* filebuf, size_t filebuf_size,
+    uint8_t** out_px, int* out_w, int* out_h
 ) {
     struct ppm_buf b = {.data = filebuf, .size = filebuf_size, .pos = 0};
     char token[64];
@@ -325,8 +325,8 @@ static bool ppm_decode(
         return false;
     }
 
-    const uint8_t *rgb = b.data + b.pos;
-    uint8_t *px = malloc(pixel_count * 4);
+    const uint8_t* rgb = b.data + b.pos;
+    uint8_t* px = malloc(pixel_count * 4);
     if (px == NULL) {
         log_warn("OOM decoding (PPM) '%s'", path);
         return false;
@@ -345,14 +345,14 @@ static bool ppm_decode(
     return true;
 }
 
-static bool is_png(const uint8_t *data, size_t size) {
+static bool is_png(const uint8_t* data, size_t size) {
     static const uint8_t sig[8] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
     return size >= sizeof(sig) && memcmp(data, sig, sizeof(sig)) == 0;
 }
 
-static uint8_t *png_decode_with(
-    spng_ctx *ctx, const char *path, const uint8_t *data, size_t size,
-    int *out_w, int *out_h
+static uint8_t* png_decode_with(
+    spng_ctx* ctx, const char* path, const uint8_t* data, size_t size,
+    int* out_w, int* out_h
 ) {
     int ret = spng_set_image_limits(ctx, MAX_DIMENSION, MAX_DIMENSION);
 
@@ -384,7 +384,7 @@ static uint8_t *png_decode_with(
     size_t pixel_count = (size_t)ihdr.width * (size_t)ihdr.height;
     size_t out_size = pixel_count * 4;
 
-    uint8_t *px = malloc(out_size);
+    uint8_t* px = malloc(out_size);
     if (px == NULL) {
         log_warn("OOM decoding '%s'", path);
         return NULL;
@@ -399,7 +399,7 @@ static uint8_t *png_decode_with(
     }
 
     for (size_t i = 0; i < pixel_count; i++) {
-        uint8_t *p = &px[i * 4];
+        uint8_t* p = &px[i * 4];
         uint32_t a = p[3];
         uint8_t r = p[0], g = p[1], b = p[2];
         if (a != 255) {
@@ -418,13 +418,13 @@ static uint8_t *png_decode_with(
 }
 
 static bool png_decode(
-    const char *path, const uint8_t *data, size_t size, uint8_t **out_px,
-    int *out_w, int *out_h
+    const char* path, const uint8_t* data, size_t size, uint8_t** out_px,
+    int* out_w, int* out_h
 ) {
-    spng_ctx *ctx = spng_ctx_new(0);
+    spng_ctx* ctx = spng_ctx_new(0);
     if (ctx == NULL) return false;
 
-    uint8_t *px = png_decode_with(ctx, path, data, size, out_w, out_h);
+    uint8_t* px = png_decode_with(ctx, path, data, size, out_w, out_h);
     spng_ctx_free(ctx);
 
     if (px == NULL) return false;
@@ -434,8 +434,8 @@ static bool png_decode(
 }
 
 static bool
-image_load(const char *path, uint8_t **out_px, int *out_w, int *out_h) {
-    uint8_t *filebuf = NULL;
+image_load(const char* path, uint8_t** out_px, int* out_w, int* out_h) {
+    uint8_t* filebuf = NULL;
     size_t filebuf_size = 0;
 
     if (!read_whole_file(path, &filebuf, &filebuf_size)) return false;
@@ -448,13 +448,13 @@ image_load(const char *path, uint8_t **out_px, int *out_w, int *out_h) {
     return ok;
 }
 
-static uint8_t *
-box_downscale(const uint8_t *src, int sw, int sh, int k, int *ow, int *oh) {
+static uint8_t*
+box_downscale(const uint8_t* src, int sw, int sh, int k, int* ow, int* oh) {
     int w = sw / k, h = sh / k;
     if (w <= 0 || h <= 0) return NULL;
 
-    uint8_t *out = malloc((size_t)w * (size_t)h * 4);
-    uint32_t *acc = malloc((size_t)w * 4 * sizeof(*acc));
+    uint8_t* out = malloc((size_t)w * (size_t)h * 4);
+    uint32_t* acc = malloc((size_t)w * 4 * sizeof(*acc));
     if (out == NULL || acc == NULL) {
         free(out);
         free(acc);
@@ -465,10 +465,10 @@ box_downscale(const uint8_t *src, int sw, int sh, int k, int *ow, int *oh) {
     for (int y = 0; y < h; y++) {
         memset(acc, 0, (size_t)w * 4 * sizeof(*acc));
         for (int j = 0; j < k; j++) {
-            const uint8_t *row =
+            const uint8_t* row =
                 src + ((size_t)y * (size_t)k + (size_t)j) * (size_t)sw * 4;
             for (int x = 0; x < w; x++) {
-                const uint8_t *p = row + (size_t)x * (size_t)k * 4;
+                const uint8_t* p = row + (size_t)x * (size_t)k * 4;
                 for (int i = 0; i < k; i++, p += 4) {
                     acc[x * 4 + 0] += p[0];
                     acc[x * 4 + 1] += p[1];
@@ -477,7 +477,7 @@ box_downscale(const uint8_t *src, int sw, int sh, int k, int *ow, int *oh) {
             }
         }
 
-        uint8_t *o = out + (size_t)y * (size_t)w * 4;
+        uint8_t* o = out + (size_t)y * (size_t)w * 4;
         for (int x = 0; x < w; x++) {
             o[x * 4 + 0] = (uint8_t)(acc[x * 4 + 0] / div);
             o[x * 4 + 1] = (uint8_t)(acc[x * 4 + 1] / div);
@@ -493,12 +493,12 @@ box_downscale(const uint8_t *src, int sw, int sh, int k, int *ow, int *oh) {
 }
 
 static bool
-scale_cover(const uint8_t *src, int sw, int sh, uint8_t *dst, int dw, int dh) {
+scale_cover(const uint8_t* src, int sw, int sh, uint8_t* dst, int dw, int dh) {
     if (sw <= 0 || sh <= 0 || dw <= 0 || dh <= 0) return false;
 
     double cover =
         (double)dw / sw > (double)dh / sh ? (double)dw / sw : (double)dh / sh;
-    uint8_t *tmp = NULL;
+    uint8_t* tmp = NULL;
     int k = (int)(1.0 / cover);
 
     if (k >= 2) {
@@ -517,11 +517,11 @@ scale_cover(const uint8_t *src, int sw, int sh, uint8_t *dst, int dw, int dh) {
     double off_x = ((double)sw - dw * inv) / 2.0;
     double off_y = ((double)sh - dh * inv) / 2.0;
 
-    pixman_image_t *s = pixman_image_create_bits(
-        PIXMAN_x8r8g8b8, sw, sh, (uint32_t *)(uintptr_t)src, sw * 4
+    pixman_image_t* s = pixman_image_create_bits(
+        PIXMAN_x8r8g8b8, sw, sh, (uint32_t*)(uintptr_t)src, sw * 4
     );
-    pixman_image_t *d = pixman_image_create_bits(
-        PIXMAN_x8r8g8b8, dw, dh, (uint32_t *)dst, dw * 4
+    pixman_image_t* d = pixman_image_create_bits(
+        PIXMAN_x8r8g8b8, dw, dh, (uint32_t*)dst, dw * 4
     );
 
     bool ok = s != NULL && d != NULL;
@@ -548,15 +548,15 @@ scale_cover(const uint8_t *src, int sw, int sh, uint8_t *dst, int dw, int dh) {
     return ok;
 }
 
-static void box_blur(uint8_t *pixels, int w, int h, int radius) {
+static void box_blur(uint8_t* pixels, int w, int h, int radius) {
     if (radius <= 0 || w <= 0 || h <= 0) return;
 
-    uint8_t *scratch = malloc((size_t)w * (size_t)h * 4);
+    uint8_t* scratch = malloc((size_t)w * (size_t)h * 4);
     if (scratch == NULL) return;
 
     for (int y = 0; y < h; y++) {
-        uint8_t *row = &pixels[(size_t)y * (size_t)w * 4];
-        uint8_t *out_row = &scratch[(size_t)y * (size_t)w * 4];
+        uint8_t* row = &pixels[(size_t)y * (size_t)w * 4];
+        uint8_t* out_row = &scratch[(size_t)y * (size_t)w * 4];
         for (int c = 0; c < 3; c++) {
             long sum = 0;
             int count = 0;
@@ -614,7 +614,7 @@ static void box_blur(uint8_t *pixels, int w, int h, int radius) {
     free(scratch);
 }
 
-static void wpjob_free(struct WpJob *job) {
+static void wpjob_free(struct WpJob* job) {
     if (job == NULL) return;
     free(job->src);
     free(job->sharp);
@@ -622,7 +622,7 @@ static void wpjob_free(struct WpJob *job) {
     free(job);
 }
 
-static void wpjob_compute(struct WpJob *job) {
+static void wpjob_compute(struct WpJob* job) {
     size_t image_size = (size_t)job->width * (size_t)job->height * 4;
 
     job->sharp = calloc(1, image_size);
@@ -657,7 +657,7 @@ static void wpjob_compute(struct WpJob *job) {
     }
 }
 
-static void *worker_main(void *arg) {
+static void* worker_main(void* arg) {
     (void)arg;
 
     pthread_mutex_lock(&g_worker.mutex);
@@ -668,7 +668,7 @@ static void *worker_main(void *arg) {
 
         if (g_worker.quit) break;
 
-        struct WpJob *job = wl_container_of(g_worker.pending.next, job, link);
+        struct WpJob* job = wl_container_of(g_worker.pending.next, job, link);
         wl_list_remove(&job->link);
 
         if (job->gen != g_worker.gen) {
@@ -696,30 +696,30 @@ static void *worker_main(void *arg) {
 
 struct wallpaper_buffer {
     struct wlr_buffer base;
-    uint8_t *data;
+    uint8_t* data;
     size_t stride;
 };
 
-static void wallpaper_buffer_destroy(struct wlr_buffer *wlr_buffer) {
-    struct wallpaper_buffer *buf = wl_container_of(wlr_buffer, buf, base);
+static void wallpaper_buffer_destroy(struct wlr_buffer* wlr_buffer) {
+    struct wallpaper_buffer* buf = wl_container_of(wlr_buffer, buf, base);
     free(buf->data);
     free(buf);
 }
 
 static bool wallpaper_buffer_begin_data_ptr_access(
-    struct wlr_buffer *wlr_buffer, uint32_t flags, void **data,
-    uint32_t *format, size_t *stride
+    struct wlr_buffer* wlr_buffer, uint32_t flags, void** data,
+    uint32_t* format, size_t* stride
 ) {
     (void)flags;
 
-    struct wallpaper_buffer *buf = wl_container_of(wlr_buffer, buf, base);
+    struct wallpaper_buffer* buf = wl_container_of(wlr_buffer, buf, base);
     *data = buf->data;
     *format = DRM_FORMAT_XRGB8888;
     *stride = buf->stride;
     return true;
 }
 
-static void wallpaper_buffer_end_data_ptr_access(struct wlr_buffer *wlr_buffer
+static void wallpaper_buffer_end_data_ptr_access(struct wlr_buffer* wlr_buffer
 ) {
     (void)wlr_buffer;
 }
@@ -730,16 +730,16 @@ static const struct wlr_buffer_impl wallpaper_buffer_impl = {
     .end_data_ptr_access = wallpaper_buffer_end_data_ptr_access,
 };
 
-static struct wallpaper_buffer *wallpaper_buffer_create(int w, int h) {
+static struct wallpaper_buffer* wallpaper_buffer_create(int w, int h) {
     if (w <= 0 || h <= 0) return NULL;
 
     size_t stride = (size_t)w * 4;
     if ((size_t)h > SIZE_MAX / stride) return NULL;
 
-    uint8_t *data = malloc((size_t)h * stride);
+    uint8_t* data = malloc((size_t)h * stride);
     if (data == NULL) return NULL;
 
-    struct wallpaper_buffer *buf = calloc(1, sizeof(*buf));
+    struct wallpaper_buffer* buf = calloc(1, sizeof(*buf));
     if (buf == NULL) {
         free(data);
         return NULL;
@@ -755,7 +755,7 @@ bool wallpaper_blur_wanted(void) {
     if (!wm.wallpaper.blur_enabled) return false;
     if (!layouts_is_tiled(wm.layout)) return false;
 
-    struct Window *w;
+    struct Window* w;
     wl_list_for_each(w, &wm.windows, link) {
         if (w->closed) continue;
         if (!w->mapped) continue;
@@ -767,7 +767,7 @@ bool wallpaper_blur_wanted(void) {
     return false;
 }
 
-static void wpo_free_cache(struct WallpaperOutput *wpo) {
+static void wpo_free_cache(struct WallpaperOutput* wpo) {
     free(wpo->cached_sharp);
     wpo->cached_sharp = NULL;
     free(wpo->cached_blurred);
@@ -775,7 +775,7 @@ static void wpo_free_cache(struct WallpaperOutput *wpo) {
     wpo->drawn_valid = false;
 }
 
-static void wpo_record_state(struct WallpaperOutput *wpo) {
+static void wpo_record_state(struct WallpaperOutput* wpo) {
     wpo->drawn_valid = true;
     wpo->drawn_w = wpo->width;
     wpo->drawn_h = wpo->height;
@@ -795,11 +795,11 @@ static void wpo_record_state(struct WallpaperOutput *wpo) {
     wpo->drawn_blur_passes = wm.wallpaper.blur_passes;
 }
 
-static void wpo_redraw(struct WallpaperOutput *wpo) {
+static void wpo_redraw(struct WallpaperOutput* wpo) {
     if (wpo->cached_sharp == NULL || wpo->cached_blurred == NULL) return;
     if (wpo->width <= 0 || wpo->height <= 0) return;
 
-    struct wallpaper_buffer *buf =
+    struct wallpaper_buffer* buf =
         wallpaper_buffer_create(wpo->width, wpo->height);
     if (buf == NULL) return;
 
@@ -824,8 +824,8 @@ static void wpo_redraw(struct WallpaperOutput *wpo) {
     wpo_record_state(wpo);
 }
 
-static void apply_job(struct WpJob *job) {
-    struct WallpaperOutput *wpo = job->wpo;
+static void apply_job(struct WpJob* job) {
+    struct WallpaperOutput* wpo = job->wpo;
 
     if (wpo == NULL || job->sharp == NULL || job->blurred == NULL
         || wpo->width != job->width || wpo->height != job->height) {
@@ -846,7 +846,7 @@ static void apply_job(struct WpJob *job) {
     wpjob_free(job);
 }
 
-static int on_worker_wake(int fd, uint32_t mask, void *data) {
+static int on_worker_wake(int fd, uint32_t mask, void* data) {
     (void)mask;
     (void)data;
 
@@ -944,11 +944,11 @@ void wallpaper_worker_finish(void) {
     g_worker.gen = 0;
 }
 
-static void wpo_enqueue_rebuild(struct WallpaperOutput *wpo) {
+static void wpo_enqueue_rebuild(struct WallpaperOutput* wpo) {
     if (!g_worker.started) return;
     if (wpo->width <= 0 || wpo->height <= 0) return;
 
-    struct WpJob *job = calloc(1, sizeof(*job));
+    struct WpJob* job = calloc(1, sizeof(*job));
     if (job == NULL) return;
 
     job->wpo = wpo;
@@ -1002,8 +1002,8 @@ static void wpo_enqueue_rebuild(struct WallpaperOutput *wpo) {
     pthread_mutex_unlock(&g_worker.mutex);
 }
 
-bool wallpaper_load_image(const char *path) {
-    uint8_t *pixels = NULL;
+bool wallpaper_load_image(const char* path) {
+    uint8_t* pixels = NULL;
     int w = 0, h = 0;
 
     if (path == NULL || !image_load(path, &pixels, &w, &h)) {
@@ -1047,7 +1047,7 @@ void wallpaper_invalidate_all(void) {
 
     pthread_mutex_unlock(&g_worker.mutex);
 
-    struct WallpaperOutput *wpo;
+    struct WallpaperOutput* wpo;
     wl_list_for_each(wpo, &g_wallpaper.outputs, link) {
         wpo->drawn_valid = false;
         wpo_enqueue_rebuild(wpo);
@@ -1068,8 +1068,8 @@ void wallpaper_finish(void) {
     g_wallpaper.loaded = false;
 }
 
-struct WallpaperOutput *wallpaper_output_create(struct Output *output) {
-    struct WallpaperOutput *wpo = calloc(1, sizeof(*wpo));
+struct WallpaperOutput* wallpaper_output_create(struct Output* output) {
+    struct WallpaperOutput* wpo = calloc(1, sizeof(*wpo));
     if (wpo == NULL) return NULL;
 
     wpo->output = output;
@@ -1090,7 +1090,7 @@ struct WallpaperOutput *wallpaper_output_create(struct Output *output) {
     return wpo;
 }
 
-void wallpaper_output_destroy(struct WallpaperOutput *wpo) {
+void wallpaper_output_destroy(struct WallpaperOutput* wpo) {
     if (wpo == NULL) return;
 
     if (g_worker.started) {
@@ -1124,7 +1124,7 @@ void wallpaper_output_destroy(struct WallpaperOutput *wpo) {
     free(wpo);
 }
 
-static bool wpo_needs_rebuild(const struct WallpaperOutput *wpo) {
+static bool wpo_needs_rebuild(const struct WallpaperOutput* wpo) {
     if (wpo->cached_sharp == NULL || wpo->cached_blurred == NULL) return true;
     if (wpo->drawn_w != wpo->width || wpo->drawn_h != wpo->height) return true;
     if (wpo->drawn_loaded != g_wallpaper.loaded) return true;
@@ -1151,14 +1151,14 @@ static bool wpo_needs_rebuild(const struct WallpaperOutput *wpo) {
     return false;
 }
 
-static bool wpo_needs_redraw(const struct WallpaperOutput *wpo) {
+static bool wpo_needs_redraw(const struct WallpaperOutput* wpo) {
     if (wpo->cached_sharp == NULL || wpo->cached_blurred == NULL) return false;
     if (!wpo->drawn_valid) return true;
     return wpo->drawn_blur_active != wallpaper_blur_wanted();
 }
 
-static void wpo_update(struct WallpaperOutput *wpo) {
-    struct Output *output = wpo->output;
+static void wpo_update(struct WallpaperOutput* wpo) {
+    struct Output* output = wpo->output;
     if (output->width <= 0 || output->height <= 0) return;
 
     if (wpo->width != output->width || wpo->height != output->height) {
@@ -1179,12 +1179,12 @@ static void wpo_update(struct WallpaperOutput *wpo) {
 }
 
 void wallpaper_update_all(void) {
-    struct WallpaperOutput *wpo;
+    struct WallpaperOutput* wpo;
     wl_list_for_each(wpo, &g_wallpaper.outputs, link) { wpo_update(wpo); }
 }
 
-void wallpaper_update_output(struct Output *output) {
-    struct WallpaperOutput *wpo;
+void wallpaper_update_output(struct Output* output) {
+    struct WallpaperOutput* wpo;
     wl_list_for_each(wpo, &g_wallpaper.outputs, link) {
         if (wpo->output == output) {
             wpo_update(wpo);

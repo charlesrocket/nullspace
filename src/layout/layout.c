@@ -18,7 +18,7 @@
 static int32_t cascade_next_slot = 0;
 
 static void output_usable_area(
-    struct Output *output, int32_t *x, int32_t *y, int32_t *w, int32_t *h
+    struct Output* output, int32_t* x, int32_t* y, int32_t* w, int32_t* h
 ) {
     if (!output->area_set || output->area_width <= 0
         || output->area_height <= 0) {
@@ -36,13 +36,13 @@ static void output_usable_area(
     *h = output->area_height;
 }
 
-static bool window_is_layoutable(const struct Window *w) {
+static bool window_is_layoutable(const struct Window* w) {
     return !w->closed && !w->space_hidden && w->mapped && !w->fullscreen
         && !window_is_transient(w);
 }
 
-static struct Window *layout_focused_window_for(struct Output *out) {
-    struct Window *window;
+static struct Window* layout_focused_window_for(struct Output* out) {
+    struct Window* window;
     wl_list_for_each_reverse(window, &wm.focus_stack, focus_link) {
         if (window->output != out) continue;
         if (window_is_layoutable(window)) return window;
@@ -51,7 +51,7 @@ static struct Window *layout_focused_window_for(struct Output *out) {
     return NULL;
 }
 
-static void layout_output(struct Output *output, LayoutCompute compute) {
+static void layout_output(struct Output* output, LayoutCompute compute) {
     if (output->removed) return;
     if (output->wlr_output == NULL || !output->wlr_output->enabled) return;
 
@@ -60,7 +60,7 @@ static void layout_output(struct Output *output, LayoutCompute compute) {
     if (aw <= 0 || ah <= 0) return;
 
     size_t n = 0;
-    struct Window *w;
+    struct Window* w;
     wl_list_for_each(w, &wm.windows, link) {
         if (w->output != output) continue;
         if (window_is_layoutable(w)) n++;
@@ -68,7 +68,7 @@ static void layout_output(struct Output *output, LayoutCompute compute) {
 
     if (n == 0) return;
 
-    struct LayoutWindow *lw = calloc(n, sizeof(*lw));
+    struct LayoutWindow* lw = calloc(n, sizeof(*lw));
     if (lw == NULL) return;
 
     size_t i = 0;
@@ -109,7 +109,7 @@ static void layout_output(struct Output *output, LayoutCompute compute) {
     if (written > n) written = n;
 
     for (size_t j = 0; j < written; j++) {
-        struct Window *fw = lw[j].window;
+        struct Window* fw = lw[j].window;
         if (fw->fullscreen) {
             window_apply_target(
                 fw, output->pos_x, output->pos_y, output->width, output->height
@@ -127,7 +127,7 @@ static void layout_output(struct Output *output, LayoutCompute compute) {
             continue;
         if (!window_is_transient(w)) continue;
 
-        struct Window *parent = window_parent(w);
+        struct Window* parent = window_parent(w);
         if (parent == NULL || parent->closed) continue;
 
         int32_t ww = w->width > 0 ? w->width : 1;
@@ -138,7 +138,7 @@ static void layout_output(struct Output *output, LayoutCompute compute) {
 }
 
 static void floating_layout(
-    struct LayoutWindow *lw, size_t n, const struct LayoutParams *p
+    struct LayoutWindow* lw, size_t n, const struct LayoutParams* p
 ) {
     bool occupied = false;
     for (size_t i = 0; i < n; i++) {
@@ -151,7 +151,7 @@ static void floating_layout(
     if (!occupied) cascade_next_slot = 0;
 
     for (size_t i = 0; i < n; i++) {
-        struct Window *w = lw[i].window;
+        struct Window* w = lw[i].window;
 
         if (w->maximized) {
             lw[i].x = p->x;
@@ -202,8 +202,8 @@ static void floating_layout(
 }
 
 static size_t layouts_compute(
-    enum Layout layout, struct LayoutWindow *out, size_t n,
-    const struct LayoutParams *p
+    enum Layout layout, struct LayoutWindow* out, size_t n,
+    const struct LayoutParams* p
 ) {
     if (n == 0 || p == NULL || out == NULL) { return 0; }
 
@@ -224,7 +224,7 @@ static size_t layouts_compute(
 }
 
 void layout_apply(void) {
-    struct Output *out;
+    struct Output* out;
     wl_list_for_each(out, &server.outputs, link) {
         if (out->removed) continue;
         layout_output(out, layouts_compute);

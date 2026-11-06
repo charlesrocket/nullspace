@@ -61,7 +61,7 @@ struct NsServer server = {0};
 static struct wl_list inhibitors;
 
 struct Inhibitor {
-    struct wlr_idle_inhibitor_v1 *inhibitor;
+    struct wlr_idle_inhibitor_v1* inhibitor;
     struct wl_listener destroy;
     struct wl_list link;
 };
@@ -70,24 +70,24 @@ struct DragContext {
     struct wl_listener destroy;
 };
 
-static void handle_new_output(struct wl_listener *l, void *data);
-static void handle_new_input(struct wl_listener *l, void *data);
-static void handle_new_xdg_toplevel(struct wl_listener *l, void *data);
-static void handle_new_xdg_popup(struct wl_listener *l, void *data);
-static void handle_new_xdg_decoration(struct wl_listener *l, void *data);
+static void handle_new_output(struct wl_listener* l, void* data);
+static void handle_new_input(struct wl_listener* l, void* data);
+static void handle_new_xdg_toplevel(struct wl_listener* l, void* data);
+static void handle_new_xdg_popup(struct wl_listener* l, void* data);
+static void handle_new_xdg_decoration(struct wl_listener* l, void* data);
 
-static void handle_request_set_selection(struct wl_listener *l, void *data);
+static void handle_request_set_selection(struct wl_listener* l, void* data);
 static void
-handle_request_set_primary_selection(struct wl_listener *l, void *data);
+handle_request_set_primary_selection(struct wl_listener* l, void* data);
 
-static void handle_request_start_drag(struct wl_listener *l, void *data);
-static void handle_start_drag(struct wl_listener *l, void *data);
-static void handle_request_set_cursor(struct wl_listener *l, void *data);
+static void handle_request_start_drag(struct wl_listener* l, void* data);
+static void handle_start_drag(struct wl_listener* l, void* data);
+static void handle_request_set_cursor(struct wl_listener* l, void* data);
 
-static void handle_output_power_set_mode(struct wl_listener *l, void *data);
-static void handle_new_idle_inhibitor(struct wl_listener *l, void *data);
+static void handle_output_power_set_mode(struct wl_listener* l, void* data);
+static void handle_new_idle_inhibitor(struct wl_listener* l, void* data);
 
-static const char *cursor_shape_name(uint32_t shape) {
+static const char* cursor_shape_name(uint32_t shape) {
     switch (shape) {
         case WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_DEFAULT: return "default";
         case WP_CURSOR_SHAPE_DEVICE_V1_SHAPE_CONTEXT_MENU:
@@ -129,9 +129,9 @@ static const char *cursor_shape_name(uint32_t shape) {
     }
 }
 
-static void handle_request_set_cursor_shape(struct wl_listener *l, void *data) {
-    struct NsServer *s = wl_container_of(l, s, request_set_cursor_shape);
-    struct wlr_cursor_shape_manager_v1_request_set_shape_event *ev = data;
+static void handle_request_set_cursor_shape(struct wl_listener* l, void* data) {
+    struct NsServer* s = wl_container_of(l, s, request_set_cursor_shape);
+    struct wlr_cursor_shape_manager_v1_request_set_shape_event* ev = data;
 
     if (s->seat->pointer_state.focused_client != ev->seat_client) return;
     if (cursor_is_hidden()) return;
@@ -141,7 +141,7 @@ static void handle_request_set_cursor_shape(struct wl_listener *l, void *data) {
     );
 }
 
-int server_init(struct wl_display *display) {
+int server_init(struct wl_display* display) {
     server.display = display;
     server.event_loop = wl_display_get_event_loop(display);
 
@@ -186,7 +186,7 @@ int server_init(struct wl_display *display) {
     wlr_relative_pointer_manager_v1_create(display);
     wlr_pointer_constraints_v1_create(display);
 
-    struct wlr_server_decoration_manager *kde_deco =
+    struct wlr_server_decoration_manager* kde_deco =
         wlr_server_decoration_manager_create(display);
     if (kde_deco != NULL) {
         wlr_server_decoration_manager_set_default_mode(
@@ -420,7 +420,7 @@ void server_finish(void) {
     if (server.scene) wlr_scene_node_destroy(&server.scene->tree.node);
 }
 
-struct NodeTag *node_tag_find(const struct wlr_scene_node *node) {
+struct NodeTag* node_tag_find(const struct wlr_scene_node* node) {
     for (; node != NULL; node = node->parent ? &node->parent->node : NULL) {
         if (node->data != NULL) return node->data;
     }
@@ -428,11 +428,11 @@ struct NodeTag *node_tag_find(const struct wlr_scene_node *node) {
     return NULL;
 }
 
-static bool inhibitor_surface_visible(struct wlr_surface *surface) {
+static bool inhibitor_surface_visible(struct wlr_surface* surface) {
     if (server.locked) return false;
-    struct wlr_surface *root = wlr_surface_get_root_surface(surface);
+    struct wlr_surface* root = wlr_surface_get_root_surface(surface);
 
-    struct Window *w;
+    struct Window* w;
     wl_list_for_each(w, &wm.windows, link) {
         if (w->closed) continue;
         if (window_wlr_surface(w) == root) {
@@ -447,7 +447,7 @@ static bool inhibitor_surface_visible(struct wlr_surface *surface) {
         }
     }
 
-    struct LayerSurface *ls = layer_surface_from_wlr_surface(root);
+    struct LayerSurface* ls = layer_surface_from_wlr_surface(root);
     if (ls != NULL) {
         if (!ls->mapped) return false;
         int lx = 0, ly = 0;
@@ -461,7 +461,7 @@ void idle_update_inhibit(void) {
     if (server.idle_notifier == NULL) return;
 
     bool inhibited = false;
-    struct Inhibitor *i;
+    struct Inhibitor* i;
     wl_list_for_each(i, &inhibitors, link) {
         if (inhibitor_surface_visible(i->inhibitor->surface)) {
             inhibited = true;
@@ -472,10 +472,10 @@ void idle_update_inhibit(void) {
     wlr_idle_notifier_v1_set_inhibited(server.idle_notifier, inhibited);
 }
 
-static void inhibitor_handle_destroy(struct wl_listener *l, void *data) {
+static void inhibitor_handle_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct Inhibitor *i = wl_container_of(l, i, destroy);
+    struct Inhibitor* i = wl_container_of(l, i, destroy);
 
     wl_list_remove(&i->destroy.link);
     wl_list_remove(&i->link);
@@ -484,10 +484,10 @@ static void inhibitor_handle_destroy(struct wl_listener *l, void *data) {
     idle_update_inhibit();
 }
 
-static void handle_new_idle_inhibitor(struct wl_listener *l, void *data) {
+static void handle_new_idle_inhibitor(struct wl_listener* l, void* data) {
     (void)l;
 
-    struct Inhibitor *i = calloc(1, sizeof(*i));
+    struct Inhibitor* i = calloc(1, sizeof(*i));
     if (i == NULL) return;
 
     i->inhibitor = data;
@@ -503,9 +503,9 @@ void server_notify_activity(void) {
     wlr_idle_notifier_v1_notify_activity(server.idle_notifier, server.seat);
 }
 
-static void handle_output_power_set_mode(struct wl_listener *l, void *data) {
+static void handle_output_power_set_mode(struct wl_listener* l, void* data) {
     (void)l;
-    struct wlr_output_power_v1_set_mode_event *ev = data;
+    struct wlr_output_power_v1_set_mode_event* ev = data;
 
     if (output_set_enabled(
             ev->output, ev->mode == ZWLR_OUTPUT_POWER_V1_MODE_ON
@@ -514,31 +514,31 @@ static void handle_output_power_set_mode(struct wl_listener *l, void *data) {
     }
 }
 
-static void handle_new_output(struct wl_listener *l, void *data) {
+static void handle_new_output(struct wl_listener* l, void* data) {
     (void)l;
 
-    output_create((struct wlr_output *)data);
+    output_create((struct wlr_output*)data);
 }
 
-static void handle_new_input(struct wl_listener *l, void *data) {
+static void handle_new_input(struct wl_listener* l, void* data) {
     (void)l;
 
-    seat_handle_new_input((struct wlr_input_device *)data);
+    seat_handle_new_input((struct wlr_input_device*)data);
 }
 
-static void handle_new_xdg_toplevel(struct wl_listener *l, void *data) {
+static void handle_new_xdg_toplevel(struct wl_listener* l, void* data) {
     (void)l;
 
-    window_create((struct wlr_xdg_toplevel *)data);
+    window_create((struct wlr_xdg_toplevel*)data);
 }
 
-static void handle_new_xdg_popup(struct wl_listener *l, void *data) {
+static void handle_new_xdg_popup(struct wl_listener* l, void* data) {
     (void)l;
 
-    struct wlr_xdg_popup *popup = data;
+    struct wlr_xdg_popup* popup = data;
     if (popup->parent == NULL) return;
 
-    struct wlr_xdg_surface *parent_xdg =
+    struct wlr_xdg_surface* parent_xdg =
         wlr_xdg_surface_try_from_wlr_surface(popup->parent);
 
     if (parent_xdg == NULL || parent_xdg->data == NULL) {
@@ -547,10 +547,10 @@ static void handle_new_xdg_popup(struct wl_listener *l, void *data) {
         return;
     }
 
-    struct wlr_scene_tree *parent_tree = parent_xdg->data;
+    struct wlr_scene_tree* parent_tree = parent_xdg->data;
 
     if (parent_xdg->role == WLR_XDG_SURFACE_ROLE_TOPLEVEL) {
-        struct Window *window = window_from_scene_node(&parent_tree->node);
+        struct Window* window = window_from_scene_node(&parent_tree->node);
         if (window == NULL || window->popup_tree == NULL) {
             log_warn("xdg popup parent window not found (dismissing)");
             wlr_xdg_popup_destroy(popup);
@@ -564,14 +564,14 @@ static void handle_new_xdg_popup(struct wl_listener *l, void *data) {
 }
 
 struct XdgDecoration {
-    struct wlr_xdg_toplevel_decoration_v1 *decoration;
+    struct wlr_xdg_toplevel_decoration_v1* decoration;
     struct wl_listener request_mode;
     struct wl_listener surface_commit;
     struct wl_listener destroy;
     bool commit_listening;
 };
 
-static void xdg_decoration_apply(struct XdgDecoration *d) {
+static void xdg_decoration_apply(struct XdgDecoration* d) {
     if (!d->decoration->toplevel->base->initialized) return;
 
     wlr_xdg_toplevel_decoration_v1_set_mode(
@@ -579,10 +579,10 @@ static void xdg_decoration_apply(struct XdgDecoration *d) {
     );
 }
 
-static void xdg_decoration_handle_commit(struct wl_listener *l, void *data) {
+static void xdg_decoration_handle_commit(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct XdgDecoration *d = wl_container_of(l, d, surface_commit);
+    struct XdgDecoration* d = wl_container_of(l, d, surface_commit);
     if (!d->decoration->toplevel->base->initialized) return;
 
     wl_list_remove(&d->surface_commit.link);
@@ -591,20 +591,20 @@ static void xdg_decoration_handle_commit(struct wl_listener *l, void *data) {
 }
 
 static void
-xdg_decoration_handle_request_mode(struct wl_listener *l, void *data) {
+xdg_decoration_handle_request_mode(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct XdgDecoration *d = wl_container_of(l, d, request_mode);
+    struct XdgDecoration* d = wl_container_of(l, d, request_mode);
 
     // SSD-only policy.
     // If the surface is not initialized yet, the commit hook applies it later.
     xdg_decoration_apply(d);
 }
 
-static void xdg_decoration_handle_destroy(struct wl_listener *l, void *data) {
+static void xdg_decoration_handle_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct XdgDecoration *d = wl_container_of(l, d, destroy);
+    struct XdgDecoration* d = wl_container_of(l, d, destroy);
 
     if (d->commit_listening) wl_list_remove(&d->surface_commit.link);
     wl_list_remove(&d->request_mode.link);
@@ -612,12 +612,12 @@ static void xdg_decoration_handle_destroy(struct wl_listener *l, void *data) {
     free(d);
 }
 
-static void handle_new_xdg_decoration(struct wl_listener *l, void *data) {
+static void handle_new_xdg_decoration(struct wl_listener* l, void* data) {
     (void)l;
 
-    struct wlr_xdg_toplevel_decoration_v1 *deco = data;
+    struct wlr_xdg_toplevel_decoration_v1* deco = data;
 
-    struct XdgDecoration *d = calloc(1, sizeof(*d));
+    struct XdgDecoration* d = calloc(1, sizeof(*d));
     if (d == NULL) {
         log_err("xdg-decoration: OOM (mode will not be enforced)");
         return;
@@ -642,38 +642,38 @@ static void handle_new_xdg_decoration(struct wl_listener *l, void *data) {
     }
 }
 
-static void handle_request_set_selection(struct wl_listener *l, void *data) {
+static void handle_request_set_selection(struct wl_listener* l, void* data) {
     (void)l;
 
-    struct wlr_seat_request_set_selection_event *ev = data;
+    struct wlr_seat_request_set_selection_event* ev = data;
     wlr_seat_set_selection(server.seat, ev->source, ev->serial);
 }
 
 static void
-handle_request_set_primary_selection(struct wl_listener *l, void *data) {
+handle_request_set_primary_selection(struct wl_listener* l, void* data) {
     (void)l;
 
-    struct wlr_seat_request_set_primary_selection_event *ev = data;
+    struct wlr_seat_request_set_primary_selection_event* ev = data;
     wlr_seat_set_primary_selection(server.seat, ev->source, ev->serial);
 }
 
-static void drag_context_destroy(struct wl_listener *l, void *data) {
+static void drag_context_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct DragContext *ctx = wl_container_of(l, ctx, destroy);
+    struct DragContext* ctx = wl_container_of(l, ctx, destroy);
     wl_list_remove(&ctx->destroy.link);
     free(ctx);
 
     seat_refocus_after_drag();
 }
 
-static void handle_start_drag(struct wl_listener *l, void *data) {
+static void handle_start_drag(struct wl_listener* l, void* data) {
     (void)l;
 
-    struct wlr_drag *drag = data;
+    struct wlr_drag* drag = data;
 
     if (drag->icon != NULL) {
-        struct wlr_scene_tree *icon_tree =
+        struct wlr_scene_tree* icon_tree =
             wlr_scene_drag_icon_create(server.overlay_tree, drag->icon);
 
         if (icon_tree != NULL) {
@@ -686,17 +686,17 @@ static void handle_start_drag(struct wl_listener *l, void *data) {
         }
     }
 
-    struct DragContext *ctx = calloc(1, sizeof(*ctx));
+    struct DragContext* ctx = calloc(1, sizeof(*ctx));
     if (ctx == NULL) return;
 
     ctx->destroy.notify = drag_context_destroy;
     wl_signal_add(&drag->events.destroy, &ctx->destroy);
 }
 
-static void handle_request_start_drag(struct wl_listener *l, void *data) {
+static void handle_request_start_drag(struct wl_listener* l, void* data) {
     (void)l;
 
-    struct wlr_seat_request_start_drag_event *ev = data;
+    struct wlr_seat_request_start_drag_event* ev = data;
     if (wlr_seat_validate_pointer_grab_serial(
             server.seat, ev->origin, ev->serial
         )) {
@@ -706,10 +706,10 @@ static void handle_request_start_drag(struct wl_listener *l, void *data) {
     }
 }
 
-static void handle_request_set_cursor(struct wl_listener *l, void *data) {
+static void handle_request_set_cursor(struct wl_listener* l, void* data) {
     (void)l;
 
-    struct wlr_seat_pointer_request_set_cursor_event *ev = data;
+    struct wlr_seat_pointer_request_set_cursor_event* ev = data;
     if (server.seat->pointer_state.focused_client != ev->seat_client) return;
     if (cursor_is_hidden()) return;
 

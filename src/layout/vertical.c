@@ -7,7 +7,7 @@
 #include <stdint.h>
 
 static struct LayoutParams
-effective_params(const struct LayoutParams *p, size_t n) {
+effective_params(const struct LayoutParams* p, size_t n) {
     struct LayoutParams e = *p;
     if (e.smart_gaps && n == 1) {
         e.gap_outer_h = e.gap_outer_v = 0;
@@ -17,7 +17,7 @@ effective_params(const struct LayoutParams *p, size_t n) {
     return e;
 }
 
-static float weight_of(const struct Window *w) {
+static float weight_of(const struct Window* w) {
     if (w == NULL) { return 1.0f; }
 
     float wp = w->size_per;
@@ -27,7 +27,7 @@ static float weight_of(const struct Window *w) {
 }
 
 static void strip_h_weighted(
-    struct LayoutWindow *lw, size_t start, size_t count, int32_t x0, int32_t y,
+    struct LayoutWindow* lw, size_t start, size_t count, int32_t x0, int32_t y,
     int32_t width, int32_t height, int32_t gap
 ) {
     if (count == 0) { return; }
@@ -73,14 +73,14 @@ static void strip_h_weighted(
     }
 }
 
-static int32_t master_boundary(const struct LayoutParams *g, size_t nstack) {
+static int32_t master_boundary(const struct LayoutParams* g, size_t nstack) {
     if (nstack == 0) { return g->height - 2 * g->gap_outer_v + g->gap_inner_v; }
 
     return (int32_t)((float)(g->height + g->gap_inner_v) * g->mfact);
 }
 
 void vertical_tile(
-    struct LayoutWindow *lw, size_t n, const struct LayoutParams *p
+    struct LayoutWindow* lw, size_t n, const struct LayoutParams* p
 ) {
     struct LayoutParams g = effective_params(p, n);
 
@@ -119,7 +119,7 @@ void vertical_tile(
 }
 
 void vertical_grid(
-    struct LayoutWindow *lw, size_t n, const struct LayoutParams *p
+    struct LayoutWindow* lw, size_t n, const struct LayoutParams* p
 ) {
     if (n == 0) { return; }
     struct LayoutParams g = effective_params(p, n);

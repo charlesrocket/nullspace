@@ -11,14 +11,14 @@ struct KeyDef {
     uint32_t mods;
     xkb_keysym_t key;
     enum Action action;
-    const void *arg;
+    const void* arg;
 };
 
 struct PointerDef {
     uint32_t mods;
     uint32_t button;
     enum Action action;
-    const void *arg;
+    const void* arg;
 };
 
 struct LibinputConfig {
@@ -43,5 +43,5 @@ extern const size_t cfg_pointer_binds_len;
 
 struct wlr_input_device;
 
-void input_apply_pointer_config(struct wlr_input_device *device);
+void input_apply_pointer_config(struct wlr_input_device* device);
 void libinput_reconfigure(void);

@@ -22,8 +22,8 @@
 #define LOG_TOPIC "session"
 
 struct SessionLock {
-    struct wlr_session_lock_v1 *lock;
-    struct wlr_scene_tree *tree;
+    struct wlr_session_lock_v1* lock;
+    struct wlr_scene_tree* tree;
     struct wl_list surfaces; // LockSurface.link (oldest first)
     struct wl_listener new_surface, unlock, destroy;
 
@@ -31,23 +31,23 @@ struct SessionLock {
 };
 
 struct LockSurface {
-    struct SessionLock *lock;
-    struct wlr_session_lock_surface_v1 *surface;
-    struct wlr_scene_tree *tree; // NULL once the tree is gone
+    struct SessionLock* lock;
+    struct wlr_session_lock_surface_v1* surface;
+    struct wlr_scene_tree* tree; // NULL once the tree is gone
     struct wl_listener destroy, tree_destroy;
     struct wl_list link;
 
     uint32_t width, height; // saved size
 };
 
-static struct wlr_session_lock_manager_v1 *manager;
+static struct wlr_session_lock_manager_v1* manager;
 static struct wl_listener new_lock_listener;
-static struct SessionLock *current_lock;
+static struct SessionLock* current_lock;
 
-static bool is_lock_surface(struct wlr_surface *surface) {
+static bool is_lock_surface(struct wlr_surface* surface) {
     if (surface == NULL || current_lock == NULL) return false;
 
-    struct LockSurface *ls;
+    struct LockSurface* ls;
     wl_list_for_each(ls, &current_lock->surfaces, link) {
         if (ls->surface->surface == surface) return true;
     }
@@ -55,8 +55,8 @@ static bool is_lock_surface(struct wlr_surface *surface) {
     return false;
 }
 
-static void focus_lock_surface(struct wlr_surface *surface) {
-    struct wlr_keyboard *kb = wlr_seat_get_keyboard(server.seat);
+static void focus_lock_surface(struct wlr_surface* surface) {
+    struct wlr_keyboard* kb = wlr_seat_get_keyboard(server.seat);
     if (kb != NULL) {
         wlr_seat_keyboard_notify_enter(
             server.seat, surface, kb->keycodes, kb->num_keycodes, &kb->modifiers
@@ -74,13 +74,13 @@ static void ensure_keyboard_focus(void) {
         return;
     }
 
-    struct LockSurface *first =
+    struct LockSurface* first =
         wl_container_of(current_lock->surfaces.next, first, link);
 
     focus_lock_surface(first->surface->surface);
 }
 
-static void configure_surface(struct LockSurface *ls) {
+static void configure_surface(struct LockSurface* ls) {
     int w, h;
     wlr_output_effective_resolution(ls->surface->output, &w, &h);
     if (w <= 0 || h <= 0) return;
@@ -102,11 +102,11 @@ void session_lock_update_geometry(void) {
 
     if (current_lock == NULL) return;
 
-    struct LockSurface *ls;
+    struct LockSurface* ls;
     wl_list_for_each(ls, &current_lock->surfaces, link) {
         if (ls->tree == NULL) continue;
 
-        struct wlr_output_layout_output *lo =
+        struct wlr_output_layout_output* lo =
             wlr_output_layout_get(server.output_layout, ls->surface->output);
         if (lo == NULL) continue;
 
@@ -118,10 +118,10 @@ void session_lock_update_geometry(void) {
 // `locked` may only be sent after every visible output has shown a blanked
 // frame.
 static void try_send_locked(void) {
-    struct SessionLock *lock = current_lock;
+    struct SessionLock* lock = current_lock;
     if (lock == NULL || lock->locked_sent) return;
 
-    struct Output *o;
+    struct Output* o;
     wl_list_for_each(o, &server.outputs, link) {
         if (o->removed || !o->wlr_output->enabled) continue;
         if (!o->lock_blanked) return;
@@ -131,7 +131,7 @@ static void try_send_locked(void) {
     wlr_session_lock_v1_send_locked(lock->lock);
 }
 
-void session_lock_output_committed(struct Output *out) {
+void session_lock_output_committed(struct Output* out) {
     if (!server.locked) return;
     out->lock_blanked = true;
     try_send_locked();
@@ -142,10 +142,10 @@ void session_lock_outputs_changed(void) { try_send_locked(); }
 void session_lock_click_focus(void) {
     if (!server.locked) return;
 
-    struct wlr_surface *s = server.seat->pointer_state.focused_surface;
+    struct wlr_surface* s = server.seat->pointer_state.focused_surface;
     if (s == NULL) return;
 
-    struct wlr_surface *root = wlr_surface_get_root_surface(s);
+    struct wlr_surface* root = wlr_surface_get_root_surface(s);
     if (!is_lock_surface(root)) return;
     if (server.seat->keyboard_state.focused_surface == root) return;
 
@@ -153,18 +153,18 @@ void session_lock_click_focus(void) {
 }
 
 static void
-lock_surface_handle_tree_destroy(struct wl_listener *l, void *data) {
+lock_surface_handle_tree_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct LockSurface *ls = wl_container_of(l, ls, tree_destroy);
+    struct LockSurface* ls = wl_container_of(l, ls, tree_destroy);
     wl_list_remove(&ls->tree_destroy.link);
     ls->tree = NULL;
 }
 
-static void lock_surface_handle_destroy(struct wl_listener *l, void *data) {
+static void lock_surface_handle_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct LockSurface *ls = wl_container_of(l, ls, destroy);
+    struct LockSurface* ls = wl_container_of(l, ls, destroy);
 
     wl_list_remove(&ls->destroy.link);
     wl_list_remove(&ls->link);
@@ -175,11 +175,11 @@ static void lock_surface_handle_destroy(struct wl_listener *l, void *data) {
     ensure_keyboard_focus();
 }
 
-static void lock_handle_new_surface(struct wl_listener *l, void *data) {
-    struct SessionLock *lock = wl_container_of(l, lock, new_surface);
-    struct wlr_session_lock_surface_v1 *surf = data;
+static void lock_handle_new_surface(struct wl_listener* l, void* data) {
+    struct SessionLock* lock = wl_container_of(l, lock, new_surface);
+    struct wlr_session_lock_surface_v1* surf = data;
 
-    struct wlr_output_layout_output *lo =
+    struct wlr_output_layout_output* lo =
         surf->output != NULL
             ? wlr_output_layout_get(server.output_layout, surf->output)
             : NULL;
@@ -189,7 +189,7 @@ static void lock_handle_new_surface(struct wl_listener *l, void *data) {
         return;
     }
 
-    struct LockSurface *ls = calloc(1, sizeof(*ls));
+    struct LockSurface* ls = calloc(1, sizeof(*ls));
     if (ls == NULL) return;
 
     ls->tree = wlr_scene_subsurface_tree_create(lock->tree, surf->surface);
@@ -213,7 +213,7 @@ static void lock_handle_new_surface(struct wl_listener *l, void *data) {
     ensure_keyboard_focus();
 }
 
-static void release_lock(struct SessionLock *lock, bool unlock) {
+static void release_lock(struct SessionLock* lock, bool unlock) {
     wl_list_remove(&lock->new_surface.link);
     wl_list_remove(&lock->unlock.link);
     wl_list_remove(&lock->destroy.link);
@@ -248,17 +248,17 @@ static void release_lock(struct SessionLock *lock, bool unlock) {
     wm_mark_layout_dirty();
 }
 
-static void lock_handle_unlock(struct wl_listener *l, void *data) {
+static void lock_handle_unlock(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct SessionLock *lock = wl_container_of(l, lock, unlock);
+    struct SessionLock* lock = wl_container_of(l, lock, unlock);
     release_lock(lock, true);
 }
 
-static void lock_handle_destroy(struct wl_listener *l, void *data) {
+static void lock_handle_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
-    struct SessionLock *lock = wl_container_of(l, lock, destroy);
+    struct SessionLock* lock = wl_container_of(l, lock, destroy);
     release_lock(lock, !lock->locked_sent);
 }
 
@@ -271,7 +271,7 @@ static void engage_lock(void) {
     wlr_seat_pointer_clear_focus(server.seat);
     wlr_seat_keyboard_clear_focus(server.seat);
 
-    struct Window *focused = window_focused();
+    struct Window* focused = window_focused();
     if (focused != NULL) window_set_activated(focused, false);
 
     wlr_scene_node_set_enabled(&server.content_tree->node, false);
@@ -280,24 +280,24 @@ static void engage_lock(void) {
     session_lock_update_geometry();
     idle_update_inhibit();
 
-    struct Output *o;
+    struct Output* o;
     wl_list_for_each(o, &server.outputs, link) {
         o->lock_blanked = false;
         wlr_output_schedule_frame(o->wlr_output);
     }
 }
 
-static void handle_new_lock(struct wl_listener *l, void *data) {
+static void handle_new_lock(struct wl_listener* l, void* data) {
     (void)l;
 
-    struct wlr_session_lock_v1 *wlr_lock = data;
+    struct wlr_session_lock_v1* wlr_lock = data;
 
     if (current_lock != NULL) {
         wlr_session_lock_v1_destroy(wlr_lock);
         return;
     }
 
-    struct SessionLock *lock = calloc(1, sizeof(*lock));
+    struct SessionLock* lock = calloc(1, sizeof(*lock));
     if (lock == NULL) {
         wlr_session_lock_v1_destroy(wlr_lock);
         return;
@@ -320,7 +320,7 @@ static void handle_new_lock(struct wl_listener *l, void *data) {
     current_lock = lock;
 
     if (already_locked) {
-        struct Output *o;
+        struct Output* o;
         wl_list_for_each(o, &server.outputs, link) o->lock_blanked = true;
     } else {
         engage_lock();
@@ -329,7 +329,7 @@ static void handle_new_lock(struct wl_listener *l, void *data) {
     try_send_locked();
 }
 
-bool session_lock_init(struct wl_display *display) {
+bool session_lock_init(struct wl_display* display) {
     static const float bg_color[4] = {0.05f, 0.05f, 0.05f, 1.0f};
     server.lock_bg = wlr_scene_rect_create(server.lock_tree, 0, 0, bg_color);
 

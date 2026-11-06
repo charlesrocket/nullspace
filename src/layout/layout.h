@@ -10,12 +10,12 @@
 struct Window;
 
 struct LayoutWindow {
-    struct Window *window;
+    struct Window* window;
     int32_t x, y, w, h;
 };
 
 struct LayoutParams {
-    struct Window *focused;
+    struct Window* focused;
 
     int32_t x, y, width, height; // usable area (exclusive zone)
     int32_t gap_outer_h, gap_outer_v;
@@ -29,12 +29,12 @@ struct LayoutParams {
 
 bool layouts_is_tiled(enum Layout layout);
 
-typedef size_t (*LayoutCompute)(enum Layout, struct LayoutWindow *, size_t, const struct LayoutParams *);
+typedef size_t (*LayoutCompute)(enum Layout, struct LayoutWindow*, size_t, const struct LayoutParams*);
 
 void layout_apply(void);
 
 static inline float
-layout_weight_sum(const struct LayoutWindow *lw, size_t start, size_t n) {
+layout_weight_sum(const struct LayoutWindow* lw, size_t start, size_t n) {
     float s = 0.0f;
     for (size_t i = start; i < start + n; i++) {
         float w = lw[i].window->size_per;

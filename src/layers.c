@@ -22,7 +22,7 @@
 
 #define LOG_TOPIC "layer"
 
-static struct wlr_scene_tree *
+static struct wlr_scene_tree*
 layer_tree_for(enum zwlr_layer_shell_v1_layer layer) {
     switch (layer) {
         case ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND:
@@ -35,14 +35,14 @@ layer_tree_for(enum zwlr_layer_shell_v1_layer layer) {
     return server.top_tree;
 }
 
-static struct Output *output_for(struct wlr_layer_surface_v1 *layer) {
+static struct Output* output_for(struct wlr_layer_surface_v1* layer) {
     if (layer->output != NULL) { return output_from_wlr_output(layer->output); }
     return output_primary();
 }
 
 static void
-consume_exclusive(struct wlr_layer_surface_v1 *layer, struct wlr_box *box) {
-    const struct wlr_layer_surface_v1_state *state = &layer->current;
+consume_exclusive(struct wlr_layer_surface_v1* layer, struct wlr_box* box) {
+    const struct wlr_layer_surface_v1_state* state = &layer->current;
     if (state->exclusive_zone <= 0) return;
 
     uint32_t edge = wlr_layer_surface_v1_get_exclusive_edge(layer);
@@ -94,9 +94,9 @@ consume_exclusive(struct wlr_layer_surface_v1 *layer, struct wlr_box *box) {
     if (box->height < 0) box->height = 0;
 }
 
-static struct wlr_box layer_bounds_for(struct LayerSurface *ls) {
-    struct Output *o = ls->output;
-    const struct wlr_layer_surface_v1_state *state =
+static struct wlr_box layer_bounds_for(struct LayerSurface* ls) {
+    struct Output* o = ls->output;
+    const struct wlr_layer_surface_v1_state* state =
         &ls->layer_surface->current;
 
     struct wlr_box full = {
@@ -111,7 +111,7 @@ static struct wlr_box layer_bounds_for(struct LayerSurface *ls) {
     if (state->exclusive_zone == 0) {
         struct wlr_box box = full;
         for (int i = 3; i >= 0; i--) {
-            struct LayerSurface *it;
+            struct LayerSurface* it;
             wl_list_for_each(it, &wm.layer_surfaces, link) {
                 if (it->output != o || !it->mapped) continue;
                 if (it->layer_surface->current.layer != (uint32_t)i) continue;
@@ -126,7 +126,7 @@ static struct wlr_box layer_bounds_for(struct LayerSurface *ls) {
     bool reached = false;
 
     for (int i = 3; i >= 0 && !reached; i--) {
-        struct LayerSurface *it;
+        struct LayerSurface* it;
         wl_list_for_each(it, &wm.layer_surfaces, link) {
             if (it->layer_surface->current.layer != (uint32_t)i) continue;
             if (it->output != o || !it->mapped) continue;
@@ -142,7 +142,7 @@ static struct wlr_box layer_bounds_for(struct LayerSurface *ls) {
     return box;
 }
 
-static void update_output_usable_area(struct Output *o) {
+static void update_output_usable_area(struct Output* o) {
     if (o == NULL || o->removed) return;
 
     struct wlr_box box = {
@@ -153,7 +153,7 @@ static void update_output_usable_area(struct Output *o) {
     };
 
     for (int i = 3; i >= 0; i--) {
-        struct LayerSurface *ls;
+        struct LayerSurface* ls;
         wl_list_for_each(ls, &wm.layer_surfaces, link) {
             if (ls->output != o || !ls->mapped) continue;
             if (ls->layer_surface->current.layer != (uint32_t)i) continue;
@@ -178,13 +178,13 @@ static void update_output_usable_area(struct Output *o) {
     wm_mark_layout_dirty();
 }
 
-static void arrange_layer_surface(struct LayerSurface *ls) {
-    struct wlr_layer_surface_v1 *layer = ls->layer_surface;
-    struct Output *o = ls->output;
+static void arrange_layer_surface(struct LayerSurface* ls) {
+    struct wlr_layer_surface_v1* layer = ls->layer_surface;
+    struct Output* o = ls->output;
 
     if (o == NULL || o->width <= 0 || o->height <= 0) return;
 
-    const struct wlr_layer_surface_v1_state *state = &layer->current;
+    const struct wlr_layer_surface_v1_state* state = &layer->current;
     struct wlr_box bounds = layer_bounds_for(ls);
 
     struct wlr_box box = {
@@ -257,10 +257,10 @@ static void arrange_layer_surface(struct LayerSurface *ls) {
     wlr_layer_surface_v1_configure(layer, cw, ch);
 }
 
-static void handle_map(struct wl_listener *lst, void *data) {
+static void handle_map(struct wl_listener* lst, void* data) {
     (void)data;
 
-    struct LayerSurface *ls = wl_container_of(lst, ls, map);
+    struct LayerSurface* ls = wl_container_of(lst, ls, map);
 
     ls->mapped = true;
     wlr_scene_node_set_enabled(&ls->scene_tree->node, true);
@@ -280,10 +280,10 @@ static void handle_map(struct wl_listener *lst, void *data) {
     idle_update_inhibit();
 }
 
-static void handle_unmap(struct wl_listener *lst, void *data) {
+static void handle_unmap(struct wl_listener* lst, void* data) {
     (void)data;
 
-    struct LayerSurface *ls = wl_container_of(lst, ls, unmap);
+    struct LayerSurface* ls = wl_container_of(lst, ls, unmap);
 
     bool had_focus = server.seat->keyboard_state.focused_surface
                   == ls->layer_surface->surface;
@@ -295,7 +295,7 @@ static void handle_unmap(struct wl_listener *lst, void *data) {
 
     if (!had_focus || server.locked) return;
 
-    struct Window *w = window_focused();
+    struct Window* w = window_focused();
     if (w != NULL) {
         seat_focus(w);
     } else {
@@ -303,12 +303,12 @@ static void handle_unmap(struct wl_listener *lst, void *data) {
     }
 }
 
-static void handle_commit(struct wl_listener *lst, void *data) {
+static void handle_commit(struct wl_listener* lst, void* data) {
     (void)data;
 
-    struct LayerSurface *ls = wl_container_of(lst, ls, commit);
-    struct wlr_layer_surface_v1 *layer = ls->layer_surface;
-    struct wlr_scene_tree *want = layer_tree_for(layer->current.layer);
+    struct LayerSurface* ls = wl_container_of(lst, ls, commit);
+    struct wlr_layer_surface_v1* layer = ls->layer_surface;
+    struct wlr_scene_tree* want = layer_tree_for(layer->current.layer);
 
     if (ls->scene_tree->node.parent != want) {
         wlr_scene_node_reparent(&ls->scene_tree->node, want);
@@ -318,10 +318,10 @@ static void handle_commit(struct wl_listener *lst, void *data) {
     update_output_usable_area(ls->output);
 }
 
-static void handle_destroy(struct wl_listener *lst, void *data) {
+static void handle_destroy(struct wl_listener* lst, void* data) {
     (void)data;
 
-    struct LayerSurface *ls = wl_container_of(lst, ls, destroy);
+    struct LayerSurface* ls = wl_container_of(lst, ls, destroy);
 
     wl_list_remove(&ls->destroy.link);
     wl_list_remove(&ls->new_popup.link);
@@ -337,25 +337,25 @@ static void handle_destroy(struct wl_listener *lst, void *data) {
         wlr_scene_node_destroy(&ls->popup_tree->node);
     }
 
-    struct Output *o = ls->output;
+    struct Output* o = ls->output;
     wl_list_remove(&ls->link);
     free(ls);
 
     if (o != NULL) update_output_usable_area(o);
 }
 
-static void handle_new_popup(struct wl_listener *lst, void *data) {
-    struct wlr_xdg_popup *popup = data;
-    struct LayerSurface *ls = wl_container_of(lst, ls, new_popup);
+static void handle_new_popup(struct wl_listener* lst, void* data) {
+    struct wlr_xdg_popup* popup = data;
+    struct LayerSurface* ls = wl_container_of(lst, ls, new_popup);
 
     popup_track(popup, ls->popup_tree);
 }
 
-struct LayerSurface *layer_surface_from_wlr_surface(struct wlr_surface *surface
+struct LayerSurface* layer_surface_from_wlr_surface(struct wlr_surface* surface
 ) {
     if (surface == NULL) return NULL;
 
-    struct LayerSurface *ls;
+    struct LayerSurface* ls;
     wl_list_for_each(ls, &wm.layer_surfaces, link) {
         if (ls->layer_surface->surface == surface) return ls;
     }
@@ -363,12 +363,12 @@ struct LayerSurface *layer_surface_from_wlr_surface(struct wlr_surface *surface
     return NULL;
 }
 
-void layers_handle_new_surface(struct wl_listener *listener, void *data) {
+void layers_handle_new_surface(struct wl_listener* listener, void* data) {
     (void)listener;
 
-    struct wlr_layer_surface_v1 *layer = data;
+    struct wlr_layer_surface_v1* layer = data;
 
-    struct LayerSurface *ls = calloc(1, sizeof(*ls));
+    struct LayerSurface* ls = calloc(1, sizeof(*ls));
     if (ls == NULL) return;
 
     ls->layer_surface = layer;
@@ -383,7 +383,7 @@ void layers_handle_new_surface(struct wl_listener *listener, void *data) {
         );
     }
 
-    struct wlr_scene_tree *parent = layer_tree_for(layer->pending.layer);
+    struct wlr_scene_tree* parent = layer_tree_for(layer->pending.layer);
 
     ls->scene_tree = wlr_scene_subsurface_tree_create(parent, layer->surface);
     if (ls->scene_tree == NULL) {

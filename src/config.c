@@ -33,12 +33,12 @@
 struct Config config;
 static bool initialized;
 
-static const char *const default_window_rules[] = {CFG_WINDOW_RULES};
+static const char* const default_window_rules[] = {CFG_WINDOW_RULES};
 
 static const struct {
-    const char *key;
-    char **field;
-    const char *def;
+    const char* key;
+    char** field;
+    const char* def;
 } string_keys[] = {
     {     "cmd_start",      &config.cmd_start,      CFG_CMD_START},
     {  "cursor_theme",   &config.cursor_theme,   CFG_CURSOR_THEME},
@@ -58,8 +58,8 @@ static const struct {
     {"wallpaper_path", &config.wallpaper_path, CFG_WALLPAPER_PATH},
 };
 
-static bool set_string(char **dst, const char *value) {
-    char *copy = strdup(value ? value : "");
+static bool set_string(char** dst, const char* value) {
+    char* copy = strdup(value ? value : "");
     if (!copy) return false;
     free(*dst);
     *dst = copy;
@@ -67,9 +67,9 @@ static bool set_string(char **dst, const char *value) {
     return true;
 }
 
-static bool parse_bool(const char *key, const char *value, bool *out) {
-    static const char *const yes[] = {"1", "true", "on", "yes"};
-    static const char *const no[] = {"0", "false", "off", "no"};
+static bool parse_bool(const char* key, const char* value, bool* out) {
+    static const char* const yes[] = {"1", "true", "on", "yes"};
+    static const char* const no[] = {"0", "false", "off", "no"};
 
     for (size_t i = 0; i < ARRAY_LEN(yes); i++) {
         if (strcasecmp(value, yes[i]) == 0) {
@@ -88,7 +88,7 @@ static bool parse_bool(const char *key, const char *value, bool *out) {
 }
 
 static bool parse_int_in_range(
-    const char *key, const char *value, long min, long max, long *out
+    const char* key, const char* value, long min, long max, long* out
 ) {
     long l;
     if (ns_parse_int(value, &l) && l >= min && l <= max) {
@@ -100,7 +100,7 @@ static bool parse_int_in_range(
     return false;
 }
 
-static size_t fmt_long(char *buf, size_t size, long v) {
+static size_t fmt_long(char* buf, size_t size, long v) {
     if (size < 2) return 0;
 
     bool neg = v < 0;
@@ -126,7 +126,7 @@ static size_t fmt_long(char *buf, size_t size, long v) {
     return i;
 }
 
-static size_t fmt_double(char *buf, size_t size, double v, int decimals) {
+static size_t fmt_double(char* buf, size_t size, double v, int decimals) {
     if (size < 2) return 0;
     if (v != v) return 0;
 
@@ -187,7 +187,7 @@ static size_t fmt_double(char *buf, size_t size, double v, int decimals) {
     return i;
 }
 
-static bool write_all(int fd, const char *buf, size_t len) {
+static bool write_all(int fd, const char* buf, size_t len) {
     while (len > 0) {
         ssize_t n = write(fd, buf, len);
         if (n < 0) {
@@ -207,14 +207,14 @@ static bool write_all(int fd, const char *buf, size_t len) {
     return true;
 }
 
-static bool w_str(int fd, const char *s) { return write_all(fd, s, strlen(s)); }
+static bool w_str(int fd, const char* s) { return write_all(fd, s, strlen(s)); }
 
-static bool w_kv_str(int fd, const char *k, const char *v) {
+static bool w_kv_str(int fd, const char* k, const char* v) {
     return w_str(fd, k) && w_str(fd, "=") && w_str(fd, v ? v : "")
         && w_str(fd, "\n");
 }
 
-static bool w_kv_long(int fd, const char *k, long v) {
+static bool w_kv_long(int fd, const char* k, long v) {
     char num[32];
     size_t n = fmt_long(num, sizeof(num), v);
     if (n == 0) {
@@ -226,7 +226,7 @@ static bool w_kv_long(int fd, const char *k, long v) {
         && w_str(fd, "\n");
 }
 
-static bool w_kv_float(int fd, const char *k, double v, int decimals) {
+static bool w_kv_float(int fd, const char* k, double v, int decimals) {
     char num[64];
     size_t n = fmt_double(num, sizeof(num), v, decimals);
     if (n == 0) {
@@ -238,7 +238,7 @@ static bool w_kv_float(int fd, const char *k, double v, int decimals) {
         && w_str(fd, "\n");
 }
 
-static bool w_kv_bool(int fd, const char *k, bool v) {
+static bool w_kv_bool(int fd, const char* k, bool v) {
     return w_kv_str(fd, k, v ? "true" : "false");
 }
 
@@ -260,11 +260,11 @@ static void clear_space_rules(void) {
     config.space_rule_count = 0;
 }
 
-static bool append_window_rule(const char *value) {
-    char *copy = strdup(value);
+static bool append_window_rule(const char* value) {
+    char* copy = strdup(value);
     if (!copy) return false;
 
-    char **rules = reallocarray(
+    char** rules = reallocarray(
         config.window_rules, config.window_rule_count + 1, sizeof(*rules)
     );
 
@@ -279,11 +279,11 @@ static bool append_window_rule(const char *value) {
     return true;
 }
 
-static bool append_space_rule(const char *value) {
-    char *copy = strdup(value);
+static bool append_space_rule(const char* value) {
+    char* copy = strdup(value);
     if (copy == NULL) return false;
 
-    char **rules = reallocarray(
+    char** rules = reallocarray(
         config.space_rules, config.space_rule_count + 1, sizeof(*rules)
     );
 
@@ -348,8 +348,8 @@ static bool has_bind(uint32_t mods, xkb_keysym_t key) {
 
 // Takes ownership of `arg`
 static bool
-add_bind(uint32_t mods, xkb_keysym_t key, enum Action action, char *arg) {
-    struct UserBind *b =
+add_bind(uint32_t mods, xkb_keysym_t key, enum Action action, char* arg) {
+    struct UserBind* b =
         reallocarray(config.binds, config.bind_count + 1, sizeof(*b));
     if (!b) {
         free(arg);
@@ -367,7 +367,7 @@ add_bind(uint32_t mods, xkb_keysym_t key, enum Action action, char *arg) {
 
 // NONE | SUPER | SHIFT | CTRL | ALT, split on `|` or `+`.
 // Modifies `mods_s` in place.
-static bool parse_mods(char *mods_s, uint32_t *out) {
+static bool parse_mods(char* mods_s, uint32_t* out) {
     uint32_t mods = 0;
     char *mcur = mods_s, *tok;
 
@@ -396,15 +396,15 @@ static bool parse_mods(char *mods_s, uint32_t *out) {
     return true;
 }
 
-static bool parse_space_index(const char *s, int *out) {
+static bool parse_space_index(const char* s, int* out) {
     if (s[0] < '0' || s[0] > '9' || s[1] != '\0') return false;
     *out = s[0] - '0';
     return true;
 }
 
-static bool parse_action(const char *s, enum Action *action, bool *needs_arg) {
+static bool parse_action(const char* s, enum Action* action, bool* needs_arg) {
     static const struct {
-        const char *name;
+        const char* name;
         enum Action action;
         bool needs_arg;
     } actions[] = {
@@ -446,12 +446,12 @@ static bool parse_action(const char *s, enum Action *action, bool *needs_arg) {
 
 // MODS,KEY,ACTION[,ARGS...]
 // ARGS may contain commas, everything after the 3rd comma is an argument.
-static bool parse_bind_fields(char *line) {
-    char *cur = line;
-    char *mods_s = strsep(&cur, ",");
-    char *key_s = strsep(&cur, ",");
-    char *action_s = strsep(&cur, ",");
-    char *args = cur;
+static bool parse_bind_fields(char* line) {
+    char* cur = line;
+    char* mods_s = strsep(&cur, ",");
+    char* key_s = strsep(&cur, ",");
+    char* action_s = strsep(&cur, ",");
+    char* args = cur;
 
     if (!key_s || !action_s) {
         log_warn("Bind: needs MODS,KEY,ACTION[,ARGS]");
@@ -479,7 +479,7 @@ static bool parse_bind_fields(char *line) {
         return false;
     }
 
-    char *arg = NULL;
+    char* arg = NULL;
     if (needs_arg) {
         if (!args || *args == '\0') {
             log_warn("Bind: action '%s' needs an argument", action_s);
@@ -495,8 +495,8 @@ static bool parse_bind_fields(char *line) {
     return add_bind(mods, key, action, arg);
 }
 
-static bool parse_bind(const char *value) {
-    char *copy = strdup(value);
+static bool parse_bind(const char* value) {
+    char* copy = strdup(value);
     if (!copy) return false;
 
     bool ok = parse_bind_fields(copy);
@@ -516,7 +516,7 @@ static void build_binds(void) {
 
     static const struct {
         xkb_keysym_t key;
-        char **cmd;
+        char** cmd;
     } spawn_slots[] = {
         {XKB_KEY_Return, &config.cmd_terminal},
         {    XKB_KEY_F1,       &config.cmd_f1},
@@ -534,10 +534,10 @@ static void build_binds(void) {
     for (size_t i = 0; i < ARRAY_LEN(spawn_slots); i++) {
         if (has_bind(CFG_MOD_SUPER, spawn_slots[i].key)) continue;
 
-        const char *cmd = *spawn_slots[i].cmd;
+        const char* cmd = *spawn_slots[i].cmd;
         if (!cmd || *cmd == '\0') continue;
 
-        char *dup = strdup(cmd);
+        char* dup = strdup(cmd);
         if (!dup) continue;
 
         add_bind(CFG_MOD_SUPER, spawn_slots[i].key, ACTION_SPAWN_SHELL, dup);
@@ -545,7 +545,7 @@ static void build_binds(void) {
 }
 
 static void
-parse_key(const char *key, const char *value, bool *seen_window_rule) {
+parse_key(const char* key, const char* value, bool* seen_window_rule) {
     for (size_t i = 0; i < ARRAY_LEN(string_keys); i++) {
         if (strcmp(key, string_keys[i].key) == 0) {
             set_string(string_keys[i].field, value);
@@ -655,8 +655,8 @@ parse_key(const char *key, const char *value, bool *seen_window_rule) {
     }
 }
 
-static bool config_path(char *buf, size_t size) {
-    const char *xdg = getenv("XDG_CONFIG_HOME");
+static bool config_path(char* buf, size_t size) {
+    const char* xdg = getenv("XDG_CONFIG_HOME");
     if (xdg && xdg[0] == '/') {
         if (strlcpy(buf, xdg, size) >= size) return false;
         if (strlcat(buf, "/nullspace/config", size) >= size) return false;
@@ -664,7 +664,7 @@ static bool config_path(char *buf, size_t size) {
         return true;
     }
 
-    const char *home = getenv("HOME");
+    const char* home = getenv("HOME");
     if (!home || home[0] != '/') return false;
     if (strlcpy(buf, home, size) >= size) return false;
     if (strlcat(buf, "/.config/nullspace/config", size) >= size) return false;
@@ -672,7 +672,7 @@ static bool config_path(char *buf, size_t size) {
     return true;
 }
 
-static bool make_dir(const char *p) {
+static bool make_dir(const char* p) {
     if (mkdir(p, 0700) == 0) return true;
 
     int saved = errno;
@@ -683,14 +683,14 @@ static bool make_dir(const char *p) {
     return false;
 }
 
-static bool ensure_parent_dir(const char *path) {
+static bool ensure_parent_dir(const char* path) {
     char tmp[PATH_MAX];
     if (strlcpy(tmp, path, sizeof(tmp)) >= sizeof(tmp)) {
         errno = ENAMETOOLONG;
         return false;
     }
 
-    char *slash = strrchr(tmp, '/');
+    char* slash = strrchr(tmp, '/');
     if (!slash) {
         errno = EINVAL;
         return false;
@@ -699,7 +699,7 @@ static bool ensure_parent_dir(const char *path) {
     if (slash == tmp) return true;
     *slash = '\0';
 
-    for (char *p = tmp + 1; *p; p++) {
+    for (char* p = tmp + 1; *p; p++) {
         if (*p != '/') continue;
         *p = '\0';
         if (!make_dir(tmp)) return false;
@@ -709,7 +709,7 @@ static bool ensure_parent_dir(const char *path) {
     return make_dir(tmp);
 }
 
-static bool write_default_config(const char *path) {
+static bool write_default_config(const char* path) {
     if (!ensure_parent_dir(path)) {
         log_warn("Cannot create directory for '%s': %s", path, strerror(errno));
         return false;
@@ -831,7 +831,7 @@ static bool write_default_config(const char *path) {
     return true;
 }
 
-static FILE *open_config(const char *path, bool *missing) {
+static FILE* open_config(const char* path, bool* missing) {
     *missing = false;
 
     int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK | O_NOCTTY);
@@ -850,7 +850,7 @@ static FILE *open_config(const char *path, bool *missing) {
         return NULL;
     }
 
-    const char *why = NULL;
+    const char* why = NULL;
     if (!S_ISREG(st.st_mode))
         why = "not a regular file";
     else if (st.st_size > CONFIG_MAX_BYTES)
@@ -862,7 +862,7 @@ static FILE *open_config(const char *path, bool *missing) {
         return NULL;
     }
 
-    FILE *f = fdopen(fd, "r");
+    FILE* f = fdopen(fd, "r");
     if (!f) {
         log_warn("fdopen('%s'): %s", path, strerror(errno));
         close(fd);
@@ -872,18 +872,18 @@ static FILE *open_config(const char *path, bool *missing) {
     return f;
 }
 
-static void parse_config_file(FILE *f) {
-    char *line = NULL;
+static void parse_config_file(FILE* f) {
+    char* line = NULL;
     size_t cap = 0;
     bool seen_window_rule = false;
 
     while (getline(&line, &cap, f) >= 0) {
         line[strcspn(line, "\r\n")] = '\0';
 
-        char *s = ns_trim(line);
+        char* s = ns_trim(line);
         if (*s == '\0' || *s == '#') continue;
 
-        char *eq = strchr(s, '=');
+        char* eq = strchr(s, '=');
         if (!eq) {
             log_warn("Ignoring line without '=': %s", s);
             continue;
@@ -891,8 +891,8 @@ static void parse_config_file(FILE *f) {
 
         *eq = '\0';
 
-        char *key = ns_trim(s);
-        char *value = ns_trim(eq + 1);
+        char* key = ns_trim(s);
+        char* value = ns_trim(eq + 1);
         if (*key == '\0') continue;
 
         parse_key(key, value, &seen_window_rule);
@@ -901,9 +901,9 @@ static void parse_config_file(FILE *f) {
     free(line);
 }
 
-static void load_user_config(const char *path) {
+static void load_user_config(const char* path) {
     bool missing;
-    FILE *f = open_config(path, &missing);
+    FILE* f = open_config(path, &missing);
 
     if (f) {
         parse_config_file(f);
