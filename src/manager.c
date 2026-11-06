@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <wayland-util.h>
+#include <wlr/types/wlr_foreign_toplevel_management_v1.h>
 #include <wlr/types/wlr_seat.h>
 
 #define LOG_TOPIC "wm"
@@ -313,6 +314,10 @@ void wm_minimize_window(struct Window *window) {
     window_hide_offscreen(window, 0);
     window->minimized = true;
 
+    if (window->wlr_handle != NULL) {
+        wlr_foreign_toplevel_handle_v1_set_minimized(window->wlr_handle, true);
+    }
+
     // Hand off the focus.
     struct wlr_surface *surface = window_wlr_surface(window);
     bool had_kbd_focus = surface != NULL && server.seat != NULL
@@ -343,6 +348,11 @@ void wm_restore_window(struct Window *window) {
     }
 
     window->minimized = false;
+
+    if (window->wlr_handle != NULL) {
+        wlr_foreign_toplevel_handle_v1_set_minimized(window->wlr_handle, false);
+    }
+
     wl_list_remove(&window->minimized_link);
     wl_list_init(&window->minimized_link);
 

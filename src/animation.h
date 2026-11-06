@@ -16,9 +16,7 @@ struct AnimationBox {
 };
 
 struct Animation {
-    struct AnimationBox from;
-    struct AnimationBox to;
-    struct AnimationBox current;
+    struct AnimationBox from, to, current;
 
     int64_t start_ms;
     int32_t duration_ms;

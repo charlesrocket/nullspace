@@ -431,6 +431,12 @@ void window_set_maximized(struct Window *window, bool maximized) {
 
     window->maximized = maximized;
 
+    if (window->wlr_handle != NULL) {
+        wlr_foreign_toplevel_handle_v1_set_maximized(
+            window->wlr_handle, maximized
+        );
+    }
+
     if (window->xdg_toplevel && window->xdg_toplevel->base->initialized) {
         wlr_xdg_toplevel_set_maximized(window->xdg_toplevel, maximized);
     }
@@ -476,6 +482,11 @@ void window_set_fullscreen(struct Window *window, bool fullscreen) {
 
     window->fullscreen = fullscreen;
 
+    if (window->wlr_handle != NULL) {
+        wlr_foreign_toplevel_handle_v1_set_fullscreen(
+            window->wlr_handle, fullscreen
+        );
+    }
 #ifdef XWAYLAND
     if (window->is_xwayland) {
         wlr_xwayland_surface_set_fullscreen(
@@ -544,8 +555,17 @@ static void wlr_handle_create(struct Window *window) {
     wlr_foreign_toplevel_handle_v1_set_title(
         window->wlr_handle, window_title(window)
     );
+
     wlr_foreign_toplevel_handle_v1_set_app_id(
         window->wlr_handle, window_app_id(window)
+    );
+
+    wlr_foreign_toplevel_handle_v1_set_fullscreen(
+        window->wlr_handle, window->fullscreen
+    );
+
+    wlr_foreign_toplevel_handle_v1_set_maximized(
+        window->wlr_handle, window->maximized
     );
 
     struct Output *o = window->output;

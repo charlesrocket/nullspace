@@ -19,27 +19,7 @@
 struct wlr_xwayland_surface;
 
 struct Window {
-    struct Output *output;
-    struct Decoration *decoration; // ?NULL (floating/non‑fullscreen windows)
-    struct Icon *icon;             // current, applied on commit
-    struct Icon *pending_icon;     // ?NULL
-
-    struct wlr_ext_foreign_toplevel_handle_v1 *foreign_handle;
-    struct wlr_foreign_toplevel_handle_v1 *wlr_handle;
-    struct wlr_xdg_toplevel *xdg_toplevel;
-#ifdef XWAYLAND
-    struct wlr_xwayland_surface *xwayland_surface;
-    struct wlr_scene_tree *xw_surface_tree;
-#endif
-    struct wlr_scene_tree *scene_tree, *popup_tree;
-
-    struct wl_list link;           // WindowManager.windows
-    struct wl_list focus_link;     // WindowManager.focus_stack
-    struct wl_list minimized_link; // WindowManager.minimized_windows
-
     struct Animation anim;
-    struct AnimationBox target_box;
-    struct NodeTag node_tag;
 
     struct wl_listener map, unmap, commit, destroy, request_move,
         wlr_request_activate, wlr_request_close, request_resize,
@@ -54,7 +34,30 @@ struct Window {
         xw_dissociate, xw_tree_destroy;
 #endif
 
+    struct AnimationBox target_box;
+
+    struct wl_list link, // WindowManager.windows
+        focus_link,      // WindowManager.focus_stack
+        minimized_link;  // WindowManager.minimized_windows
+
+    struct Output *output;
+    struct Decoration *decoration; // ?NULL (floating/non‑fullscreen windows)
+    struct Icon *icon,             // current, applied on commit
+        *pending_icon;             // ?NULL
+
+    struct wlr_ext_foreign_toplevel_handle_v1 *foreign_handle;
+    struct wlr_foreign_toplevel_handle_v1 *wlr_handle;
+    struct wlr_xdg_toplevel *xdg_toplevel;
+#ifdef XWAYLAND
+    struct wlr_xwayland_surface *xwayland_surface;
+    struct wlr_scene_tree *xw_surface_tree;
+#endif
+    struct wlr_scene_tree *scene_tree, *popup_tree;
+
     uint64_t id;
+    char *title, *app_id;
+
+    struct NodeTag node_tag;
 
     int32_t max_saved_x, max_saved_y, max_saved_w,
         max_saved_h,            // maximized saved
@@ -66,8 +69,6 @@ struct Window {
     float size_per; // tiled size weight
 
     int space;
-
-    char *title, *app_id;
 
     enum Layout decoration_state;
 
