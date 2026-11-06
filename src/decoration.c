@@ -568,6 +568,8 @@ void deco_update_shadow(struct Window *window) {
     struct Decoration *deco = window ? window->decoration : NULL;
     if (deco == NULL || deco->tree == NULL || deco->shadow == NULL) return;
     if (wm.resizing) return;
+    if (sliding_deco == deco) return;
+
     if (!deco->shadow->node.enabled && window->mapped) {
         wlr_scene_node_set_enabled(&deco->shadow->node, true);
     }
@@ -1111,6 +1113,11 @@ void deco_set_visible(struct Window *window, bool visible) {
     struct Decoration *deco = window ? window->decoration : NULL;
     if (deco == NULL || deco->tree == NULL) return;
 
+    if (!visible && sliding_deco == deco) {
+          sliding_deco = NULL;
+          deco->shadow_key_valid = false;
+      }
+
     if (!visible && sliding_deco == deco) sliding_deco = NULL;
     wlr_scene_node_set_enabled(&deco->tree->node, visible);
 
@@ -1233,6 +1240,10 @@ bool deco_handle_press(double lx, double ly, uint32_t button, uint32_t mods) {
                 sliding_deco = deco;
                 deco->slide_start_x = lx;
                 deco->slide_start_tab_x = deco->tab_x;
+
+                if (deco->shadow != NULL) {
+                    wlr_scene_node_set_enabled(&deco->shadow->node, false);
+                }
             } else if (click_is_double(deco, lx, ly)) {
                 window_toggle_maximized(w);
             } else {
@@ -1248,8 +1259,16 @@ bool deco_handle_press(double lx, double ly, uint32_t button, uint32_t mods) {
 bool deco_handle_release(uint32_t button) {
     if (swallowed_button == 0 || swallowed_button != button) return false;
 
+    struct Decoration *deco = sliding_deco;
+
     swallowed_button = 0;
     sliding_deco = NULL;
+
+    if (deco != NULL && deco->window != NULL && !deco->window->closed
+        && deco->window->decoration == deco) {
+        deco_update_shadow(deco->window);
+    }
+
     return true;
 }
 
