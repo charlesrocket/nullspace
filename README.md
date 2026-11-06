@@ -18,7 +18,7 @@ This is a tiling compositor for FreeBSD. It features bespoke visuals, robust win
 
 ## Build
 
-```sh
+```
 meson setup build -Dbuildtype=release
 meson install -C build
 ```
