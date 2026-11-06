@@ -13,6 +13,7 @@
 #include "window.h"
 
 #include <dev/evdev/input-event-codes.h>
+#include <math.h>
 #include <nullspace/layouts.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -23,8 +24,10 @@
 #include <wayland-server-protocol.h>
 #include <wayland-util.h>
 #include <wlr/types/wlr_cursor.h>
+#include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_pointer.h>
+#include <wlr/types/wlr_scene.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/util/edges.h>
 
@@ -66,6 +69,19 @@ bool cursor_is_hidden(void) { return cursor_hidden; }
 static void set_xcursor(const char *name) {
     if (cursor_hidden) return;
     wlr_cursor_set_xcursor(server.cursor, server.cursor_mgr, name);
+}
+
+static void drag_icon_update_position(void) {
+    if (server.seat == NULL || server.seat->drag == NULL) return;
+
+    struct wlr_drag_icon *icon = server.seat->drag->icon;
+    if (icon == NULL || icon->data == NULL) return;
+
+    struct wlr_scene_tree *tree = icon->data;
+    wlr_scene_node_set_position(
+        &tree->node, (int32_t)round(server.cursor->x),
+        (int32_t)round(server.cursor->y)
+    );
 }
 
 static void interactive_apply(double cx, double cy) {
@@ -222,6 +238,7 @@ static void focus_follow_on_motion(struct Window *under) {
     if (server.locked || !layouts_is_tiled(wm.layout)) return;
     if (wm.layout == LAYOUT_HORIZONTAL_MONOCLE) return;
     if (buttons_down > 0) return; // never switch focus mid-drag
+    if (wlr_seat_keyboard_has_grab(server.seat)) return;
 
     bool crossed = under != prev;
     bool no_keyboard_focus =
@@ -301,7 +318,7 @@ static void cursor_manage_focus(bool motion) {
     if (motion) focus_follow_on_motion(surface != NULL ? under : NULL);
 
     if (surface == NULL) {
-        wlr_seat_pointer_clear_focus(server.seat);
+        wlr_seat_pointer_notify_clear_focus(server.seat);
         set_xcursor("default");
         edge_cursor_active = false;
         return;
@@ -315,7 +332,7 @@ static void cursor_manage_focus(bool motion) {
         edge_cursor_active = true;
     } else if (edge_cursor_active) {
         edge_cursor_active = false;
-        wlr_seat_pointer_clear_focus(server.seat);
+        wlr_seat_pointer_notify_clear_focus(server.seat);
         set_xcursor("default");
     }
 
@@ -365,7 +382,7 @@ static void hide_cursor(void) {
 
 static void show_cursor(void) {
     cursor_hidden = false;
-    wlr_seat_pointer_clear_focus(server.seat);
+    wlr_seat_pointer_notify_clear_focus(server.seat);
     set_xcursor("default");
     cursor_refresh_focus();
 }
@@ -441,6 +458,8 @@ void cursor_handle_motion(struct wl_listener *l, void *data) {
         server.cursor, &ev->pointer->base, ev->delta_x, ev->delta_y
     );
 
+    drag_icon_update_position();
+
     if (deco_handle_motion(server.cursor->x)) return; // sliding consumes motion
 
     if (interactive.active) {
@@ -459,6 +478,8 @@ void cursor_handle_motion_absolute(struct wl_listener *l, void *data) {
     struct wlr_pointer_motion_absolute_event *ev = data;
 
     wlr_cursor_warp_absolute(server.cursor, &ev->pointer->base, ev->x, ev->y);
+
+    drag_icon_update_position();
 
     if (deco_handle_motion(server.cursor->x)) return;
 

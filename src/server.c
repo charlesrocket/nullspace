@@ -32,6 +32,7 @@
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_cursor_shape_v1.h>
 #include <wlr/types/wlr_data_control_v1.h>
+#include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_ext_foreign_toplevel_list_v1.h>
 #include <wlr/types/wlr_foreign_toplevel_management_v1.h>
 #include <wlr/types/wlr_fractional_scale_v1.h>
@@ -43,6 +44,7 @@
 #include <wlr/types/wlr_primary_selection.h>
 #include <wlr/types/wlr_primary_selection_v1.h>
 #include <wlr/types/wlr_relative_pointer_v1.h>
+#include <wlr/types/wlr_scene.h>
 #include <wlr/types/wlr_screencopy_v1.h>
 #include <wlr/types/wlr_server_decoration.h>
 #include <wlr/types/wlr_subcompositor.h>
@@ -64,6 +66,10 @@ struct Inhibitor {
     struct wl_list link;
 };
 
+struct DragContext {
+    struct wl_listener destroy;
+};
+
 static void handle_new_output(struct wl_listener *l, void *data);
 static void handle_new_input(struct wl_listener *l, void *data);
 static void handle_new_xdg_toplevel(struct wl_listener *l, void *data);
@@ -75,6 +81,7 @@ static void
 handle_request_set_primary_selection(struct wl_listener *l, void *data);
 
 static void handle_request_start_drag(struct wl_listener *l, void *data);
+static void handle_start_drag(struct wl_listener *l, void *data);
 static void handle_request_set_cursor(struct wl_listener *l, void *data);
 
 static void handle_output_power_set_mode(struct wl_listener *l, void *data);
@@ -283,6 +290,9 @@ int server_init(struct wl_display *display) {
         &server.seat->events.request_start_drag, &server.request_start_drag
     );
 
+    server.start_drag.notify = handle_start_drag;
+    wl_signal_add(&server.seat->events.start_drag, &server.start_drag);
+
     server.request_set_cursor.notify = handle_request_set_cursor;
     wl_signal_add(
         &server.seat->events.request_set_cursor, &server.request_set_cursor
@@ -381,6 +391,7 @@ void server_detach_listeners(void) {
     wl_list_remove(&server.request_set_selection.link);
     wl_list_remove(&server.request_set_primary_selection.link);
     wl_list_remove(&server.request_start_drag.link);
+    wl_list_remove(&server.start_drag.link);
     wl_list_remove(&server.request_set_cursor.link);
     wl_list_remove(&server.request_set_cursor_shape.link);
 
@@ -644,6 +655,42 @@ handle_request_set_primary_selection(struct wl_listener *l, void *data) {
 
     struct wlr_seat_request_set_primary_selection_event *ev = data;
     wlr_seat_set_primary_selection(server.seat, ev->source, ev->serial);
+}
+
+static void drag_context_destroy(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct DragContext *ctx = wl_container_of(l, ctx, destroy);
+    wl_list_remove(&ctx->destroy.link);
+    free(ctx);
+
+    seat_refocus_after_drag();
+}
+
+static void handle_start_drag(struct wl_listener *l, void *data) {
+    (void)l;
+
+    struct wlr_drag *drag = data;
+
+    if (drag->icon != NULL) {
+        struct wlr_scene_tree *icon_tree =
+            wlr_scene_drag_icon_create(server.overlay_tree, drag->icon);
+
+        if (icon_tree != NULL) {
+            wlr_scene_node_set_position(
+                &icon_tree->node, (int32_t)server.cursor->x,
+                (int32_t)server.cursor->y
+            );
+
+            drag->icon->data = icon_tree;
+        }
+    }
+
+    struct DragContext *ctx = calloc(1, sizeof(*ctx));
+    if (ctx == NULL) return;
+
+    ctx->destroy.notify = drag_context_destroy;
+    wl_signal_add(&drag->events.destroy, &ctx->destroy);
 }
 
 static void handle_request_start_drag(struct wl_listener *l, void *data) {

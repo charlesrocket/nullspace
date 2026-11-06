@@ -215,7 +215,7 @@ static int corner_radius_for(const struct Window *window) {
     return r;
 }
 
-// TODO rewire to allow state changes
+// TODO rewire to allow state changes (via IPC)
 void window_update_corners(struct Window *window) {
     if (window == NULL || window->closed || window->scene_tree == NULL) return;
 
@@ -364,8 +364,12 @@ void window_apply_target(
             from = target;
         }
 
-        from.width = target.width;
-        from.height = target.height;
+        // Close-fill
+        if ((w->width > 0 && w->width != from.width)
+            || (w->height > 0 && w->height != from.height)) {
+            from.width = target.width;
+            from.height = target.height;
+        }
 
         type = ANIM_MOVE;
         duration = wm.animations.duration_move;

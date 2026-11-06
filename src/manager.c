@@ -292,7 +292,12 @@ void wm_switch_space_on(struct Output *out, int space) {
         break;
     }
 
-    seat_focus(top);
+    if (top != NULL) {
+        seat_focus(top);
+    } else {
+        wlr_seat_keyboard_notify_clear_focus(server.seat);
+        seat_update_decorations(NULL);
+    }
 
     ipc_notify_space();
     ipc_notify_focus();

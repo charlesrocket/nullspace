@@ -649,7 +649,7 @@ void seat_handle_new_input(struct wlr_input_device *device) {
     wlr_seat_set_capabilities(server.seat, caps);
 }
 
-static void seat_update_decorations(const struct Window *focused) {
+void seat_update_decorations(const struct Window *focused) {
     struct Window *w;
     wl_list_for_each(w, &wm.windows, link) {
         if (w->closed) continue;
@@ -694,6 +694,8 @@ void seat_focus(struct Window *window) {
     }
 
     if (window != NULL) {
+        if (wlr_seat_keyboard_has_grab(server.seat)) { return; }
+
         window_set_activated(window, true);
 
         struct wlr_keyboard *kb = wlr_seat_get_keyboard(server.seat);
@@ -705,7 +707,7 @@ void seat_focus(struct Window *window) {
         wl_list_remove(&window->focus_link);
         wl_list_insert(wm.focus_stack.prev, &window->focus_link);
     } else {
-        wlr_seat_keyboard_clear_focus(server.seat);
+        wlr_seat_keyboard_notify_clear_focus(server.seat);
     }
 
     if (resize_mode.active && resize_mode.window != window) {
@@ -715,4 +717,22 @@ void seat_focus(struct Window *window) {
     seat_update_decorations(window);
     ipc_notify_focus();
     wm_mark_layout_dirty();
+}
+
+void seat_refocus_after_drag(void) {
+    if (server.cursor == NULL) return;
+
+    struct wlr_surface *surface = NULL;
+    double sx = 0, sy = 0;
+
+    struct Window *target =
+        window_at(server.cursor->x, server.cursor->y, &surface, &sx, &sy);
+
+    if (target == NULL || target->closed || !target->mapped
+        || target->space_hidden) {
+        return;
+    }
+
+    wlr_seat_keyboard_notify_clear_focus(server.seat);
+    seat_focus(target);
 }
