@@ -164,11 +164,12 @@ static void set_layout_impl(enum Layout layout) {
     wl_list_for_each(w, &wm.windows, link) {
         if (w->closed || w->space_hidden) continue;
 
+        bool tiled = layouts_is_tiled(layout) && !window_is_transient(w);
         window_reparent(w, !layouts_is_tiled(layout));
 
         if (!changed) continue;
 
-        window_set_tiled(w, layouts_is_tiled(layout));
+        window_set_tiled(w, tiled);
         deco_update_for_layout(w);
         w->prop_valid = false;
         w->has_target = false;
@@ -310,6 +311,14 @@ void wm_minimize_window(struct Window *window) {
     if (window == NULL || window->closed) return;
     if (!window->mapped) return;
     if (window->minimized) return;
+
+    struct Window *w;
+    wl_list_for_each(w, &wm.windows, link) {
+        if (w->closed || !w->mapped || w->minimized || w->space_hidden)
+            continue;
+
+        if (window_parent(w) == window) return;
+    }
 
     window_hide_offscreen(window, 0);
     window->minimized = true;

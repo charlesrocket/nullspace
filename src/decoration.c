@@ -938,7 +938,7 @@ static bool button_create(
 void deco_create(struct Window *window) {
     if (window == NULL || window->decoration != NULL) return;
     if (window->closed || window->fullscreen) return;
-    if (layouts_is_tiled(wm.layout)) return;
+    if (layouts_is_tiled(wm.layout) && !window_is_transient(window)) return;
 
     struct Decoration *deco = calloc(1, sizeof(*deco));
     if (deco == NULL) return;
@@ -1079,7 +1079,10 @@ void deco_update_active(struct Window *window, bool active) {
 void deco_update_for_layout(struct Window *window) {
     if (window == NULL) return;
 
-    if (layouts_is_tiled(wm.layout) || window->fullscreen) {
+    bool want_deco =
+        !layouts_is_tiled(wm.layout) || window_is_transient(window);
+
+    if (!want_deco || window->fullscreen) {
         deco_destroy(window);
         return;
     }

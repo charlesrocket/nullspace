@@ -286,18 +286,79 @@ const char *window_app_id(const struct Window *window) {
     return window->app_id ? window->app_id : "";
 }
 
+// Look up the window that owns a given toplevel (NULL when the toplevel has no
+// scene tree yet).
+static struct Window *
+window_from_xdg_toplevel(const struct wlr_xdg_toplevel *toplevel) {
+    if (toplevel == NULL || toplevel->base == NULL) return NULL;
+    if (toplevel->base->data == NULL) return NULL;
+
+    struct wlr_scene_tree *tree = toplevel->base->data;
+    return window_from_scene_node(&tree->node);
+}
+
+// Parent (transient-for) of `window`, if any.
+struct Window *window_parent(const struct Window *window) {
+    if (window == NULL || window->closed) return NULL;
+
+#ifdef XWAYLAND
+    if (window->is_xwayland) {
+        struct wlr_xwayland_surface *px = window->xwayland_surface != NULL
+                                            ? window->xwayland_surface->parent
+                                            : NULL;
+
+        if (px == NULL || px->data == NULL) return NULL;
+
+        struct Window *pw =
+            window_from_scene_node(&((struct wlr_scene_tree *)px->data)->node);
+
+        return (pw != NULL && !pw->closed) ? pw : NULL;
+    }
+#endif
+
+    if (window->xdg_toplevel == NULL) return NULL;
+
+    struct Window *pw = window_from_xdg_toplevel(window->xdg_toplevel->parent);
+
+    return (pw != NULL && !pw->closed) ? pw : NULL;
+}
+
+bool window_is_transient(const struct Window *window) {
+    return window_parent(window) != NULL;
+}
+
 void window_apply_target(
     struct Window *w, int32_t nx, int32_t ny, int32_t nw, int32_t nh
 ) {
     if (w->space_hidden) return;
     if (nw < 1) nw = 1;
     if (nh < 1) nh = 1;
+
+    // Transients float over their parent, centred on the parent's TARGET.
+    struct Window *parent = window_parent(w);
+    bool transient = (parent != NULL);
+
     if (!w->fullscreen) {
-        window_clamp_to_usable(w, &nx, &ny, &nw, &nh);
-        if (!layouts_is_tiled(wm.layout)) {
+        if (!layouts_is_tiled(wm.layout) || transient) {
             window_clamp_to_size_hints(w, &nw, &nh);
         }
     }
+
+    if (transient) {
+        int32_t px = parent->has_target ? parent->target_box.x : parent->x;
+        int32_t py = parent->has_target ? parent->target_box.y : parent->y;
+        int32_t pw = parent->has_target
+                       ? parent->target_box.width
+                       : (parent->width > 0 ? parent->width : 1);
+        int32_t ph = parent->has_target
+                       ? parent->target_box.height
+                       : (parent->height > 0 ? parent->height : 1);
+
+        nx = px + (pw - nw) / 2;
+        ny = py + (ph - nh) / 2;
+    }
+
+    if (!w->fullscreen) { window_clamp_to_usable(w, &nx, &ny, &nw, &nh); }
 
     // Consume the reveal flag unconditionally.
     int32_t reveal_dir = w->reveal_dir;
@@ -487,6 +548,7 @@ void window_set_fullscreen(struct Window *window, bool fullscreen) {
             window->wlr_handle, fullscreen
         );
     }
+
 #ifdef XWAYLAND
     if (window->is_xwayland) {
         wlr_xwayland_surface_set_fullscreen(
@@ -503,6 +565,13 @@ void window_set_fullscreen(struct Window *window, bool fullscreen) {
 
     window->has_target = false;
     window_reparent(window, !layouts_is_tiled(wm.layout));
+
+    struct Window *child;
+    wl_list_for_each(child, &wm.windows, link) {
+        if (child->closed || !child->mapped || child == window) continue;
+        if (window_parent(child) != window) continue;
+        window_reparent(child, !layouts_is_tiled(wm.layout));
+    }
 
     if (!fullscreen && !layouts_is_tiled(wm.layout)) { // floating
         window_apply_target(                           // restore from saved
@@ -590,11 +659,23 @@ static void wlr_handle_create(struct Window *window) {
 static void wlr_handle_destroy(struct Window *window) {
     if (window->wlr_handle == NULL) return;
 
+    struct wlr_foreign_toplevel_handle_v1 *handle = window->wlr_handle;
+
+    struct Window *w;
+    wl_list_for_each(w, &wm.windows, link) {
+        if (w->closed || w->wlr_handle == NULL) continue;
+        if (w->last_foreign_parent != handle) continue;
+
+        w->last_foreign_parent = NULL;
+        wlr_foreign_toplevel_handle_v1_set_parent(w->wlr_handle, NULL);
+    }
+
+    window->last_foreign_parent = NULL;
+    window->wlr_handle = NULL;
+
     wl_list_remove(&window->wlr_request_activate.link);
     wl_list_remove(&window->wlr_request_close.link);
-    wlr_foreign_toplevel_handle_v1_destroy(window->wlr_handle);
-
-    window->wlr_handle = NULL;
+    wlr_foreign_toplevel_handle_v1_destroy(handle);
 }
 
 static void foreign_handle_create(struct Window *window) {
@@ -638,8 +719,55 @@ static void window_apply_rules(struct Window *window) {
     if (!rules_window_match(window_app_id(window), window_title(window), &act))
         return;
 
-    if (act.has_space) wm_assign_new_window_space(window, act.space);
+    // Transients live in their parent's space (only blur and other
+    // non-positional rules make sense).
+    if (act.has_space && !window_is_transient(window)) {
+        wm_assign_new_window_space(window, act.space);
+    }
+
     if (act.has_blur) window->blur_enabled = act.blur;
+}
+
+static void window_sync_foreign_parent(struct Window *window) {
+    if (window == NULL || window->closed) return;
+    if (window->wlr_handle == NULL) return;
+
+    struct wlr_foreign_toplevel_handle_v1 *parent_handle = NULL;
+
+#ifdef XWAYLAND
+    if (window->is_xwayland) {
+        struct wlr_xwayland_surface *parent_xw =
+            window->xwayland_surface != NULL ? window->xwayland_surface->parent
+                                             : NULL;
+
+        if (parent_xw != NULL && parent_xw->data != NULL) {
+            struct wlr_scene_tree *tree = parent_xw->data;
+            struct Window *pw = window_from_scene_node(&tree->node);
+
+            if (pw != NULL && !pw->closed && pw->wlr_handle != NULL) {
+                parent_handle = pw->wlr_handle;
+            }
+        }
+    } else
+#endif
+    {
+        if (window->xdg_toplevel == NULL) return;
+
+        struct wlr_xdg_toplevel *parent = window->xdg_toplevel->parent;
+        if (parent != NULL) {
+            struct Window *pw = window_from_xdg_toplevel(parent);
+            if (pw != NULL && !pw->closed && pw->wlr_handle != NULL) {
+                parent_handle = pw->wlr_handle;
+            }
+        }
+    }
+
+    if (window->last_foreign_parent == parent_handle) return;
+
+    window->last_foreign_parent = parent_handle;
+    wlr_foreign_toplevel_handle_v1_set_parent(
+        window->wlr_handle, parent_handle
+    );
 }
 
 static void window_do_map(struct Window *window) {
@@ -653,6 +781,14 @@ static void window_do_map(struct Window *window) {
 
     window_apply_rules(window);
 
+    // Transients live on their parent's output and space.
+    struct Window *parent = window_parent(window);
+    if (parent != NULL) {
+        if (parent->output != NULL) window->output = parent->output;
+        window->space = parent->space;
+        window->space_hidden = parent->space_hidden;
+    }
+
     // Stale cases
     if (window->output != NULL && !window->space_hidden
         && window->space != window->output->current_space) {
@@ -660,6 +796,7 @@ static void window_do_map(struct Window *window) {
     }
 
     wlr_handle_create(window);
+    window_sync_foreign_parent(window);
     foreign_handle_create(window);
     wm_mark_layout_dirty();
 
@@ -667,7 +804,8 @@ static void window_do_map(struct Window *window) {
     wlr_scene_node_set_enabled(&window->popup_tree->node, true);
 
     window_update_corners(window);
-    window_set_tiled(window, layouts_is_tiled(wm.layout));
+    window_set_tiled(window, layouts_is_tiled(wm.layout) && parent == NULL);
+    window_reparent(window, !layouts_is_tiled(wm.layout));
     deco_update_for_layout(window);
 
     if (window->space_hidden) {
@@ -675,6 +813,7 @@ static void window_do_map(struct Window *window) {
         wl_list_insert(&wm.focus_stack, &window->focus_link);
     } else {
         seat_focus(window);
+        window_raise(window);
     }
 
     ipc_notify_window_opened(window);
@@ -791,6 +930,7 @@ static void window_handle_commit(struct wl_listener *l, void *data) {
     window_apply_pending_icon(window);
 
     if (!window->mapped && surf->surface->mapped) window_do_map(window);
+    window_sync_foreign_parent(window);
 
     if (surf->surface->mapped) window_update_corners(window);
 
@@ -1039,6 +1179,34 @@ void window_destroy(struct Window *window) {
 
     if (window->xwayland_surface != NULL) window->xwayland_surface->data = NULL;
 
+    struct Window *child;
+    wl_list_for_each(child, &wm.windows, link) {
+        if (child == window || child->closed || !child->mapped) continue;
+
+        bool is_child = false;
+#ifdef XWAYLAND
+        if (child->is_xwayland) {
+            is_child =
+                child->xwayland_surface != NULL
+                && child->xwayland_surface->parent != NULL
+                && window->is_xwayland
+                && child->xwayland_surface->parent == window->xwayland_surface;
+        } else
+#endif
+        {
+            is_child = child->xdg_toplevel != NULL
+                    && child->xdg_toplevel->parent != NULL
+                    && child->xdg_toplevel->parent == window->xdg_toplevel;
+        }
+
+        if (!is_child) continue;
+
+        child->has_target = false;
+        window_reparent(child, !layouts_is_tiled(wm.layout));
+        window_set_tiled(child, layouts_is_tiled(wm.layout));
+        deco_update_for_layout(child);
+    }
+
     icon_free(window->icon);
     free(window->icon);
 
@@ -1071,6 +1239,7 @@ void window_destroy(struct Window *window) {
         wl_list_remove(&window->xw_request_activate.link);
         wl_list_remove(&window->xw_request_close.link);
         wl_list_remove(&window->xw_set_title.link);
+        wl_list_remove(&window->xw_set_parent.link);
         wl_list_remove(&window->xw_set_class.link);
     } else
 #endif
@@ -1278,7 +1447,7 @@ void window_close(struct Window *window) {
     wlr_xdg_toplevel_send_close(window->xdg_toplevel);
 }
 
-void window_raise(struct Window *window) {
+static void window_raise_self(struct Window *window) {
     wlr_scene_node_raise_to_top(&window->scene_tree->node);
     deco_raise(window);
 
@@ -1287,10 +1456,35 @@ void window_raise(struct Window *window) {
     }
 }
 
+void window_raise(struct Window *window) {
+    if (window == NULL || window->closed) return;
+
+    struct Window *parent = window_parent(window);
+
+    if (parent == NULL && !window->fullscreen && layouts_is_tiled(wm.layout)) {
+        return;
+    }
+
+    if (parent != NULL) window_raise_self(parent);
+    window_raise_self(window);
+}
+
 void window_reparent(struct Window *window, bool to_float) {
-    struct wlr_scene_tree *target =
-        window->fullscreen ? server.fullscreen_tree
-                           : (to_float ? server.float_tree : server.tile_tree);
+    if (window->closed) return;
+
+    struct wlr_scene_tree *target;
+
+    if (window->fullscreen) {
+        target = server.fullscreen_tree;
+    } else if (window_is_transient(window)) {
+        struct Window *parent = window_parent(window);
+
+        // A dialog of a fullscreen parent must sit above the fullscreen tree.
+        target = (parent != NULL && parent->fullscreen) ? server.fullscreen_tree
+                                                        : server.float_tree;
+    } else {
+        target = to_float ? server.float_tree : server.tile_tree;
+    }
 
     if (window->scene_tree->node.parent == target) return;
     wlr_scene_node_reparent(&window->scene_tree->node, target);
@@ -1480,6 +1674,13 @@ static void xw_handle_request_close(struct wl_listener *l, void *data) {
     window_close(window);
 }
 
+static void xw_handle_set_parent(struct wl_listener *l, void *data) {
+    (void)data;
+
+    struct Window *window = wl_container_of(l, window, xw_set_parent);
+    window_sync_foreign_parent(window);
+}
+
 static void xw_handle_set_title(struct wl_listener *l, void *data) {
     (void)data;
 
@@ -1634,6 +1835,9 @@ void window_create_xwayland(struct wlr_xwayland_surface *xw) {
 
     window->xw_set_title.notify = xw_handle_set_title;
     wl_signal_add(&xw->events.set_title, &window->xw_set_title);
+
+    window->xw_set_parent.notify = xw_handle_set_parent;
+    wl_signal_add(&xw->events.set_parent, &window->xw_set_parent);
 
     window->xw_set_class.notify = xw_handle_set_class;
     wl_signal_add(&xw->events.set_class, &window->xw_set_class);

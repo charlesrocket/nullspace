@@ -30,8 +30,8 @@ struct Window {
     struct wl_listener xw_map, xw_unmap, xw_destroy, xw_request_configure,
         xw_request_move, xw_request_resize, xw_request_maximize,
         xw_request_fullscreen, xw_request_minimize, xw_request_activate,
-        xw_request_close, xw_set_title, xw_set_class, xw_associate,
-        xw_dissociate, xw_tree_destroy;
+        xw_request_close, xw_set_title, xw_set_parent, xw_set_class,
+        xw_associate, xw_dissociate, xw_tree_destroy;
 #endif
 
     struct AnimationBox target_box;
@@ -46,7 +46,7 @@ struct Window {
         *pending_icon;             // ?NULL
 
     struct wlr_ext_foreign_toplevel_handle_v1 *foreign_handle;
-    struct wlr_foreign_toplevel_handle_v1 *wlr_handle;
+    struct wlr_foreign_toplevel_handle_v1 *wlr_handle, *last_foreign_parent;
     struct wlr_xdg_toplevel *xdg_toplevel;
 #ifdef XWAYLAND
     struct wlr_xwayland_surface *xwayland_surface;
@@ -123,9 +123,12 @@ void window_create_xwayland(struct wlr_xwayland_surface *xw);
 struct Window *window_from_id(uint64_t id);
 struct Window *window_from_scene_node(const struct wlr_scene_node *node);
 struct Window *window_focused(void);
+struct Window *window_parent(const struct Window *window);
 struct Window *window_at(
     double lx, double ly, struct wlr_surface **surface, double *sx, double *sy
 );
+
+bool window_is_transient(const struct Window *window);
 
 struct wlr_surface *window_wlr_surface(const struct Window *window);
 const char *window_title(const struct Window *window);

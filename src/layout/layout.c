@@ -37,7 +37,8 @@ static void output_usable_area(
 }
 
 static bool window_is_layoutable(const struct Window *w) {
-    return !w->closed && !w->space_hidden && w->mapped && !w->fullscreen;
+    return !w->closed && !w->space_hidden && w->mapped && !w->fullscreen
+        && !window_is_transient(w);
 }
 
 static struct Window *layout_focused_window_for(struct Output *out) {
@@ -119,6 +120,21 @@ static void layout_output(struct Output *output, LayoutCompute compute) {
     }
 
     free(lw);
+
+    wl_list_for_each(w, &wm.windows, link) {
+        if (w->output != output) continue;
+        if (w->closed || w->space_hidden || !w->mapped || w->fullscreen)
+            continue;
+        if (!window_is_transient(w)) continue;
+
+        struct Window *parent = window_parent(w);
+        if (parent == NULL || parent->closed) continue;
+
+        int32_t ww = w->width > 0 ? w->width : 1;
+        int32_t wh = w->height > 0 ? w->height : 1;
+
+        window_apply_target(w, parent->x, parent->y, ww, wh);
+    }
 }
 
 static void floating_layout(

@@ -114,6 +114,22 @@ static void interactive_apply(double cx, double cy) {
 
         v->saved_x = nx;
         v->saved_y = ny;
+
+        struct Window *child;
+        wl_list_for_each(child, &wm.windows, link) {
+            if (child->closed || !child->mapped || child->space_hidden)
+                continue;
+            if (child == v) continue;
+            if (window_parent(child) != v) continue;
+
+            int32_t cw = child->width > 0 ? child->width : 1;
+            int32_t ch = child->height > 0 ? child->height : 1;
+            int32_t vw = v->width > 0 ? v->width : 1;
+            int32_t vh = v->height > 0 ? v->height : 1;
+
+            window_set_position(child, nx + (vw - cw) / 2, ny + (vh - ch) / 2);
+        }
+
         return;
     }
 
@@ -617,8 +633,7 @@ void cursor_handle_button(struct wl_listener *l, void *data) {
 
         focus_window(under);
 
-        if (under != NULL && !under->closed && !under->space_hidden
-            && !layouts_is_tiled(wm.layout)) {
+        if (under != NULL && !under->closed && !under->space_hidden) {
             window_raise(under);
         }
     }
