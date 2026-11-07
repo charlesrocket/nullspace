@@ -6,7 +6,8 @@
 #include <stdint.h>
 #include <wayland-server-core.h>
 #include <wayland-util.h>
-#include <wlr/types/wlr_scene.h>
+
+struct wlr_scene_tree;
 
 struct text_node {
     struct wlr_scene_buffer* buffer_node;

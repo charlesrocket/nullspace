@@ -1,4 +1,5 @@
 #include "config.h"
+#include "help.h"
 #include "ipc.h"
 #include "keymap.h"
 #include "log.h"
@@ -178,8 +179,11 @@ int main(int argc, char* argv[]) {
         wlr_multi_for_each_backend(
             server.backend, create_default_output, &created
         );
+
         if (!created) log_info("No default output requested");
     }
+
+    if (config_default_was_written()) help_schedule();
 
     wl_event_loop_add_idle(server.event_loop, spawn_startup, NULL);
     log_info("Entering event loop");
@@ -189,6 +193,7 @@ int main(int argc, char* argv[]) {
 
     wl_display_destroy_clients(display);
     ipc_destroy();
+    help_finish();
 
 #ifdef XWAYLAND
     xwayland_finish();

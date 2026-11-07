@@ -1,6 +1,7 @@
 #include "ipc.h"
 
 #include "decoration.h"
+#include "help.h"
 #include "icon.h"
 #include "input.h"
 #include "layout/layout.h"
@@ -432,6 +433,12 @@ static const char* reply_value(struct IpcClient* c, struct Value v) {
     line_value(&v);
     line_send(c);
     return NULL;
+}
+
+static void act_show_help(intptr_t unused) {
+    (void)unused;
+    if (server.overview_active) return;
+    help_show();
 }
 
 static void act_switch_space(intptr_t s) { wm_switch_space((int)s); }
@@ -1396,10 +1403,11 @@ static const struct QueuedVerb {
     IpcAction action;
     bool takes_space;
 } queued_verbs[] = {
-    { "SWITCH_SPACE",  act_switch_space,  true},
-    {"MOVE_TO_SPACE", act_move_to_space,  true},
-    { "CYCLE_LAYOUT",  act_cycle_layout, false},
-    {        "CLOSE",         act_close, false},
+    {"ACTIVE_BINDINGS",     act_show_help, false},
+    {   "SWITCH_SPACE",  act_switch_space,  true},
+    {  "MOVE_TO_SPACE", act_move_to_space,  true},
+    {   "CYCLE_LAYOUT",  act_cycle_layout, false},
+    {          "CLOSE",         act_close, false},
 };
 
 static void dispatch_line(struct IpcClient* c, char* text) {

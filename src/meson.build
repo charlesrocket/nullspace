@@ -27,6 +27,7 @@ src_files = files(
   'animation.c',
   'background.c',
   'wallpaper.c',
+  'help.c',
 )
 
 if build_xwayland

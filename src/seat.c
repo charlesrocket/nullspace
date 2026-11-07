@@ -4,6 +4,7 @@
 #include "config.h"
 #include "cursor.h"
 #include "decoration.h"
+#include "help.h"
 #include "input.h"
 #include "ipc.h"
 #include "keymap.h"
@@ -67,6 +68,44 @@ static bool swallow_take(uint32_t keycode) {
     }
 
     return false;
+}
+
+static void keyboard_handle_key(struct wl_listener* l, void* data);
+static void keyboard_handle_key_help(struct wl_listener* l, void* data);
+
+static wl_notify_func_t key_handler = keyboard_handle_key;
+
+void seat_set_help_capture(bool on) {
+    wl_notify_func_t next = on ? keyboard_handle_key_help : keyboard_handle_key;
+
+    if (key_handler == next) return;
+    key_handler = next;
+
+    struct Keyboard* kb;
+    wl_list_for_each(kb, &server.keyboards, link) {
+        kb->key.notify = key_handler;
+    }
+}
+
+static void keyboard_handle_key_help(struct wl_listener* l, void* data) {
+    struct Keyboard* kb = wl_container_of(l, kb, key);
+    struct wlr_keyboard_key_event* ev = data;
+
+    server_notify_activity();
+
+    if (ev->state == WL_KEYBOARD_KEY_STATE_RELEASED) {
+        if (swallow_take(ev->keycode)) return;
+
+        wlr_seat_set_keyboard(server.seat, kb->wlr_keyboard);
+        wlr_seat_keyboard_notify_key(
+            server.seat, ev->time_msec, ev->keycode, ev->state
+        );
+
+        return;
+    }
+
+    help_hide();
+    swallow_add(ev->keycode);
 }
 
 struct DeviceEntry {
@@ -508,7 +547,7 @@ static void keyboard_handle_key(struct wl_listener* l, void* data) {
             resize_repeat_stop();
         }
 
-        if (swallow_take(ev->keycode)) { return; }
+        if (swallow_take(ev->keycode)) return;
     }
 
     // xkb keycodes are evdev codes + 8.
@@ -629,7 +668,7 @@ void seat_handle_new_input(struct wlr_input_device* device) {
                     &kb->wlr_keyboard->events.modifiers, &kb->modifiers
                 );
 
-                kb->key.notify = keyboard_handle_key;
+                kb->key.notify = key_handler;
                 wl_signal_add(&kb->wlr_keyboard->events.key, &kb->key);
 
                 kb->destroy.notify = keyboard_handle_destroy;

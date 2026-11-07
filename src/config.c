@@ -31,7 +31,7 @@
 #endif
 
 struct Config config;
-static bool initialized;
+static bool initialized, wrote_default;
 
 static const char* const default_window_rules[] = {CFG_WINDOW_RULES};
 
@@ -914,7 +914,10 @@ static void load_user_config(const char* path) {
         return;
     }
 
-    if (missing && write_default_config(path)) return;
+    if (missing && write_default_config(path)) {
+        wrote_default = true;
+        return;
+    }
 
     log_warn("Using built-in defaults");
 }
@@ -948,5 +951,8 @@ void config_finish(void) {
     free(config.binds);
 
     memset(&config, 0, sizeof(config));
+    wrote_default = false;
     initialized = false;
 }
+
+bool config_default_was_written(void) { return wrote_default; }

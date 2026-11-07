@@ -234,3 +234,4 @@ extern struct Config config;
 
 void config_init(void);
 void config_finish(void);
+bool config_default_was_written(void);

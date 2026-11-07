@@ -31,3 +31,5 @@ void seat_resize_mode_window_destroyed(struct Window* w);
 void seat_foreach_input_device(
     void (*fn)(struct wlr_input_device*, void*), void* data
 );
+
+void seat_set_help_capture(bool on);

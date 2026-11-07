@@ -43,6 +43,7 @@ static const struct CtlCommand COMMANDS[] = {
     {            "raw",                  "raw <string>",                "send raw IPC lines"},
     {           "list",                 "list <string>",           "show available commands"},
     {        "inspect",               "inspect windows", "list all windows and their states"},
+    {"active-bindings",               "active-bindings",         "show current key bindings"},
     {"window-activate",          "window-activate <id>",          "focus and raise a window"},
     {   "window-close",             "window-close <id>",                    "close a window"},
     {"window-minimize",          "window-minimize <id>",       "move a window to scratchpad"},
