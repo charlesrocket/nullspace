@@ -188,6 +188,12 @@ static void interactive_apply(double cx, double cy) {
     }
 }
 
+void cursor_cancel_drag_state(void) {
+    cursor_end_interactive();
+    buttons_down = 0;
+    pointer_grab_window = NULL;
+}
+
 void cursor_begin_interactive(
     struct Window* window, enum SeatOp op, uint32_t edges
 ) {

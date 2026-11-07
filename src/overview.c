@@ -2,6 +2,7 @@
 
 #include "animation.h"
 #include "config.h"
+#include "cursor.h"
 #include "decoration.h"
 #include "layout/layout.h"
 #include "log.h"
@@ -467,6 +468,13 @@ void overview_enter(void) {
     closing_stop();
     ov_closing = false;
     server.overview_active = true;
+
+    if (server.seat->drag != NULL && server.seat->drag->source != NULL) {
+        wlr_data_source_destroy(server.seat->drag->source);
+    }
+
+    cursor_cancel_drag_state();
+
     drag_window = NULL;
     drag_active = false;
     drag_target_space = -1;
@@ -607,6 +615,7 @@ void overview_exit(void) {
     }
 
     wm_mark_layout_dirty();
+    cursor_refresh_focus();
     closing_start();
 }
 

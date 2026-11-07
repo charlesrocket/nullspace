@@ -23,6 +23,7 @@ void cursor_handle_axis(struct wl_listener* l, void* data);
 void cursor_handle_frame(struct wl_listener* l, void* data);
 void cursor_window_destroyed(struct Window* window);
 void cursor_refresh_focus(void);
+void cursor_cancel_drag_state(void);
 void cursor_end_interactive(void);
 void cursor_end_interactive_for(struct Window* window);
 void cursor_hide_init(struct wl_event_loop* loop);
