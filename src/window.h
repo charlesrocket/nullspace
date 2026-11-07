@@ -77,7 +77,7 @@ struct Window {
         ov_target_x, ov_target_y, ov_from_x, ov_from_y;
 
     float size_per, // tiled size weight
-        ov_scale,   // .0-1 hover progress
+        ov_scale,   // 0.0-1 hover progress
         ov_scale_from, ov_scale_to;
 
     int space;
