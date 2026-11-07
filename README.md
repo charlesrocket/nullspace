@@ -1,6 +1,6 @@
 # `nullspace`
 
-This is a tiling compositor for FreeBSD. It features bespoke visuals, robust window management, an intuitive control system, DE integrations ([TopBar](https://codeberg.org/charlesrocket/topbar)), custom rules, and much more.
+This is a fluid compositor for FreeBSD. It features bespoke visuals, robust window management with tiling/floating mode, an intuitive control system, DE integrations ([TopBar](https://codeberg.org/charlesrocket/topbar)), custom rules, and much more.
 
 ## Dependencies
 
