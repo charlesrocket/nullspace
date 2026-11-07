@@ -41,7 +41,7 @@
 #define OV_CLOSING_TICK_MS  8
 #define DRAG_THRESHOLD      4.0
 #define MAX_WINDOWS         256
-#define EDGE_BAND_PX        200
+#define EDGE_BAND_PX        180
 #define EDGE_SHIFT_COOLDOWN 300 // ms between repeat shifts
 
 struct ScaleCtx {
