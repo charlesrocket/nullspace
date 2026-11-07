@@ -421,8 +421,6 @@ void server_finish(void) {
     if (server.cursor) wlr_cursor_destroy(server.cursor);
     if (server.output_layout) wlr_output_layout_destroy(server.output_layout);
     if (server.scene) wlr_scene_node_destroy(&server.scene->tree.node);
-
-    wlr_scene_node_destroy(&server.overview_tree->node);
 }
 
 struct NodeTag* node_tag_find(const struct wlr_scene_node* node) {
