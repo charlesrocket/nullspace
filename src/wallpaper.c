@@ -753,6 +753,7 @@ static struct wallpaper_buffer* wallpaper_buffer_create(int w, int h) {
 
 bool wallpaper_blur_wanted(void) {
     if (!wm.wallpaper.blur_enabled) return false;
+    if (server.overview_active) return true;
     if (!layouts_is_tiled(wm.layout)) return false;
 
     struct Window* w;

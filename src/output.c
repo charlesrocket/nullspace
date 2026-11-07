@@ -3,7 +3,7 @@
 #include "layout/layout.h"
 #include "log.h"
 #include "manager.h"
-#include "output.h"
+#include "overview.h"
 #include "seat.h"
 #include "server.h"
 #include "session.h"
@@ -265,17 +265,20 @@ static void output_handle_frame(struct wl_listener* l, void* data) {
         wallpaper_update_all();
     }
 
-    wm_animation_tick_all();
+    if (server.overview_active) {
+        overview_tick();
+    } else {
+        wm_animation_tick_all();
+    }
 
     const bool committed = wlr_scene_output_commit(out->scene_output, NULL);
-
-    if (committed) { session_lock_output_committed(out); }
+    if (committed) session_lock_output_committed(out);
 
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
     wlr_scene_output_send_frame_done(out->scene_output, &now);
 
-    if (committed && wm_animation_active()) {
+    if (committed && (wm_animation_active() || server.overview_active)) {
         wlr_output_schedule_frame(out->wlr_output);
     }
 }

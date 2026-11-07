@@ -222,6 +222,9 @@ int server_init(struct wl_display* display) {
     server.overlay_tree = wlr_scene_tree_create(server.content_tree);
     server.lock_tree = wlr_scene_tree_create(&server.scene->tree);
 
+    server.overview_tree = wlr_scene_tree_create(&server.scene->tree);
+
+    wlr_scene_node_set_enabled(&server.overview_tree->node, false);
     wlr_scene_node_set_enabled(&server.lock_tree->node, false);
 
     server.xdg_shell = wlr_xdg_shell_create(display, 6);
@@ -418,6 +421,8 @@ void server_finish(void) {
     if (server.cursor) wlr_cursor_destroy(server.cursor);
     if (server.output_layout) wlr_output_layout_destroy(server.output_layout);
     if (server.scene) wlr_scene_node_destroy(&server.scene->tree.node);
+
+    wlr_scene_node_destroy(&server.overview_tree->node);
 }
 
 struct NodeTag* node_tag_find(const struct wlr_scene_node* node) {

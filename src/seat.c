@@ -10,6 +10,7 @@
 #include "layout/layout.h"
 #include "manager.h"
 #include "output.h"
+#include "overview.h"
 #include "server.h"
 #include "spawn.h"
 #include "window.h"
@@ -411,6 +412,12 @@ static void seat_action(enum Action action, const void* arg) {
         case ACTION_CYCLE_LAYOUT:
             wm_set_layout((enum Layout)((wm.layout + 1) % (LAYOUT_LAST + 1)));
             break;
+        case ACTION_OVERVIEW:
+            if (server.overview_active)
+                overview_exit();
+            else
+                overview_enter();
+            break;
 
         case ACTION_EXIT: wl_display_terminate(server.display); break;
 
@@ -529,6 +536,12 @@ static void keyboard_handle_key(struct wl_listener* l, void* data) {
 
     uint32_t mods =
         wlr_keyboard_get_modifiers(kb->wlr_keyboard) & ~KEY_MODS_IGNORED;
+
+    if (server.overview_active) {
+        overview_handle_key(keycode, syms, nsyms, mods);
+        swallow_add(ev->keycode);
+        return;
+    }
 
     bool handled = false;
 
@@ -668,6 +681,7 @@ static struct Window* seat_window_for_surface(const struct wlr_surface* surface
 }
 
 void seat_focus(struct Window* window) {
+    if (server.overview_active) return;
     if (server.locked) {
         if (window != NULL) {
             wl_list_remove(&window->focus_link);

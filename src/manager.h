@@ -17,6 +17,7 @@
 #define HIDDEN_POS_Y (-1000000)
 
 struct WindowManager {
+    struct Window* overview_focused;
     struct wl_list windows, // Window, creation order
         focus_stack,        // Window, most recently focused last
         layer_surfaces,     // LayerSurface

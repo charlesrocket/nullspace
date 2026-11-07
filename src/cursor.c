@@ -7,6 +7,7 @@
 #include "input.h"
 #include "layout/layout.h"
 #include "manager.h"
+#include "overview.h"
 #include "seat.h"
 #include "server.h"
 #include "session.h"
@@ -495,6 +496,11 @@ void cursor_handle_motion(struct wl_listener* l, void* data) {
 
     drag_icon_update_position();
 
+    if (server.overview_active) {
+        overview_handle_motion(server.cursor->x, server.cursor->y);
+        return;
+    }
+
     if (deco_handle_motion(server.cursor->x)) return; // sliding consumes motion
 
     if (interactive.active) {
@@ -516,6 +522,11 @@ void cursor_handle_motion_absolute(struct wl_listener* l, void* data) {
 
     drag_icon_update_position();
 
+    if (server.overview_active) {
+        overview_handle_motion(server.cursor->x, server.cursor->y);
+        return;
+    }
+
     if (deco_handle_motion(server.cursor->x)) return;
 
     if (interactive.active) {
@@ -532,6 +543,11 @@ void cursor_handle_button(struct wl_listener* l, void* data) {
     server_notify_activity();
     cursor_wake();
     struct wlr_pointer_button_event* ev = data;
+
+    if (server.overview_active) {
+        overview_handle_button(ev);
+        return;
+    }
 
     const bool pressed = ev->state == WL_POINTER_BUTTON_STATE_PRESSED;
     const uint32_t mods = current_keyboard_modifiers();

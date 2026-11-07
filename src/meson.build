@@ -11,6 +11,7 @@ src_files = files(
   'ipc.c',
   'popup.c',
   'window.c',
+  'overview.c',
   'icon.c',
   'decoration.c',
   'session.c',

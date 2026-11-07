@@ -9,6 +9,7 @@
 #include "log.h"
 #include "manager.h"
 #include "output.h"
+#include "overview.h"
 #include "rules.h"
 #include "seat.h"
 #include "server.h"
@@ -371,7 +372,8 @@ void window_apply_target(
     w->target_box = target;
     w->has_target = true;
 
-    if (!wm.animations.enabled || wm.resizing) {
+    if (!wm.animations.enabled || wm.resizing || w->skip_next_anim) {
+        w->skip_next_anim = false;
         w->anim.running = false;
         w->anim.current = target;
         window_set_position(w, nx, ny);
@@ -811,7 +813,7 @@ static void window_do_map(struct Window* window) {
     if (window->space_hidden) {
         wl_list_remove(&window->focus_link);
         wl_list_insert(&wm.focus_stack, &window->focus_link);
-    } else {
+    } else if (!server.overview_active) {
         seat_focus(window);
         window_raise(window);
     }
@@ -824,6 +826,8 @@ static void window_do_unmap(struct Window* window) {
     if (!window->mapped) return;
 
     window->mapped = false;
+
+    overview_window_destroy(window);
 
     if (window->minimized) {
         window->minimized = false;
@@ -1172,6 +1176,7 @@ void window_create(struct wlr_xdg_toplevel* xdg_toplevel) {
 }
 
 void window_destroy(struct Window* window) {
+    if (wm.overview_focused == window) wm.overview_focused = NULL;
     if (window->closed) return;
     if (window->mapped) window_do_unmap(window);
 

@@ -24,7 +24,7 @@ struct Window {
     struct wl_listener map, unmap, commit, destroy, request_move,
         wlr_request_activate, wlr_request_close, request_resize,
         request_maximize, request_fullscreen, request_minimize, set_title,
-        set_app_id;
+        set_app_id, ov_scale_commit;
 
 #ifdef XWAYLAND
     struct wl_listener xw_map, xw_unmap, xw_destroy, xw_request_configure,
@@ -42,31 +42,43 @@ struct Window {
 
     struct Output* output;
     struct Decoration* decoration; // ?NULL (floating/non‑fullscreen windows)
-    struct Icon *icon,             // current, applied on commit
-        *pending_icon;             // ?NULL
+    struct Icon* icon;             // current, applied on commit
+    struct Icon* pending_icon;     // ?NULL
 
     struct wlr_ext_foreign_toplevel_handle_v1* foreign_handle;
-    struct wlr_foreign_toplevel_handle_v1 *wlr_handle, *last_foreign_parent;
+    struct wlr_foreign_toplevel_handle_v1* wlr_handle;
+    struct wlr_foreign_toplevel_handle_v1* last_foreign_parent;
     struct wlr_xdg_toplevel* xdg_toplevel;
+
 #ifdef XWAYLAND
     struct wlr_xwayland_surface* xwayland_surface;
     struct wlr_scene_tree* xw_surface_tree;
 #endif
-    struct wlr_scene_tree *scene_tree, *popup_tree;
+    struct wlr_scene_tree* saved_parent_tree;
+    struct wlr_scene_tree* scene_tree;
+    struct wlr_scene_tree* popup_tree;
 
     uint64_t id;
     char *title, *app_id;
 
     struct NodeTag node_tag;
 
-    int32_t max_saved_x, max_saved_y, max_saved_w,
-        max_saved_h,            // maximized saved
-        saved_x, saved_y,       // regular saved
-        fs_x, fs_y, fs_w, fs_h, // floating
-        x, y, width, height, prop_w, prop_h, reveal_dir, hide_dir, last_tl,
-        last_tr, last_bl, last_br;
+    int32_t max_saved_x, max_saved_y, // maximized saved
+        max_saved_w, max_saved_h,     //
+        saved_x, saved_y,             // regular saved
+        fs_x, fs_y, fs_w, fs_h,       // floating
+        x, y, width, height,          // regular
+        prop_w, prop_h,               //
+        reveal_dir, hide_dir,         //
+        last_tl, last_tr, last_bl,    //
+        last_br,                      //
+        overview_x, overview_y,       // control
+        overview_w, overview_h,       //
+        ov_target_x, ov_target_y, ov_from_x, ov_from_y;
 
-    float size_per; // tiled size weight
+    float size_per, // tiled size weight
+        ov_scale,   // .0-1 hover progress
+        ov_scale_from, ov_scale_to;
 
     int space;
 
@@ -74,7 +86,8 @@ struct Window {
 
     bool initial_configure_sent, maximized, rules_applied, pending_icon_cleared,
         decoration_state_set, prop_valid, pos_valid, has_target, closed, mapped,
-        fullscreen, space_hidden, minimized, blur_enabled;
+        fullscreen, space_hidden, minimized, blur_enabled, ov_scale_hooked,
+        skip_next_anim;
 
 #ifdef XWAYLAND
     bool is_xwayland,

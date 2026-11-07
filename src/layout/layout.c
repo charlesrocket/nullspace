@@ -224,6 +224,8 @@ static size_t layouts_compute(
 }
 
 void layout_apply(void) {
+    if (server.overview_active) return;
+
     struct Output* out;
     wl_list_for_each(out, &server.outputs, link) {
         if (out->removed) continue;

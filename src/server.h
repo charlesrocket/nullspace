@@ -46,16 +46,17 @@ struct NsServer {
     struct wlr_scene* scene;
     struct wlr_scene_output_layout* scene_layout;
 
-    struct wlr_scene_tree *background_tree, // wallpaper
-        *bottom_tree,                       // lower
-        *tile_tree,                         // normal
-        *float_tree,                        // floating
-        *popup_tree,                        // menus
-        *top_tree,                          // panels
-        *overlay_tree,                      // immediate
-        *fullscreen_tree,                   // expanded
-        *content_tree,                      // session
-        *lock_tree;                         // locked
+    struct wlr_scene_tree* background_tree; // wallpaper
+    struct wlr_scene_tree* bottom_tree;     // lower
+    struct wlr_scene_tree* tile_tree;       // normal
+    struct wlr_scene_tree* float_tree;      // floating
+    struct wlr_scene_tree* popup_tree;      // menus
+    struct wlr_scene_tree* top_tree;        // panels
+    struct wlr_scene_tree* overlay_tree;    // immediate
+    struct wlr_scene_tree* fullscreen_tree; // expanded
+    struct wlr_scene_tree* overview_tree;   // control
+    struct wlr_scene_tree* content_tree;    // session
+    struct wlr_scene_tree* lock_tree;       // locked
 
     struct wlr_scene_rect* lock_bg;
 
@@ -88,7 +89,7 @@ struct NsServer {
 
     struct wl_list keyboards, outputs;
 
-    bool locked;
+    bool locked, overview_active;
 };
 
 extern struct NsServer server;
