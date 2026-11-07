@@ -170,7 +170,7 @@ static int compute_gap_idx(int target_space) {
         if (w == drag_window) continue;
 
         const int32_t sw = scaled(w->width, (double)w->ov_scale_to);
-        if (server.cursor->x < w->ov_target_x + sw / 2) return idx;
+        if (server.cursor->x < w->ov_target_x + (double)sw / 2) return idx;
         idx++;
     }
 
