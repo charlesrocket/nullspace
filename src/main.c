@@ -58,9 +58,8 @@ static int on_term(int sig, void* data) {
     return 0;
 }
 
-static void spawn_startup(void* d) {
-    // TODO
-    (void)d;
+static void startup(void* data) {
+    (void)data;
 
     if (config.cmd_start != NULL && config.cmd_start[0] != '\0')
         spawn_shell(config.cmd_start);
@@ -185,7 +184,7 @@ int main(int argc, char* argv[]) {
 
     if (config_default_was_written()) help_schedule();
 
-    wl_event_loop_add_idle(server.event_loop, spawn_startup, NULL);
+    wl_event_loop_add_idle(server.event_loop, startup, NULL);
     log_info("Entering event loop");
     wl_display_run(display);
 
