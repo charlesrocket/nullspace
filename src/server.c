@@ -30,6 +30,7 @@
 #include <wayland-util.h>
 #include <wlr-output-power-management-unstable-v1-protocol.h>
 #include <wlr/types/wlr_compositor.h>
+#include <wlr/types/wlr_content_type_v1.h>
 #include <wlr/types/wlr_cursor_shape_v1.h>
 #include <wlr/types/wlr_data_control_v1.h>
 #include <wlr/types/wlr_data_device.h>
@@ -129,16 +130,95 @@ static const char* cursor_shape_name(uint32_t shape) {
     }
 }
 
+static void drag_context_destroy(struct wl_listener* l, void* data) {
+    (void)data;
+
+    struct DragContext* ctx = wl_container_of(l, ctx, destroy);
+    wl_list_remove(&ctx->destroy.link);
+    free(ctx);
+
+    seat_refocus_after_drag();
+}
+
+static void handle_start_drag(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_drag* drag = data;
+
+    if (drag->icon != NULL) {
+        struct wlr_scene_tree* icon_tree =
+            wlr_scene_drag_icon_create(server.overlay_tree, drag->icon);
+
+        if (icon_tree != NULL) {
+            wlr_scene_node_set_position(
+                &icon_tree->node, (int32_t)server.cursor->x,
+                (int32_t)server.cursor->y
+            );
+
+            drag->icon->data = icon_tree;
+        }
+    }
+
+    struct DragContext* ctx = calloc(1, sizeof(*ctx));
+    if (ctx == NULL) return;
+
+    ctx->destroy.notify = drag_context_destroy;
+    wl_signal_add(&drag->events.destroy, &ctx->destroy);
+}
+
+static void handle_request_start_drag(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_seat_request_start_drag_event* ev = data;
+    if (wlr_seat_validate_pointer_grab_serial(
+            server.seat, ev->origin, ev->serial
+        )) {
+        wlr_seat_start_pointer_drag(server.seat, ev->drag, ev->serial);
+    } else {
+        wlr_data_source_destroy(ev->drag->source);
+    }
+}
+
 static void handle_request_set_cursor_shape(struct wl_listener* l, void* data) {
     struct Server* s = wl_container_of(l, s, request_set_cursor_shape);
     struct wlr_cursor_shape_manager_v1_request_set_shape_event* ev = data;
 
+    if (s->seat->pointer_state.focused_surface == NULL) return;
     if (s->seat->pointer_state.focused_client != ev->seat_client) return;
     if (cursor_is_hidden()) return;
 
     wlr_cursor_set_xcursor(
         s->cursor, s->cursor_mgr, cursor_shape_name(ev->shape)
     );
+}
+
+static void handle_request_set_cursor(struct wl_listener* l, void* data) {
+    (void)l;
+    struct wlr_seat_pointer_request_set_cursor_event* ev = data;
+
+    // No surface focused, so no client owns the cursor.
+    if (server.seat->pointer_state.focused_surface == NULL) return;
+    if (server.seat->pointer_state.focused_client != ev->seat_client) return;
+    if (cursor_is_hidden()) return;
+
+    wlr_cursor_set_surface(
+        server.cursor, ev->surface, ev->hotspot_x, ev->hotspot_y
+    );
+}
+
+static void handle_request_set_selection(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_seat_request_set_selection_event* ev = data;
+    wlr_seat_set_selection(server.seat, ev->source, ev->serial);
+}
+
+static void
+handle_request_set_primary_selection(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_seat_request_set_primary_selection_event* ev = data;
+    wlr_seat_set_primary_selection(server.seat, ev->source, ev->serial);
 }
 
 int server_init(struct wl_display* display) {
@@ -177,14 +257,20 @@ int server_init(struct wl_display* display) {
         return -1;
     }
 
+    server.relative_pointer_manager =
+        wlr_relative_pointer_manager_v1_create(display);
+
+    server.pointer_constraints = wlr_pointer_constraints_v1_create(display);
+    if (server.pointer_constraints == NULL || !cursor_constraints_init()) {
+        log_warn("Pointer constraints unavailable");
+    }
+
     wlr_subcompositor_create(display);
     wlr_data_device_manager_create(display);
     wlr_data_control_manager_v1_create(display);
     wlr_fractional_scale_manager_v1_create(display, 1);
     wlr_primary_selection_v1_device_manager_create(display);
     wlr_viewporter_create(display);
-    wlr_relative_pointer_manager_v1_create(display);
-    wlr_pointer_constraints_v1_create(display);
 
     struct wlr_server_decoration_manager* kde_deco =
         wlr_server_decoration_manager_create(display);
@@ -402,6 +488,7 @@ void server_detach_listeners(void) {
     wl_list_remove(&server.new_idle_inhibitor.link);
 
     activation_finish();
+    cursor_constraints_finish();
     session_lock_detach_listeners();
 }
 
@@ -643,80 +730,4 @@ static void handle_new_xdg_decoration(struct wl_listener* l, void* data) {
 
         d->commit_listening = true;
     }
-}
-
-static void handle_request_set_selection(struct wl_listener* l, void* data) {
-    (void)l;
-
-    struct wlr_seat_request_set_selection_event* ev = data;
-    wlr_seat_set_selection(server.seat, ev->source, ev->serial);
-}
-
-static void
-handle_request_set_primary_selection(struct wl_listener* l, void* data) {
-    (void)l;
-
-    struct wlr_seat_request_set_primary_selection_event* ev = data;
-    wlr_seat_set_primary_selection(server.seat, ev->source, ev->serial);
-}
-
-static void drag_context_destroy(struct wl_listener* l, void* data) {
-    (void)data;
-
-    struct DragContext* ctx = wl_container_of(l, ctx, destroy);
-    wl_list_remove(&ctx->destroy.link);
-    free(ctx);
-
-    seat_refocus_after_drag();
-}
-
-static void handle_start_drag(struct wl_listener* l, void* data) {
-    (void)l;
-
-    struct wlr_drag* drag = data;
-
-    if (drag->icon != NULL) {
-        struct wlr_scene_tree* icon_tree =
-            wlr_scene_drag_icon_create(server.overlay_tree, drag->icon);
-
-        if (icon_tree != NULL) {
-            wlr_scene_node_set_position(
-                &icon_tree->node, (int32_t)server.cursor->x,
-                (int32_t)server.cursor->y
-            );
-
-            drag->icon->data = icon_tree;
-        }
-    }
-
-    struct DragContext* ctx = calloc(1, sizeof(*ctx));
-    if (ctx == NULL) return;
-
-    ctx->destroy.notify = drag_context_destroy;
-    wl_signal_add(&drag->events.destroy, &ctx->destroy);
-}
-
-static void handle_request_start_drag(struct wl_listener* l, void* data) {
-    (void)l;
-
-    struct wlr_seat_request_start_drag_event* ev = data;
-    if (wlr_seat_validate_pointer_grab_serial(
-            server.seat, ev->origin, ev->serial
-        )) {
-        wlr_seat_start_pointer_drag(server.seat, ev->drag, ev->serial);
-    } else {
-        wlr_data_source_destroy(ev->drag->source);
-    }
-}
-
-static void handle_request_set_cursor(struct wl_listener* l, void* data) {
-    (void)l;
-
-    struct wlr_seat_pointer_request_set_cursor_event* ev = data;
-    if (server.seat->pointer_state.focused_client != ev->seat_client) return;
-    if (cursor_is_hidden()) return;
-
-    wlr_cursor_set_surface(
-        server.cursor, ev->surface, ev->hotspot_x, ev->hotspot_y
-    );
 }

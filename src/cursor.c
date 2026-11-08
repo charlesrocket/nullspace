@@ -16,6 +16,7 @@
 #include <dev/evdev/input-event-codes.h>
 #include <math.h>
 #include <nullspace/layouts.h>
+#include <pixman.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -28,9 +29,12 @@
 #include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_pointer.h>
+#include <wlr/types/wlr_pointer_constraints_v1.h>
+#include <wlr/types/wlr_relative_pointer_v1.h>
 #include <wlr/types/wlr_scene.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/util/edges.h>
+#include <wlr/util/region.h>
 
 #define LOG_TOPIC    "cursor"
 #define EDGE_GRAB_PX 6
@@ -39,19 +43,23 @@ struct InteractiveOp {
     struct Window* window;
     enum SeatOp op;
 
-    uint32_t edges;
-    uint32_t trigger_button;
-
-    double cursor_start_x;
-    double cursor_start_y;
-
-    int32_t window_start_x;
-    int32_t window_start_y;
-    int32_t window_start_w;
-    int32_t window_start_h;
-
+    double cursor_start_x, cursor_start_y;
+    uint32_t edges, trigger_button;
+    int32_t window_start_x, window_start_y, window_start_w, window_start_h;
     bool active;
 };
+
+struct PointerConstraintTracker {
+    struct wl_list link;
+    struct wlr_pointer_constraint_v1* constraint;
+    struct wl_listener set_region, destroy;
+};
+
+static struct wl_list constraint_trackers;
+static struct wlr_pointer_constraint_v1* active_constraint;
+static pixman_region32_t confine_region;
+static bool active_confine_requires_warp, constraints_initialized;
+static struct wl_listener active_constraint_commit, new_constraint_listener;
 
 static struct InteractiveOp interactive;
 static struct Window* hovered_window;
@@ -186,6 +194,217 @@ static void interactive_apply(double cx, double cy) {
         v->saved_x = nx;
         v->saved_y = ny;
     }
+}
+
+static struct wlr_surface*
+surface_at(double lx, double ly, double* sx, double* sy) {
+    struct wlr_surface* surf = NULL;
+    double ssx = 0, ssy = 0;
+    window_at(lx, ly, &surf, &ssx, &ssy);
+
+    if (surf == NULL) return NULL;
+    if (sx) *sx = ssx;
+    if (sy) *sy = ssy;
+
+    return surf;
+}
+
+static void check_constraint_region(void) {
+    if (active_constraint == NULL) return;
+
+    if (active_confine_requires_warp) {
+        active_confine_requires_warp = false;
+
+        double sx, sy;
+        if (surface_at(server.cursor->x, server.cursor->y, &sx, &sy)
+                == active_constraint->surface
+            && !pixman_region32_contains_point(
+                &active_constraint->region, (int)floor(sx), (int)floor(sy), NULL
+            )) {
+            int nboxes;
+            pixman_box32_t* boxes =
+                pixman_region32_rectangles(&active_constraint->region, &nboxes);
+
+            if (nboxes > 0) {
+                double tx = (boxes[0].x1 + boxes[0].x2) / 2.0;
+                double ty = (boxes[0].y1 + boxes[0].y2) / 2.0;
+                double gx = server.cursor->x + (tx - sx);
+                double gy = server.cursor->y + (ty - sy);
+
+                wlr_cursor_warp_closest(server.cursor, NULL, gx, gy);
+                cursor_refresh_focus();
+            }
+        }
+    }
+
+    if (active_constraint->type == WLR_POINTER_CONSTRAINT_V1_CONFINED) {
+        pixman_region32_copy(&confine_region, &active_constraint->region);
+    } else {
+        pixman_region32_clear(&confine_region);
+    }
+}
+
+static void handle_active_constraint_commit(struct wl_listener* l, void* data) {
+    (void)l;
+    (void)data;
+
+    check_constraint_region();
+}
+
+static void handle_constraint_set_region(struct wl_listener* l, void* data) {
+    (void)data;
+    struct PointerConstraintTracker* t = wl_container_of(l, t, set_region);
+    if (t->constraint == active_constraint) active_confine_requires_warp = true;
+}
+
+static void warp_to_constraint_cursor_hint(void) {
+    if (active_constraint == NULL) return;
+    if (!active_constraint->current.cursor_hint.enabled) return;
+
+    double sx = active_constraint->current.cursor_hint.x;
+    double sy = active_constraint->current.cursor_hint.y;
+
+    struct Window* win = NULL;
+    struct Window* w;
+    wl_list_for_each(w, &wm.windows, link) {
+        if (w->closed) continue;
+        if (window_wlr_surface(w) == active_constraint->surface) {
+            win = w;
+            break;
+        }
+    }
+
+    if (win == NULL || win->scene_tree == NULL) return;
+
+    int wx = 0, wy = 0;
+    if (!wlr_scene_node_coords(&win->scene_tree->node, &wx, &wy)) return;
+
+    wlr_cursor_warp(server.cursor, NULL, wx + sx, wy + sy);
+    wlr_seat_pointer_warp(server.seat, sx, sy);
+}
+
+static void handle_constraint_destroy(struct wl_listener* l, void* data) {
+    (void)data;
+
+    struct PointerConstraintTracker* t = wl_container_of(l, t, destroy);
+
+    if (t->constraint == active_constraint) {
+        warp_to_constraint_cursor_hint();
+        wl_list_remove(&active_constraint_commit.link);
+        wl_list_init(&active_constraint_commit.link);
+        active_constraint = NULL;
+        pixman_region32_clear(&confine_region);
+    }
+
+    wl_list_remove(&t->set_region.link);
+    wl_list_remove(&t->destroy.link);
+    wl_list_remove(&t->link);
+    free(t);
+}
+
+void cursor_update_active_constraint(void) {
+    if (!constraints_initialized) return;
+
+    struct wlr_surface* focused = server.seat->pointer_state.focused_surface;
+    struct wlr_pointer_constraint_v1* want = NULL;
+
+    if (focused != NULL) {
+        want = wlr_pointer_constraints_v1_constraint_for_surface(
+            server.pointer_constraints, focused, server.seat
+        );
+    }
+
+    if (want == active_constraint) return;
+
+    if (active_constraint != NULL) {
+        wlr_pointer_constraint_v1_send_deactivated(active_constraint);
+        wl_list_remove(&active_constraint_commit.link);
+        wl_list_init(&active_constraint_commit.link);
+        active_constraint = NULL;
+    }
+
+    if (want == NULL) return;
+
+    active_constraint = want;
+    active_confine_requires_warp = true;
+
+    if (pixman_region32_not_empty(&want->current.region)) {
+        pixman_region32_intersect(
+            &want->region, &want->surface->input_region, &want->current.region
+        );
+    } else {
+        pixman_region32_copy(&want->region, &want->surface->input_region);
+    }
+
+    check_constraint_region();
+    wlr_pointer_constraint_v1_send_activated(want);
+
+    active_constraint_commit.notify = handle_active_constraint_commit;
+    wl_signal_add(&want->surface->events.commit, &active_constraint_commit);
+}
+
+static void handle_new_constraint(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_pointer_constraint_v1* constraint = data;
+
+    struct PointerConstraintTracker* t = calloc(1, sizeof(*t));
+    if (t == NULL) return;
+    t->constraint = constraint;
+
+    t->set_region.notify = handle_constraint_set_region;
+    wl_signal_add(&constraint->events.set_region, &t->set_region);
+
+    t->destroy.notify = handle_constraint_destroy;
+    wl_signal_add(&constraint->events.destroy, &t->destroy);
+
+    wl_list_insert(&constraint_trackers, &t->link);
+
+    struct wlr_surface* focused = server.seat->pointer_state.focused_surface;
+    if (focused != NULL && focused == constraint->surface) {
+        cursor_update_active_constraint();
+    }
+}
+
+bool cursor_constraints_init(void) {
+    if (constraints_initialized) return true;
+    if (server.pointer_constraints == NULL) return false;
+
+    wl_list_init(&constraint_trackers);
+    pixman_region32_init(&confine_region);
+    wl_list_init(&active_constraint_commit.link);
+
+    new_constraint_listener.notify = handle_new_constraint;
+    wl_signal_add(
+        &server.pointer_constraints->events.new_constraint,
+        &new_constraint_listener
+    );
+
+    constraints_initialized = true;
+    return true;
+}
+
+void cursor_constraints_finish(void) {
+    if (!constraints_initialized) return;
+
+    wl_list_remove(&new_constraint_listener.link);
+
+    struct PointerConstraintTracker *t, *tmp;
+    wl_list_for_each_safe(t, tmp, &constraint_trackers, link) {
+        wl_list_remove(&t->set_region.link);
+        wl_list_remove(&t->destroy.link);
+        wl_list_remove(&t->link);
+        free(t);
+    }
+
+    if (active_constraint != NULL) {
+        wl_list_remove(&active_constraint_commit.link);
+        wl_list_init(&active_constraint_commit.link);
+        active_constraint = NULL;
+    }
+
+    pixman_region32_fini(&confine_region);
+    constraints_initialized = false;
 }
 
 void cursor_cancel_drag_state(void) {
@@ -363,6 +582,7 @@ static void cursor_manage_focus(bool motion) {
         wlr_seat_pointer_notify_clear_focus(server.seat);
         set_xcursor("default");
         edge_cursor_active = false;
+        cursor_update_active_constraint();
         return;
     }
 
@@ -379,6 +599,7 @@ static void cursor_manage_focus(bool motion) {
     }
 
     wlr_seat_pointer_notify_enter(server.seat, surface, sx, sy);
+    cursor_update_active_constraint();
     wlr_seat_pointer_notify_motion(
         server.seat, (uint32_t)animation_now_ms(), sx, sy
     );
@@ -496,9 +717,36 @@ void cursor_handle_motion(struct wl_listener* l, void* data) {
     cursor_wake();
     struct wlr_pointer_motion_event* ev = data;
 
-    wlr_cursor_move(
-        server.cursor, &ev->pointer->base, ev->delta_x, ev->delta_y
-    );
+    if (server.relative_pointer_manager != NULL) {
+        wlr_relative_pointer_manager_v1_send_relative_motion(
+            server.relative_pointer_manager, server.seat,
+            (uint64_t)animation_now_ms() * 1000, ev->delta_x, ev->delta_y,
+            ev->unaccel_dx, ev->unaccel_dy
+        );
+    }
+
+    double dx = ev->delta_x;
+    double dy = ev->delta_y;
+
+    if (!interactive.active && !server.overview_active
+        && active_constraint != NULL) {
+        double sx, sy;
+        struct wlr_surface* under =
+            surface_at(server.cursor->x, server.cursor->y, &sx, &sy);
+
+        if (under != active_constraint->surface) return;
+
+        double cxs, cys;
+        if (!wlr_region_confine(
+                &confine_region, sx, sy, sx + dx, sy + dy, &cxs, &cys
+            ))
+            return;
+
+        dx = cxs - sx;
+        dy = cys - sy;
+    }
+
+    wlr_cursor_move(server.cursor, &ev->pointer->base, dx, dy);
 
     drag_icon_update_position();
 
@@ -524,10 +772,35 @@ void cursor_handle_motion_absolute(struct wl_listener* l, void* data) {
     cursor_wake();
     struct wlr_pointer_motion_absolute_event* ev = data;
 
-    wlr_cursor_warp_absolute(server.cursor, &ev->pointer->base, ev->x, ev->y);
+    if (!interactive.active && !server.overview_active
+        && active_constraint != NULL) {
+        double tx, ty;
+        wlr_cursor_absolute_to_layout_coords(
+            server.cursor, &ev->pointer->base, ev->x, ev->y, &tx, &ty
+        );
+
+        double dx = tx - server.cursor->x;
+        double dy = ty - server.cursor->y;
+        double sx, sy;
+        struct wlr_surface* under =
+            surface_at(server.cursor->x, server.cursor->y, &sx, &sy);
+
+        if (under != active_constraint->surface) return;
+
+        double cxs, cys;
+        if (!wlr_region_confine(
+                &confine_region, sx, sy, sx + dx, sy + dy, &cxs, &cys
+            ))
+            return;
+
+        wlr_cursor_move(server.cursor, &ev->pointer->base, cxs - sx, cys - sy);
+    } else {
+        wlr_cursor_warp_absolute(
+            server.cursor, &ev->pointer->base, ev->x, ev->y
+        );
+    }
 
     drag_icon_update_position();
-
     if (server.overview_active) {
         overview_handle_motion(server.cursor->x, server.cursor->y);
         return;

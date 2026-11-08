@@ -54,11 +54,9 @@ typedef void (*BufferFn)(struct wlr_scene_buffer*, void*);
 
 // DRAG
 static struct Window* drag_window;
-static double drag_start_x, drag_start_y;
-static double drag_off_x, drag_off_y;
+static double drag_start_x, drag_start_y, drag_off_x, drag_off_y;
 static bool drag_active; // threshold crossed
-static int drag_target_space = -1;
-static int drag_last_gap_idx = -1;
+static int drag_target_space = -1, drag_last_gap_idx = -1;
 static bool edge_armed_top, edge_armed_bottom;
 static int64_t last_edge_shift_ms;
 
@@ -69,8 +67,9 @@ static bool ov_closing; // zoom-in animation after `overview_exit()`
 static struct wl_event_source* ov_closing_timer; // zoom-in driver
 
 static int32_t scr_w, scr_h;
-static int32_t ov_row_y[SPACE_COUNT];
-static int32_t ov_row_h[SPACE_COUNT];
+static int32_t ov_row_y[SPACE_COUNT], ov_row_h[SPACE_COUNT];
+
+static bool overview_btn_armed = false;
 
 static bool ov_visible(const struct Window* w) {
     return !w->closed && w->mapped && w->scene_tree != NULL && w->space >= 0
@@ -264,6 +263,7 @@ static void compute_targets(void) {
         const int32_t h = scaled(w->height, OVERVIEW_ZOOM * OVERVIEW_HOVER);
         if (h > ov_row_h[w->space]) ov_row_h[w->space] = h;
     }
+
     if (inserting) {
         const int32_t h =
             scaled(drag_window->height, OVERVIEW_ZOOM * OVERVIEW_HOVER);
@@ -289,7 +289,7 @@ static void compute_targets(void) {
     //    we reach `drag_last_gap_idx`.
     //
     // Computing x0 from the GAPPED total (not the ungapped one) keeps the row
-    // from re-centering as the cursor slides horizontally within the row.
+    // from re-centering as the cursor slides horizontally.
     for (int s = 0; s < SPACE_COUNT; s++) {
         const bool row_inserting = inserting && s == drag_target_space;
         const int32_t drag_sw =
@@ -475,10 +475,13 @@ void overview_enter(void) {
 
     cursor_cancel_drag_state();
 
+    server.seat->pointer_state.button_count = 0;
+
     drag_window = NULL;
     drag_active = false;
     drag_target_space = -1;
     drag_last_gap_idx = -1;
+    overview_btn_armed = false;
     edge_armed_top = edge_armed_bottom = false;
     last_edge_shift_ms = 0;
 
@@ -493,6 +496,7 @@ void overview_enter(void) {
 
     wlr_seat_keyboard_notify_clear_focus(server.seat);
     wlr_seat_pointer_clear_focus(server.seat);
+    cursor_update_active_constraint();
     ov_cursor("default");
 
     struct Window* w;
@@ -556,6 +560,7 @@ void overview_exit(void) {
     drag_active = false;
     drag_target_space = -1;
     drag_last_gap_idx = -1;
+    overview_btn_armed = false;
     edge_armed_top = edge_armed_bottom = false;
     ov_animating = false;
 
@@ -765,6 +770,8 @@ bool overview_handle_button(struct wlr_pointer_button_event* ev) {
             drag_off_y = cy - hit->y;
         }
 
+        overview_btn_armed = true;
+
         return true;
     }
 
@@ -772,14 +779,17 @@ bool overview_handle_button(struct wlr_pointer_button_event* ev) {
 
     struct Window* dragged = drag_window;
     const bool was_dragging = drag_active;
+    const bool was_armed = overview_btn_armed;
     const int target = drag_target_space;
 
     drag_window = NULL;
     drag_active = false;
     drag_target_space = -1;
     drag_last_gap_idx = -1;
+    overview_btn_armed = false;
     edge_armed_top = edge_armed_bottom = false;
 
+    if (!was_armed) return true;
     if (!dragged) { // click on empty
         overview_exit();
         return true;
@@ -907,6 +917,7 @@ void overview_window_destroy(struct Window* window) {
         drag_active = false;
         drag_target_space = -1;
         drag_last_gap_idx = -1;
+        overview_btn_armed = false;
         edge_armed_top = edge_armed_bottom = false;
     }
 
