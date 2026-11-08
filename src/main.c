@@ -45,7 +45,7 @@ static void headless_size(unsigned int* w, unsigned int* h) {
 
     const char* s = getenv("NULLSPACE_HEADLESS_SIZE"); // "1920x1080"
     unsigned int ww, hh;
-    if (s != NULL && sscanf(s, "%dx%d", &ww, &hh) == 2 && ww > 0 && hh > 0) {
+    if (s != NULL && sscanf(s, "%ux%u", &ww, &hh) == 2 && ww > 0 && hh > 0) {
         *w = ww;
         *h = hh;
     }
