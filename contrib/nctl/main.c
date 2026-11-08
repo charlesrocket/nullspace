@@ -556,7 +556,7 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
-    if (write_all(sock, cmd.buf, cmd.len) < 0) {
+    if (write_all(sock, cmd.buf, cmd.len) < 0 && errno != EPIPE) {
         warn("send");
         return EXIT_FAILURE;
     }
