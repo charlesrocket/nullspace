@@ -13,7 +13,7 @@ struct Window;
 
 struct Keyboard {
     struct wlr_keyboard* wlr_keyboard;
-    struct wl_list link; // NsServer.keyboards
+    struct wl_list link; // Server.keyboards
     struct wl_listener modifiers;
     struct wl_listener key;
     struct wl_listener destroy;

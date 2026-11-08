@@ -32,7 +32,7 @@ struct wlr_xwayland;
 struct Window;
 struct Output;
 
-struct NsServer {
+struct Server {
     struct wl_display* display;
     struct wl_event_loop* event_loop;
 
@@ -92,7 +92,7 @@ struct NsServer {
     bool locked, overview_active;
 };
 
-extern struct NsServer server;
+extern struct Server server;
 
 enum NodeType { NODE_WINDOW = 1, NODE_LAYER_SURFACE };
 

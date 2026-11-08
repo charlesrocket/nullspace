@@ -14,7 +14,7 @@ struct WallpaperOutput;
 struct Output {
     struct wlr_output* wlr_output;
     struct wlr_scene_output* scene_output;
-    struct wl_list link; // NsServer.outputs
+    struct wl_list link; // Server.outputs
     struct wl_listener frame, request_state, destroy;
     struct WallpaperOutput* wallpaper;
 

@@ -56,7 +56,7 @@
 
 #define LOG_TOPIC "server"
 
-struct NsServer server = {0};
+struct Server server = {0};
 
 static struct wl_list inhibitors;
 
@@ -130,7 +130,7 @@ static const char* cursor_shape_name(uint32_t shape) {
 }
 
 static void handle_request_set_cursor_shape(struct wl_listener* l, void* data) {
-    struct NsServer* s = wl_container_of(l, s, request_set_cursor_shape);
+    struct Server* s = wl_container_of(l, s, request_set_cursor_shape);
     struct wlr_cursor_shape_manager_v1_request_set_shape_event* ev = data;
 
     if (s->seat->pointer_state.focused_client != ev->seat_client) return;
