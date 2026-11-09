@@ -106,24 +106,26 @@
 #define CFG_KB_RATE_HZ                     26      // repeats/sec
 #define CFG_KB_DELAY_MS                    600
 
-#define CFG_LIBINPUT_TAP_STATE             1
-#define CFG_LIBINPUT_NATURAL_SCROLL        1
-#define CFG_LIBINPUT_LEFT_HANDED           -1
-#define CFG_LIBINPUT_MIDDLE_EMULATION      -1
-#define CFG_LIBINPUT_DWT                   -1 // disable-while-typing
-#define CFG_LIBINPUT_DRAG                  -1
+#define CFG_INPUT_TOUCHSCREEN              true
+#define CFG_INPUT_TAP_STATE                1
+#define CFG_INPUT_GESTURES                 true
+#define CFG_INPUT_NATURAL_SCROLL           1
+#define CFG_INPUT_LEFT_HANDED              -1
+#define CFG_INPUT_MIDDLE_EMULATION         -1
+#define CFG_INPUT_DWT                      -1 // disable-while-typing
+#define CFG_INPUT_DRAG                     -1
 // -1/0 disabled | 1 timeout | 2 sticky
-#define CFG_LIBINPUT_DRAG_LOCK             -1
+#define CFG_INPUT_DRAG_LOCK                -1
 // -1/0 disabled | 1 3fg | 2 4fg
-#define CFG_LIBINPUT_THREE_FINGER_DRAG     -1
+#define CFG_INPUT_THREE_FINGER_DRAG        -1
 // 0 none | 1 flat | 2 adaptive | 4 custom
-#define CFG_LIBINPUT_ACCEL_PROFILE         1
+#define CFG_INPUT_ACCEL_PROFILE            1
 // Valid range is (-1,1), (-2.0) to skip
-#define CFG_LIBINPUT_ACCEL_SPD             (-2.0f)
+#define CFG_INPUT_ACCEL_SPD                (-2.0f)
 // 0 none | 1 button_areas | 2 clickfinger
-#define CFG_LIBINPUT_CLICK_METHOD          -1
+#define CFG_INPUT_CLICK_METHOD             -1
 // 0 no_scroll | 1 two_finger | 2 edge | 4 on_button_down
-#define CFG_LIBINPUT_SCROLL_METHOD         -1
+#define CFG_INPUT_SCROLL_METHOD            -1
 
 #define CFG_ROUNDED_CORNERS_ENABLED        true
 #define CFG_ROUNDED_CORNERS_RADIUS         8 // minimum is 2
@@ -224,7 +226,7 @@ struct Config {
     float input_accel_speed, mfact;
 
     bool smart_gaps, center_overspread, focus_follow, focus_on_activate,
-        center_when_single_stack;
+        center_when_single_stack, input_touchscreen, input_gestures;
 #ifdef XWAYLAND
     bool xwayland;
 #endif

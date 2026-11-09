@@ -1271,6 +1271,7 @@ void cursor_handle_axis(struct wl_listener* l, void* data) {
 void cursor_handle_swipe_begin(struct wl_listener* l, void* data) {
     (void)l;
 
+    if (!config.input_gestures) return;
     struct wlr_pointer_swipe_begin_event* ev = data;
 
     swipe_forwarded = false;
@@ -1297,6 +1298,7 @@ void cursor_handle_swipe_begin(struct wl_listener* l, void* data) {
 void cursor_handle_swipe_update(struct wl_listener* l, void* data) {
     (void)l;
 
+    if (!config.input_gestures) return;
     struct wlr_pointer_swipe_update_event* ev = data;
 
     if (swipe_forwarded) {
@@ -1322,6 +1324,7 @@ void cursor_handle_swipe_update(struct wl_listener* l, void* data) {
 void cursor_handle_swipe_end(struct wl_listener* l, void* data) {
     (void)l;
 
+    if (!config.input_gestures) return;
     struct wlr_pointer_swipe_end_event* ev = data;
 
     if (swipe_forwarded && server.pointer_gestures != NULL) {

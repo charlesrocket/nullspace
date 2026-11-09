@@ -534,7 +534,7 @@ static void after_set(enum IpcAfter a) {
     switch (a) {
         case IPC_AFTER_NONE: break;
         case IPC_AFTER_MANAGE: wm_mark_layout_dirty(); break;
-        case IPC_AFTER_LIBINPUT: libinput_reconfigure(); break;
+        case IPC_AFTER_INPUT: libinput_reconfigure(); break;
         case IPC_AFTER_WALLPAPER:
             wm_invalidate_wallpaper();
             wm_mark_layout_dirty();

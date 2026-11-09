@@ -1,6 +1,7 @@
 #include "input.h"
 
 #include "config.h"
+#include "log.h"
 #include "manager.h"
 #include "seat.h"
 #include "server.h"
@@ -34,6 +35,22 @@ static void apply_tap(struct libinput_device* dev) {
         dev, wm.libinput.tap_state ? LIBINPUT_CONFIG_TAP_ENABLED
                                    : LIBINPUT_CONFIG_TAP_DISABLED
     );
+}
+
+static void apply_touchscreen_state(struct libinput_device* dev) {
+    if (!libinput_device_has_capability(dev, LIBINPUT_DEVICE_CAP_TOUCH)) return;
+
+    enum libinput_config_status status =
+        libinput_device_config_send_events_set_mode(
+            dev, config.input_touchscreen ? LIBINPUT_CONFIG_SEND_EVENTS_ENABLED
+                                          : LIBINPUT_CONFIG_SEND_EVENTS_DISABLED
+        );
+
+    if (status != LIBINPUT_CONFIG_STATUS_SUCCESS)
+        log_warn(
+            "Failed to set touchscreen send-events mode: %s",
+            libinput_config_status_to_str(status)
+        );
 }
 
 static void apply_natural_scroll(struct libinput_device* dev) {
@@ -199,6 +216,7 @@ static void apply_all(struct libinput_device* dev) {
     apply_accel(dev);
     apply_click_method(dev);
     apply_scroll_method(dev);
+    apply_touchscreen_state(dev);
 }
 
 void input_apply_pointer_config(struct wlr_input_device* device) {

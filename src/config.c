@@ -320,18 +320,20 @@ static void set_defaults(void) {
     config.kb_rate_hz = CFG_KB_RATE_HZ;
     config.kb_delay_ms = CFG_KB_DELAY_MS;
 
-    config.input_tap_state = CFG_LIBINPUT_TAP_STATE;
-    config.input_natural_scroll = CFG_LIBINPUT_NATURAL_SCROLL;
-    config.input_left_handed = CFG_LIBINPUT_LEFT_HANDED;
-    config.input_middle_emulation = CFG_LIBINPUT_MIDDLE_EMULATION;
-    config.input_dwt = CFG_LIBINPUT_DWT;
-    config.input_drag = CFG_LIBINPUT_DRAG;
-    config.input_drag_lock = CFG_LIBINPUT_DRAG_LOCK;
-    config.input_three_finger_drag = CFG_LIBINPUT_THREE_FINGER_DRAG;
-    config.input_accel_profile = CFG_LIBINPUT_ACCEL_PROFILE;
-    config.input_accel_speed = CFG_LIBINPUT_ACCEL_SPD;
-    config.input_click_method = CFG_LIBINPUT_CLICK_METHOD;
-    config.input_scroll_method = CFG_LIBINPUT_SCROLL_METHOD;
+    config.input_touchscreen = CFG_INPUT_TOUCHSCREEN;
+    config.input_gestures = CFG_INPUT_GESTURES;
+    config.input_tap_state = CFG_INPUT_TAP_STATE;
+    config.input_natural_scroll = CFG_INPUT_NATURAL_SCROLL;
+    config.input_left_handed = CFG_INPUT_LEFT_HANDED;
+    config.input_middle_emulation = CFG_INPUT_MIDDLE_EMULATION;
+    config.input_dwt = CFG_INPUT_DWT;
+    config.input_drag = CFG_INPUT_DRAG;
+    config.input_drag_lock = CFG_INPUT_DRAG_LOCK;
+    config.input_three_finger_drag = CFG_INPUT_THREE_FINGER_DRAG;
+    config.input_accel_profile = CFG_INPUT_ACCEL_PROFILE;
+    config.input_accel_speed = CFG_INPUT_ACCEL_SPD;
+    config.input_click_method = CFG_INPUT_CLICK_METHOD;
+    config.input_scroll_method = CFG_INPUT_SCROLL_METHOD;
 
 #ifdef XWAYLAND
     config.xwayland = CFG_XWAYLAND;
@@ -601,6 +603,10 @@ parse_key(const char* key, const char* value, bool* seen_window_rule) {
     } else if (strcmp(key, "kb_delay_ms") == 0) {
         if (parse_int_in_range(key, value, 0, 10000, &l))
             config.kb_delay_ms = (int)l;
+    } else if (strcmp(key, "input_touchscreen") == 0) {
+        if (parse_bool(key, value, &b)) config.input_touchscreen = b;
+    } else if (strcmp(key, "input_gestures") == 0) {
+        if (parse_bool(key, value, &b)) config.input_gestures = b;
     } else if (strcmp(key, "input_tap_state") == 0) {
         if (parse_int_in_range(key, value, INT_MIN, INT_MAX, &l))
             config.input_tap_state = (int)l;
@@ -777,6 +783,8 @@ static bool write_default_config(const char* path) {
     ok = ok
       && w_kv_long(fd, "input_middle_emulation", config.input_middle_emulation);
 
+    ok = ok && w_kv_bool(fd, "input_touchscreen", config.input_touchscreen);
+    ok = ok && w_kv_bool(fd, "input_gestures", config.input_gestures);
     ok = ok && w_kv_long(fd, "input_dwt", config.input_dwt);
     ok = ok && w_kv_long(fd, "input_drag", config.input_drag);
     ok = ok && w_kv_long(fd, "input_drag_lock", config.input_drag_lock);
