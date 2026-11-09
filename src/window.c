@@ -656,6 +656,14 @@ static void wlr_handle_create(struct Window* window) {
     wl_signal_add(
         &window->wlr_handle->events.request_close, &window->wlr_request_close
     );
+
+    struct wlr_surface* surf = window_wlr_surface(window);
+    bool is_focused = surf != NULL && server.seat != NULL
+                   && server.seat->keyboard_state.focused_surface == surf;
+
+    wlr_foreign_toplevel_handle_v1_set_activated(
+        window->wlr_handle, is_focused
+    );
 }
 
 static void wlr_handle_destroy(struct Window* window) {

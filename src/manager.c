@@ -297,7 +297,7 @@ void wm_switch_space_on(struct Output* out, int space) {
     if (top != NULL) {
         seat_focus(top);
     } else {
-        wlr_seat_keyboard_notify_clear_focus(server.seat);
+        seat_clear_focus();
         seat_update_decorations(NULL);
     }
 

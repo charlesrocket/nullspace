@@ -786,6 +786,16 @@ void seat_refocus_after_drag(void) {
         return;
     }
 
-    wlr_seat_keyboard_notify_clear_focus(server.seat);
+    seat_clear_focus();
     seat_focus(target);
+}
+
+void seat_clear_focus(void) {
+    struct wlr_surface* prev = server.seat->keyboard_state.focused_surface;
+    if (prev != NULL) {
+        struct Window* pw = seat_window_for_surface(prev);
+        if (pw != NULL) window_set_activated(pw, false);
+    }
+
+    wlr_seat_keyboard_notify_clear_focus(server.seat);
 }

@@ -23,6 +23,7 @@ void seat_init(void);
 void seat_finish(void);
 void seat_handle_new_input(struct wlr_input_device* device);
 void seat_focus(struct Window* window);
+void seat_clear_focus(void);
 void seat_refocus_after_drag(void);
 void seat_spawn(const void* arg);
 void seat_update_decorations(const struct Window* focused);
