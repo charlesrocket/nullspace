@@ -547,6 +547,7 @@ void overview_enter(void) {
         wlr_scene_node_set_position(&w->scene_tree->node, w->x, w->y);
     }
 
+    wm_mark_layout_dirty();
     ov_start_anim();
 }
 
