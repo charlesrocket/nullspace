@@ -21,3 +21,8 @@ bool overview_is_animating(void);
 bool overview_handle_key(
     uint32_t keycode, const xkb_keysym_t* syms, int nsyms, uint32_t mods
 );
+
+void overview_handle_touch_down(double lx, double ly);
+void overview_handle_touch_motion(double lx, double ly);
+void overview_handle_touch_up(double lx);
+void overview_handle_touch_cancel(void);

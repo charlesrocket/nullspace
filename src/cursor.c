@@ -84,7 +84,11 @@ static bool swipe_space;     // drives the space switching
 static bool space_scroll_overview;
 static double swipe_accum, space_scroll_accum, space_scroll_h_accum;
 
+static int32_t overview_touch_id = -1; // first finger owns the overview drag
+
 bool cursor_is_hidden(void) { return cursor_hidden; }
+
+void cursor_overview_touch_reset(void) { overview_touch_id = -1; }
 
 static void set_xcursor(const char* name) {
     if (cursor_hidden) return;
@@ -795,6 +799,16 @@ void cursor_handle_touch_up(struct wl_listener* l, void* data) {
     (void)l;
 
     struct wlr_touch_up_event* ev = data;
+
+    if (overview_touch_id == ev->touch_id) {
+        overview_touch_id = -1;
+        if (server.overview_active) {
+            overview_handle_touch_up(server.cursor->x);
+        }
+
+        return;
+    }
+
     struct TouchPoint* tp = touch_point_find(ev->touch_id);
     if (tp == NULL) return;
 
@@ -818,6 +832,11 @@ void cursor_handle_touch_cancel(struct wl_listener* l, void* data) {
     (void)l;
     (void)data;
 
+    if (overview_touch_id != -1) {
+        overview_touch_id = -1;
+        overview_handle_touch_cancel();
+    }
+
     if (interactive.active) {
         cursor_end_interactive();
         cursor_update_focus();
@@ -837,9 +856,25 @@ void cursor_handle_touch_cancel(struct wl_listener* l, void* data) {
 void cursor_handle_touch_down(struct wl_listener* l, void* data) {
     (void)l;
 
-    if (server.overview_active || server.locked) return;
-
     struct wlr_touch_down_event* ev = data;
+
+    if (server.locked) return;
+
+    if (server.overview_active) {
+        // The first finger owns the drag, and we ignore all others (for now).
+        if (overview_touch_id == -1) {
+            double lx, ly;
+            wlr_cursor_absolute_to_layout_coords(
+                server.cursor, &ev->touch->base, ev->x, ev->y, &lx, &ly
+            );
+
+            wlr_cursor_warp(server.cursor, NULL, lx, ly);
+            overview_touch_id = ev->touch_id;
+            overview_handle_touch_down(lx, ly);
+        }
+
+        return;
+    }
 
     server_notify_activity();
     cursor_wake();
@@ -879,6 +914,23 @@ void cursor_handle_touch_motion(struct wl_listener* l, void* data) {
     (void)l;
 
     struct wlr_touch_motion_event* ev = data;
+
+    if (overview_touch_id == ev->touch_id) {
+        if (!server.overview_active) {
+            overview_touch_id = -1;
+            return;
+        }
+
+        double lx, ly;
+        wlr_cursor_absolute_to_layout_coords(
+            server.cursor, &ev->touch->base, ev->x, ev->y, &lx, &ly
+        );
+
+        wlr_cursor_warp(server.cursor, NULL, lx, ly);
+        overview_handle_touch_motion(lx, ly);
+        return;
+    }
+
     struct TouchPoint* tp = touch_point_find(ev->touch_id);
     if (tp == NULL) return;
 

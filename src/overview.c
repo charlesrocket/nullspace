@@ -553,6 +553,8 @@ void overview_enter(void) {
 void overview_exit(void) {
     if (!server.overview_active) return;
 
+    cursor_overview_touch_reset();
+
     struct Window* to_focus = wm.overview_focused;
     server.overview_active = false;
     wm.overview_focused = NULL;
@@ -753,35 +755,25 @@ static struct Window* win_at(double lx, double ly) {
     return NULL;
 }
 
-bool overview_handle_button(struct wlr_pointer_button_event* ev) {
-    if (!server.overview_active) return false;
-    if (ev->button != BTN_LEFT) return true;
-
-    const double cx = server.cursor->x;
-    const double cy = server.cursor->y;
-
-    if (ev->state == WL_POINTER_BUTTON_STATE_PRESSED) {
-        struct Window* hit = win_at(cx, cy);
-        if (hit) {
-            drag_window = hit;
-            drag_active = false;
-            drag_target_space = -1;
-            drag_last_gap_idx = -1;
-            edge_armed_top = edge_armed_bottom = false;
-            drag_start_x = cx;
-            drag_start_y = cy;
-            ov_focus(hit);
-            drag_off_x = cx - hit->x;
-            drag_off_y = cy - hit->y;
-        }
-
-        overview_btn_armed = true;
-
-        return true;
+static void overview_press(double cx, double cy) {
+    struct Window* hit = win_at(cx, cy);
+    if (hit) {
+        drag_window = hit;
+        drag_active = false;
+        drag_target_space = -1;
+        drag_last_gap_idx = -1;
+        edge_armed_top = edge_armed_bottom = false;
+        drag_start_x = cx;
+        drag_start_y = cy;
+        ov_focus(hit);
+        drag_off_x = cx - hit->x;
+        drag_off_y = cy - hit->y;
     }
 
-    if (ev->state != WL_POINTER_BUTTON_STATE_RELEASED) return true;
+    overview_btn_armed = true;
+}
 
+static void overview_release(double cx) {
     struct Window* dragged = drag_window;
     const bool was_dragging = drag_active;
     const bool was_armed = overview_btn_armed;
@@ -794,16 +786,16 @@ bool overview_handle_button(struct wlr_pointer_button_event* ev) {
     overview_btn_armed = false;
     edge_armed_top = edge_armed_bottom = false;
 
-    if (!was_armed) return true;
+    if (!was_armed) return;
     if (!dragged) { // click on empty
         overview_exit();
-        return true;
+        return;
     }
 
     if (!was_dragging) { // plain click—zoom into the window's space
         overview_exit();
         if (!layouts_is_tiled(wm.layout)) window_raise(dragged);
-        return true;
+        return;
     }
 
     // Commit the drag into the target space at the anchor position.
@@ -828,7 +820,49 @@ bool overview_handle_button(struct wlr_pointer_button_event* ev) {
     );
 
     overview_layout();
+}
+
+bool overview_handle_button(struct wlr_pointer_button_event* ev) {
+    if (!server.overview_active) return false;
+    if (ev->button != BTN_LEFT) return true;
+
+    if (ev->state == WL_POINTER_BUTTON_STATE_PRESSED) {
+        overview_press(server.cursor->x, server.cursor->y);
+    } else if (ev->state == WL_POINTER_BUTTON_STATE_RELEASED) {
+        overview_release(server.cursor->x);
+    }
+
     return true;
+}
+
+void overview_handle_touch_down(double lx, double ly) {
+    if (!server.overview_active) return;
+    overview_press(lx, ly);
+}
+
+void overview_handle_touch_motion(double lx, double ly) {
+    if (!server.overview_active) return;
+    overview_handle_motion(lx, ly);
+}
+
+void overview_handle_touch_up(double lx) {
+    if (!server.overview_active) return;
+    overview_release(lx);
+}
+
+void overview_handle_touch_cancel(void) {
+    if (!server.overview_active) return;
+
+    const bool was_dragging = drag_active;
+
+    drag_window = NULL;
+    drag_active = false;
+    drag_target_space = -1;
+    drag_last_gap_idx = -1;
+    overview_btn_armed = false;
+    edge_armed_top = edge_armed_bottom = false;
+
+    if (was_dragging) overview_layout();
 }
 
 bool overview_handle_motion(double lx, double ly) {
