@@ -35,6 +35,7 @@
 #include <wlr/types/wlr_relative_pointer_v1.h>
 #include <wlr/types/wlr_scene.h>
 #include <wlr/types/wlr_seat.h>
+#include <wlr/types/wlr_touch.h>
 #include <wlr/util/edges.h>
 #include <wlr/util/region.h>
 
@@ -727,6 +728,189 @@ static void cursor_switch_space(int dir) {
     int next = out->current_space + dir;
     if (next < 0 || next >= SPACE_COUNT) return; // clamp
     wm_switch_space_on(out, next);
+}
+
+struct TouchPoint {
+    double start_lx, start_ly, start_sx, start_sy;
+    struct wlr_surface* surface; // ?NULL
+    struct wl_listener surface_destroy;
+    struct wl_list link;
+    int32_t touch_id;
+};
+
+static struct wl_list touch_points = {&touch_points, &touch_points};
+
+static struct TouchPoint* touch_point_find(int32_t touch_id) {
+    struct TouchPoint* tp;
+    wl_list_for_each(tp, &touch_points, link) {
+        if (tp->touch_id == touch_id) return tp;
+    }
+
+    return NULL;
+}
+
+static void touch_point_free(struct TouchPoint* tp) {
+    if (tp->surface != NULL) wl_list_remove(&tp->surface_destroy.link);
+    wl_list_remove(&tp->link);
+    free(tp);
+}
+
+static void touch_point_surface_destroy(struct wl_listener* l, void* data) {
+    (void)data;
+
+    struct TouchPoint* tp = wl_container_of(l, tp, surface_destroy);
+    wl_list_remove(&tp->surface_destroy.link);
+    tp->surface = NULL;
+    wl_list_remove(&tp->link);
+    free(tp);
+}
+
+static struct TouchPoint* touch_point_begin(
+    int32_t touch_id, struct wlr_surface* surface, double lx, double ly,
+    double sx, double sy
+) {
+    struct TouchPoint* old = touch_point_find(touch_id);
+    if (old != NULL) touch_point_free(old);
+
+    struct TouchPoint* tp = calloc(1, sizeof(*tp));
+    if (tp == NULL) return NULL;
+
+    tp->touch_id = touch_id;
+    tp->surface = surface;
+    tp->start_lx = lx;
+    tp->start_ly = ly;
+    tp->start_sx = sx;
+    tp->start_sy = sy;
+
+    if (surface != NULL) {
+        tp->surface_destroy.notify = touch_point_surface_destroy;
+        wl_signal_add(&surface->events.destroy, &tp->surface_destroy);
+    }
+
+    wl_list_insert(&touch_points, &tp->link);
+    return tp;
+}
+
+void cursor_handle_touch_up(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_touch_up_event* ev = data;
+    struct TouchPoint* tp = touch_point_find(ev->touch_id);
+    if (tp == NULL) return;
+
+    const bool was_deco = (tp->surface == NULL);
+    touch_point_free(tp);
+
+    if (was_deco) {
+        deco_handle_release(BTN_LEFT);
+        if (interactive.active) {
+            cursor_end_interactive();
+            cursor_update_focus();
+        }
+
+        return;
+    }
+
+    wlr_seat_touch_notify_up(server.seat, ev->time_msec, ev->touch_id);
+}
+
+void cursor_handle_touch_cancel(struct wl_listener* l, void* data) {
+    (void)l;
+    (void)data;
+
+    if (interactive.active) {
+        cursor_end_interactive();
+        cursor_update_focus();
+    }
+
+    struct wlr_seat_client* sc;
+    wl_list_for_each(sc, &server.seat->clients, link) {
+        wlr_seat_touch_notify_cancel(server.seat, sc);
+    }
+
+    struct TouchPoint *tp, *tmp;
+    wl_list_for_each_safe(tp, tmp, &touch_points, link) {
+        touch_point_free(tp);
+    }
+}
+
+void cursor_handle_touch_down(struct wl_listener* l, void* data) {
+    (void)l;
+
+    if (server.overview_active || server.locked) return;
+
+    struct wlr_touch_down_event* ev = data;
+
+    server_notify_activity();
+    cursor_wake();
+
+    double lx, ly;
+    wlr_cursor_absolute_to_layout_coords(
+        server.cursor, &ev->touch->base, ev->x, ev->y, &lx, &ly
+    );
+
+    wlr_cursor_warp(server.cursor, NULL, lx, ly);
+
+    if (deco_handle_press(lx, ly, BTN_LEFT, 0)) {
+        touch_point_begin(ev->touch_id, NULL, lx, ly, 0, 0);
+        return;
+    }
+
+    struct wlr_surface* surface = NULL;
+    double sx = 0, sy = 0;
+    struct Window* window = window_at(lx, ly, &surface, &sx, &sy);
+    if (surface == NULL) return;
+
+    if (window != NULL && window->mapped && !window->space_hidden) {
+        seat_focus(window);
+        if (!layouts_is_tiled(wm.layout)) window_raise(window);
+    }
+
+    if (touch_point_begin(ev->touch_id, surface, lx, ly, sx, sy) == NULL) {
+        return;
+    }
+
+    wlr_seat_touch_notify_down(
+        server.seat, surface, ev->time_msec, ev->touch_id, sx, sy
+    );
+}
+
+void cursor_handle_touch_motion(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_touch_motion_event* ev = data;
+    struct TouchPoint* tp = touch_point_find(ev->touch_id);
+    if (tp == NULL) return;
+
+    double lx, ly;
+    wlr_cursor_absolute_to_layout_coords(
+        server.cursor, &ev->touch->base, ev->x, ev->y, &lx, &ly
+    );
+
+    if (tp->surface == NULL) {
+        // Compositor-owned gesture (decoration drag/move).
+        if (interactive.active) {
+            interactive_apply(lx, ly);
+        } else {
+            deco_handle_motion(lx);
+        }
+
+        return;
+    }
+
+    double sx = tp->start_sx + (lx - tp->start_lx);
+    double sy = tp->start_sy + (ly - tp->start_ly);
+
+    wlr_seat_touch_notify_motion(
+        server.seat, ev->time_msec, ev->touch_id, sx, sy
+    );
+}
+
+void cursor_handle_touch_frame(struct wl_listener* l, void* data) {
+    (void)l;
+    (void)data;
+
+    wlr_seat_touch_notify_frame(server.seat);
 }
 
 void cursor_handle_motion(struct wl_listener* l, void* data) {

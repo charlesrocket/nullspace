@@ -393,6 +393,27 @@ int server_init(struct wl_display* display) {
     server.cursor_hold_end.notify = cursor_handle_hold_end;
     wl_signal_add(&server.cursor->events.hold_end, &server.cursor_hold_end);
 
+    server.cursor_touch_down.notify = cursor_handle_touch_down;
+    wl_signal_add(&server.cursor->events.touch_down, &server.cursor_touch_down);
+
+    server.cursor_touch_up.notify = cursor_handle_touch_up;
+    wl_signal_add(&server.cursor->events.touch_up, &server.cursor_touch_up);
+
+    server.cursor_touch_motion.notify = cursor_handle_touch_motion;
+    wl_signal_add(
+        &server.cursor->events.touch_motion, &server.cursor_touch_motion
+    );
+
+    server.cursor_touch_frame.notify = cursor_handle_touch_frame;
+    wl_signal_add(
+        &server.cursor->events.touch_frame, &server.cursor_touch_frame
+    );
+
+    server.cursor_touch_cancel.notify = cursor_handle_touch_cancel;
+    wl_signal_add(
+        &server.cursor->events.touch_cancel, &server.cursor_touch_cancel
+    );
+
     server.request_set_selection.notify = handle_request_set_selection;
     wl_signal_add(
         &server.seat->events.request_set_selection,
@@ -527,6 +548,11 @@ void server_detach_listeners(void) {
     wl_list_remove(&server.cursor_button.link);
     wl_list_remove(&server.cursor_axis.link);
     wl_list_remove(&server.cursor_frame.link);
+    wl_list_remove(&server.cursor_touch_down.link);
+    wl_list_remove(&server.cursor_touch_up.link);
+    wl_list_remove(&server.cursor_touch_motion.link);
+    wl_list_remove(&server.cursor_touch_frame.link);
+    wl_list_remove(&server.cursor_touch_cancel.link);
 
     wl_list_remove(&server.request_set_selection.link);
     wl_list_remove(&server.request_set_primary_selection.link);

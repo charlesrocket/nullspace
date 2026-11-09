@@ -16,6 +16,11 @@ void cursor_begin_interactive(
     struct Window* window, enum SeatOp op, uint32_t edges
 );
 
+void cursor_handle_touch_frame(struct wl_listener* l, void* data);
+void cursor_handle_touch_down(struct wl_listener* l, void* data);
+void cursor_handle_touch_up(struct wl_listener* l, void* data);
+void cursor_handle_touch_cancel(struct wl_listener* l, void* data);
+void cursor_handle_touch_motion(struct wl_listener* l, void* data);
 void cursor_handle_motion(struct wl_listener* l, void* data);
 void cursor_handle_motion_absolute(struct wl_listener* l, void* data);
 void cursor_handle_button(struct wl_listener* l, void* data);

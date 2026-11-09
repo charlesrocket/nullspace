@@ -94,7 +94,8 @@ struct Server {
         request_start_drag, request_set_cursor, start_drag, cursor_swipe_begin,
         cursor_swipe_update, cursor_swipe_end, cursor_pinch_begin,
         cursor_pinch_update, cursor_pinch_end, cursor_hold_begin,
-        cursor_hold_end;
+        cursor_hold_end, cursor_touch_down, cursor_touch_up,
+        cursor_touch_motion, cursor_touch_frame, cursor_touch_cancel;
 
     struct wl_list keyboards, outputs;
 

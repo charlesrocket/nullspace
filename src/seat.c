@@ -116,6 +116,21 @@ struct DeviceEntry {
 
 static struct wl_list input_devices;
 
+static void seat_update_capabilities(void) {
+    uint32_t caps = WL_SEAT_CAPABILITY_POINTER;
+    if (!wl_list_empty(&server.keyboards)) caps |= WL_SEAT_CAPABILITY_KEYBOARD;
+
+    struct DeviceEntry* e;
+    wl_list_for_each(e, &input_devices, link) {
+        if (e->device->type == WLR_INPUT_DEVICE_TOUCH) {
+            caps |= WL_SEAT_CAPABILITY_TOUCH;
+            break;
+        }
+    }
+
+    wlr_seat_set_capabilities(server.seat, caps);
+}
+
 static void device_entry_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
@@ -123,6 +138,8 @@ static void device_entry_destroy(struct wl_listener* l, void* data) {
     wl_list_remove(&e->destroy.link);
     wl_list_remove(&e->link);
     free(e);
+
+    seat_update_capabilities();
 }
 
 void seat_foreach_input_device(
@@ -645,15 +662,6 @@ static void keyboard_handle_destroy(struct wl_listener* l, void* data) {
 }
 
 void seat_handle_new_input(struct wlr_input_device* device) {
-    struct DeviceEntry* entry = calloc(1, sizeof(*entry));
-    if (entry == NULL) return;
-
-    entry->device = device;
-    entry->destroy.notify = device_entry_destroy;
-
-    wl_signal_add(&device->events.destroy, &entry->destroy);
-    wl_list_insert(&input_devices, &entry->link);
-
     switch (device->type) {
         case WLR_INPUT_DEVICE_KEYBOARD:
             {
@@ -686,9 +694,6 @@ void seat_handle_new_input(struct wlr_input_device* device) {
             break;
 
         case WLR_INPUT_DEVICE_TOUCH:
-            wlr_cursor_attach_input_device(server.cursor, device);
-            break;
-
         case WLR_INPUT_DEVICE_TABLET:
             wlr_cursor_attach_input_device(server.cursor, device);
             break;
@@ -696,9 +701,15 @@ void seat_handle_new_input(struct wlr_input_device* device) {
         default: break;
     }
 
-    uint32_t caps = WL_SEAT_CAPABILITY_POINTER;
-    if (!wl_list_empty(&server.keyboards)) caps |= WL_SEAT_CAPABILITY_KEYBOARD;
-    wlr_seat_set_capabilities(server.seat, caps);
+    struct DeviceEntry* entry = calloc(1, sizeof(*entry));
+    if (entry == NULL) return;
+
+    entry->device = device;
+    entry->destroy.notify = device_entry_destroy;
+    wl_signal_add(&device->events.destroy, &entry->destroy);
+    wl_list_insert(&input_devices, &entry->link);
+
+    seat_update_capabilities();
 }
 
 void seat_update_decorations(const struct Window* focused) {
