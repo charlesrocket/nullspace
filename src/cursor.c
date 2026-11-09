@@ -7,6 +7,7 @@
 #include "input.h"
 #include "layout/layout.h"
 #include "manager.h"
+#include "output.h"
 #include "overview.h"
 #include "seat.h"
 #include "server.h"
@@ -30,14 +31,18 @@
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_pointer.h>
 #include <wlr/types/wlr_pointer_constraints_v1.h>
+#include <wlr/types/wlr_pointer_gestures_v1.h>
 #include <wlr/types/wlr_relative_pointer_v1.h>
 #include <wlr/types/wlr_scene.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/util/edges.h>
 #include <wlr/util/region.h>
 
-#define LOG_TOPIC    "cursor"
-#define EDGE_GRAB_PX 6
+#define LOG_TOPIC           "cursor"
+#define EDGE_GRAB_PX        6
+#define SPACE_SWIPE_FINGERS 4u
+#define SPACE_SWIPE_STEP    200.0
+#define SPACE_SCROLL_STEP   40.0
 
 struct InteractiveOp {
     struct Window* window;
@@ -72,6 +77,11 @@ static uint64_t last_activity_ms;
 static struct wl_event_source* hide_timer;
 static bool hide_timer_armed, hide_idle_on, hide_typing_on, cursor_hidden,
     edge_cursor_active;
+
+static bool swipe_forwarded; // goes to the client
+static bool swipe_space;     // drives the space switching
+static bool space_scroll_overview;
+static double swipe_accum, space_scroll_accum, space_scroll_h_accum;
 
 bool cursor_is_hidden(void) { return cursor_hidden; }
 
@@ -710,6 +720,15 @@ static void cursor_wake(void) {
     if (cursor_hidden) show_cursor();
 }
 
+static void cursor_switch_space(int dir) {
+    struct Output* out = output_focused();
+    if (out == NULL) return;
+
+    int next = out->current_space + dir;
+    if (next < 0 || next >= SPACE_COUNT) return; // clamp
+    wm_switch_space_on(out, next);
+}
+
 void cursor_handle_motion(struct wl_listener* l, void* data) {
     (void)l;
 
@@ -973,9 +992,176 @@ void cursor_handle_axis(struct wl_listener* l, void* data) {
 
     struct wlr_pointer_axis_event* ev = data;
 
+    // Stale accumulators
+    if (server.overview_active != space_scroll_overview) {
+        space_scroll_overview = server.overview_active;
+        space_scroll_accum = space_scroll_h_accum = 0.0;
+    }
+
+    if (server.overview_active && !server.locked) {
+        if (ev->orientation == WL_POINTER_AXIS_VERTICAL_SCROLL) {
+            space_scroll_accum += ev->delta;
+            if (space_scroll_accum >= SPACE_SCROLL_STEP) {
+                overview_navigate(0, +1);
+                space_scroll_accum = 0.0;
+            } else if (space_scroll_accum <= -SPACE_SCROLL_STEP) {
+                overview_navigate(0, -1);
+                space_scroll_accum = 0.0;
+            }
+
+            return;
+        }
+
+        if (ev->orientation == WL_POINTER_AXIS_HORIZONTAL_SCROLL) {
+            space_scroll_h_accum += ev->delta;
+            if (space_scroll_h_accum >= SPACE_SCROLL_STEP) {
+                overview_navigate(+1, 0);
+                space_scroll_h_accum = 0.0;
+            } else if (space_scroll_h_accum <= -SPACE_SCROLL_STEP) {
+                overview_navigate(-1, 0);
+                space_scroll_h_accum = 0.0;
+            }
+
+            return;
+        }
+    }
+
     wlr_seat_pointer_notify_axis(
         server.seat, ev->time_msec, ev->orientation, ev->delta,
         ev->delta_discrete, ev->source, ev->relative_direction
+    );
+}
+
+void cursor_handle_swipe_begin(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_pointer_swipe_begin_event* ev = data;
+
+    swipe_forwarded = false;
+    swipe_space = false;
+    swipe_accum = 0.0;
+
+    if (server.locked || interactive.active || server.overview_active) return;
+
+    if (ev->fingers == SPACE_SWIPE_FINGERS
+        && !wlr_seat_pointer_has_grab(server.seat)) {
+        swipe_space = true;
+        return;
+    }
+
+    if (server.pointer_gestures != NULL) {
+        wlr_pointer_gestures_v1_send_swipe_begin(
+            server.pointer_gestures, server.seat, ev->time_msec, ev->fingers
+        );
+
+        swipe_forwarded = true;
+    }
+}
+
+void cursor_handle_swipe_update(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_pointer_swipe_update_event* ev = data;
+
+    if (swipe_forwarded) {
+        wlr_pointer_gestures_v1_send_swipe_update(
+            server.pointer_gestures, server.seat, ev->time_msec, ev->dx, ev->dy
+        );
+
+        return;
+    }
+
+    if (!swipe_space) return;
+
+    swipe_accum += ev->dx;
+    if (swipe_accum >= SPACE_SWIPE_STEP) {
+        cursor_switch_space(+1);
+        swipe_accum -= SPACE_SWIPE_STEP;
+    } else if (swipe_accum <= -SPACE_SWIPE_STEP) {
+        cursor_switch_space(-1);
+        swipe_accum += SPACE_SWIPE_STEP;
+    }
+}
+
+void cursor_handle_swipe_end(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_pointer_swipe_end_event* ev = data;
+
+    if (swipe_forwarded && server.pointer_gestures != NULL) {
+        wlr_pointer_gestures_v1_send_swipe_end(
+            server.pointer_gestures, server.seat, ev->time_msec, ev->cancelled
+        );
+    }
+
+    swipe_forwarded = false;
+    swipe_space = false;
+    swipe_accum = 0.0;
+}
+
+void cursor_handle_pinch_begin(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_pointer_pinch_begin_event* ev = data;
+    if (server.pointer_gestures == NULL || server.overview_active
+        || server.locked)
+        return;
+
+    wlr_pointer_gestures_v1_send_pinch_begin(
+        server.pointer_gestures, server.seat, ev->time_msec, ev->fingers
+    );
+}
+
+void cursor_handle_pinch_update(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_pointer_pinch_update_event* ev = data;
+    if (server.pointer_gestures == NULL || server.overview_active
+        || server.locked)
+        return;
+
+    wlr_pointer_gestures_v1_send_pinch_update(
+        server.pointer_gestures, server.seat, ev->time_msec, ev->dx, ev->dy,
+        ev->scale, ev->rotation
+    );
+}
+
+void cursor_handle_pinch_end(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_pointer_pinch_end_event* ev = data;
+    if (server.pointer_gestures == NULL || server.overview_active
+        || server.locked)
+        return;
+
+    wlr_pointer_gestures_v1_send_pinch_end(
+        server.pointer_gestures, server.seat, ev->time_msec, ev->cancelled
+    );
+}
+
+void cursor_handle_hold_begin(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_pointer_hold_begin_event* ev = data;
+    if (server.pointer_gestures == NULL || server.overview_active
+        || server.locked)
+        return;
+
+    wlr_pointer_gestures_v1_send_hold_begin(
+        server.pointer_gestures, server.seat, ev->time_msec, ev->fingers
+    );
+}
+
+void cursor_handle_hold_end(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_pointer_hold_end_event* ev = data;
+    if (server.pointer_gestures == NULL || server.overview_active
+        || server.locked)
+        return;
+
+    wlr_pointer_gestures_v1_send_hold_end(
+        server.pointer_gestures, server.seat, ev->time_msec, ev->cancelled
     );
 }
 

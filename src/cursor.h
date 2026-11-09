@@ -21,6 +21,15 @@ void cursor_handle_motion_absolute(struct wl_listener* l, void* data);
 void cursor_handle_button(struct wl_listener* l, void* data);
 void cursor_handle_axis(struct wl_listener* l, void* data);
 void cursor_handle_frame(struct wl_listener* l, void* data);
+void cursor_handle_swipe_begin(struct wl_listener* l, void* data);
+void cursor_handle_swipe_update(struct wl_listener* l, void* data);
+void cursor_handle_swipe_end(struct wl_listener* l, void* data);
+void cursor_handle_pinch_begin(struct wl_listener* l, void* data);
+void cursor_handle_pinch_update(struct wl_listener* l, void* data);
+void cursor_handle_pinch_end(struct wl_listener* l, void* data);
+void cursor_handle_hold_begin(struct wl_listener* l, void* data);
+void cursor_handle_hold_end(struct wl_listener* l, void* data);
+
 void cursor_window_destroyed(struct Window* window);
 void cursor_refresh_focus(void);
 void cursor_cancel_drag_state(void);

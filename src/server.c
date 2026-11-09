@@ -361,6 +361,38 @@ int server_init(struct wl_display* display) {
     server.cursor_frame.notify = cursor_handle_frame;
     wl_signal_add(&server.cursor->events.frame, &server.cursor_frame);
 
+    server.cursor_swipe_begin.notify = cursor_handle_swipe_begin;
+    wl_signal_add(
+        &server.cursor->events.swipe_begin, &server.cursor_swipe_begin
+    );
+
+    server.cursor_swipe_update.notify = cursor_handle_swipe_update;
+    wl_signal_add(
+        &server.cursor->events.swipe_update, &server.cursor_swipe_update
+    );
+
+    server.cursor_swipe_end.notify = cursor_handle_swipe_end;
+    wl_signal_add(&server.cursor->events.swipe_end, &server.cursor_swipe_end);
+
+    server.cursor_pinch_begin.notify = cursor_handle_pinch_begin;
+    wl_signal_add(
+        &server.cursor->events.pinch_begin, &server.cursor_pinch_begin
+    );
+
+    server.cursor_pinch_update.notify = cursor_handle_pinch_update;
+    wl_signal_add(
+        &server.cursor->events.pinch_update, &server.cursor_pinch_update
+    );
+
+    server.cursor_pinch_end.notify = cursor_handle_pinch_end;
+    wl_signal_add(&server.cursor->events.pinch_end, &server.cursor_pinch_end);
+
+    server.cursor_hold_begin.notify = cursor_handle_hold_begin;
+    wl_signal_add(&server.cursor->events.hold_begin, &server.cursor_hold_begin);
+
+    server.cursor_hold_end.notify = cursor_handle_hold_end;
+    wl_signal_add(&server.cursor->events.hold_end, &server.cursor_hold_end);
+
     server.request_set_selection.notify = handle_request_set_selection;
     wl_signal_add(
         &server.seat->events.request_set_selection,
@@ -421,6 +453,11 @@ int server_init(struct wl_display* display) {
         &server.request_set_cursor_shape
     );
 
+    server.pointer_gestures = wlr_pointer_gestures_v1_create(display);
+    if (server.pointer_gestures == NULL) {
+        log_warn("Pointer gestures unavailable");
+    }
+
     server.content_type_manager =
         wlr_content_type_manager_v1_create(display, 1);
     if (server.content_type_manager == NULL) {
@@ -447,7 +484,7 @@ int server_init(struct wl_display* display) {
     );
 
     seat_init();
-    if (!icon_manager_init(display)) log_warn("toplevel-icon unavailable");
+    if (!icon_manager_init(display)) log_warn("Toplevel icon unavailable");
 
     server.xdg_activation = wlr_xdg_activation_v1_create(display);
     if (server.xdg_activation == NULL) {
@@ -477,6 +514,14 @@ void server_detach_listeners(void) {
     wl_list_remove(&server.new_xdg_popup.link);
     wl_list_remove(&server.new_xdg_decoration.link);
 
+    wl_list_remove(&server.cursor_swipe_begin.link);
+    wl_list_remove(&server.cursor_swipe_update.link);
+    wl_list_remove(&server.cursor_swipe_end.link);
+    wl_list_remove(&server.cursor_pinch_begin.link);
+    wl_list_remove(&server.cursor_pinch_update.link);
+    wl_list_remove(&server.cursor_pinch_end.link);
+    wl_list_remove(&server.cursor_hold_begin.link);
+    wl_list_remove(&server.cursor_hold_end.link);
     wl_list_remove(&server.cursor_motion.link);
     wl_list_remove(&server.cursor_motion_absolute.link);
     wl_list_remove(&server.cursor_button.link);

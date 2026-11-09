@@ -10,6 +10,7 @@ struct Window;
 void overview_enter(void);
 void overview_exit(void);
 void overview_layout(void);
+void overview_navigate(int dx, int dy);
 void overview_window_destroy(struct Window* window);
 
 bool overview_handle_button(struct wlr_pointer_button_event* ev);

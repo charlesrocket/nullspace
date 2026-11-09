@@ -698,6 +698,11 @@ static void ov_move_window(int dx, int dy) {
     overview_layout();
 }
 
+void overview_navigate(int dx, int dy) {
+    if (!server.overview_active) return;
+    ov_navigate(dx, dy);
+}
+
 bool overview_handle_key(
     uint32_t keycode, const xkb_keysym_t* syms, int nsyms, uint32_t mods
 ) {

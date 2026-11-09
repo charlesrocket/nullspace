@@ -15,6 +15,7 @@
 #include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_layer_shell_v1.h>
 #include <wlr/types/wlr_output_layout.h>
+#include <wlr/types/wlr_pointer_gestures_v1.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/types/wlr_viewporter.h>
 #include <wlr/types/wlr_xcursor_manager.h>
@@ -66,18 +67,20 @@ struct Server {
 
     struct wlr_seat* seat;
 
-    struct wlr_cursor* cursor;
-    struct wlr_xcursor_manager* cursor_mgr;
+    struct wlr_content_type_manager_v1* content_type_manager;
+
+    struct wlr_output_power_manager_v1* output_power_manager;
+    struct wlr_idle_inhibit_manager_v1* idle_inhibit_manager;
+    struct wlr_idle_notifier_v1* idle_notifier;
     struct wlr_layer_shell_v1* layer_shell;
     struct wlr_ext_foreign_toplevel_list_v1* foreign_toplevel_list;
     struct wlr_foreign_toplevel_manager_v1* foreign_toplevel_manager;
-    struct wlr_cursor_shape_manager_v1* cursor_shape_manager;
-    struct wlr_output_power_manager_v1* output_power_manager;
-    struct wlr_content_type_manager_v1* content_type_manager;
     struct wlr_relative_pointer_manager_v1* relative_pointer_manager;
     struct wlr_pointer_constraints_v1* pointer_constraints;
-    struct wlr_idle_notifier_v1* idle_notifier;
-    struct wlr_idle_inhibit_manager_v1* idle_inhibit_manager;
+    struct wlr_pointer_gestures_v1* pointer_gestures;
+    struct wlr_cursor_shape_manager_v1* cursor_shape_manager;
+    struct wlr_xcursor_manager* cursor_mgr;
+    struct wlr_cursor* cursor;
 
 #ifdef XWAYLAND
     struct wlr_xwayland* xwayland;
@@ -88,7 +91,10 @@ struct Server {
         new_idle_inhibitor, new_xdg_toplevel, new_xdg_popup, new_layer_surface,
         new_xdg_decoration, request_set_selection,
         request_set_primary_selection, request_set_cursor_shape,
-        request_start_drag, request_set_cursor, start_drag;
+        request_start_drag, request_set_cursor, start_drag, cursor_swipe_begin,
+        cursor_swipe_update, cursor_swipe_end, cursor_pinch_begin,
+        cursor_pinch_update, cursor_pinch_end, cursor_hold_begin,
+        cursor_hold_end;
 
     struct wl_list keyboards, outputs;
 
