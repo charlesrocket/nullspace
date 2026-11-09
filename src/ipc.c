@@ -1,10 +1,12 @@
 #include "ipc.h"
 
 #include "background.h"
+#include "config.h"
 #include "decoration.h"
 #include "help.h"
 #include "icon.h"
 #include "input.h"
+#include "layers.h"
 #include "layout/layout.h"
 #include "log.h"
 #include "manager.h"
@@ -21,6 +23,7 @@
 #include <nullspace/layouts.h>
 #include <strings.h>
 #include <wayland-protocols/content-type-v1-enum.h>
+#include <wlr-layer-shell-unstable-v1-protocol.h>
 #include <wlr/types/wlr_content_type_v1.h>
 #include <wlr/types/wlr_ext_foreign_toplevel_list_v1.h>
 #ifdef XWAYLAND
@@ -749,13 +752,163 @@ static void cmd_inspect_windows(struct IpcClient* c) {
     line_send(c);
 }
 
+static const char* input_device_type_name(enum wlr_input_device_type t) {
+    switch (t) {
+        case WLR_INPUT_DEVICE_KEYBOARD: return "keyboard";
+        case WLR_INPUT_DEVICE_POINTER: return "pointer";
+        case WLR_INPUT_DEVICE_TOUCH: return "touch";
+        case WLR_INPUT_DEVICE_TABLET: return "tablet";
+        case WLR_INPUT_DEVICE_TABLET_PAD: return "tablet_pad";
+        case WLR_INPUT_DEVICE_SWITCH: return "switch";
+    }
+
+    return "unknown";
+}
+
+struct DeviceInspectCtx {
+    struct IpcClient* client;
+    size_t count;
+};
+
+static void inspect_device(struct wlr_input_device* device, void* data) {
+    struct DeviceInspectCtx* ctx = data;
+
+    line_printf("DEVICE %s", input_device_type_name(device->type));
+    line_lit(" name ");
+    line_quoted(device->name);
+    line_send(ctx->client);
+
+    ctx->count++;
+}
+
+static void cmd_inspect_devices(struct IpcClient* c) {
+    struct DeviceInspectCtx ctx = {.client = c, .count = 0};
+    seat_foreach_input_device(inspect_device, &ctx);
+
+    line_printf("OK %zu", ctx.count);
+    line_send(c);
+}
+
+static void inspect_display(struct IpcClient* c, const struct Output* o) {
+    const struct wlr_output* wlr = o->wlr_output;
+
+    line_lit("DISPLAY ");
+    line_quoted(wlr->name);
+    line_lit(" make ");
+    line_quoted(wlr->make);
+    line_lit(" model ");
+    line_quoted(wlr->model);
+    line_lit(" serial ");
+    line_quoted(wlr->serial);
+    line_printf(" x %d y %d", o->pos_x, o->pos_y);
+    line_printf(" width %d height %d", o->width, o->height);
+    line_printf(
+        " phys_width %d phys_height %d", wlr->phys_width, wlr->phys_height
+    );
+
+    line_printf(" scale %g", (double)wlr->scale);
+    line_printf(" refresh %d", wlr->refresh);
+    line_printf(" enabled %d space %d", wlr->enabled ? 1 : 0, o->current_space);
+    line_printf(" area_x %d area_y %d", o->area_x, o->area_y);
+    line_printf(" area_width %d area_height %d", o->area_width, o->area_height);
+    line_send(c);
+}
+
+static void cmd_inspect_displays(struct IpcClient* c) {
+    size_t count = 0;
+    struct Output* o;
+    wl_list_for_each(o, &server.outputs, link) {
+        if (o->removed) continue;
+        inspect_display(c, o);
+        count++;
+    }
+
+    line_printf("OK %zu", count);
+    line_send(c);
+}
+
+static const char* layer_shell_layer_name(enum zwlr_layer_shell_v1_layer layer
+) {
+    switch (layer) {
+        case ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND: return "background";
+        case ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM: return "bottom";
+        case ZWLR_LAYER_SHELL_V1_LAYER_TOP: return "top";
+        case ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY: return "overlay";
+    }
+
+    return "unknown";
+}
+
+static const char*
+layer_keyboard_name(enum zwlr_layer_surface_v1_keyboard_interactivity kbi) {
+    switch (kbi) {
+        case ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_NONE: return "none";
+        case ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE:
+            return "exclusive";
+        case ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND:
+            return "on_demand";
+    }
+
+    return "unknown";
+}
+
+static void inspect_layer(struct IpcClient* c, const struct LayerSurface* ls) {
+    const struct wlr_layer_surface_v1* surf = ls->layer_surface;
+    const char* output = (ls->output != NULL && ls->output->wlr_output != NULL)
+                           ? ls->output->wlr_output->name
+                           : NULL;
+
+    line_lit("LAYER ");
+    line_quoted(surf->namespace);
+    line_printf(" layer %s", layer_shell_layer_name(surf->current.layer));
+    line_lit(" output ");
+    line_quoted(output);
+    line_printf(" mapped %d", ls->mapped ? 1 : 0);
+
+    int x = 0, y = 0;
+    if (ls->mapped && ls->scene_tree != NULL) {
+        wlr_scene_node_coords(&ls->scene_tree->node, &x, &y);
+    }
+
+    line_printf(" x %d y %d", x, y);
+    line_printf(" width %u height %u", ls->last_w, ls->last_h);
+    line_printf(" exclusive_zone %d", surf->current.exclusive_zone);
+    line_printf(
+        " keyboard %s", layer_keyboard_name(surf->current.keyboard_interactive)
+    );
+
+    line_send(c);
+}
+
+static void cmd_inspect_layers(struct IpcClient* c) {
+    size_t count = 0;
+    struct LayerSurface* ls;
+    wl_list_for_each(ls, &wm.layer_surfaces, link) {
+        inspect_layer(c, ls);
+        count++;
+    }
+
+    line_printf("OK %zu", count);
+    line_send(c);
+}
+
 static void cmd_inspect(struct IpcClient* c, char* args) {
-    if (args != NULL && strcasecmp(args, "WINDOWS") == 0) {
-        cmd_inspect_windows(c);
+    if (args == NULL || *args == '\0') {
+        respond(c, "topic is missing (windows|devices|displays|layers)");
         return;
     }
 
-    respond(c, "unknown topic (windows)");
+    if (strcasecmp(args, "WINDOWS") == 0) {
+        cmd_inspect_windows(c);
+    } else if (strcasecmp(args, "DEVICES") == 0) {
+        cmd_inspect_devices(c);
+    } else if (strcasecmp(args, "DISPLAYS") == 0) {
+        cmd_inspect_displays(c);
+    } else if (strcasecmp(args, "LAYERS") == 0) {
+        cmd_inspect_layers(c);
+    } else {
+        respond(c, "unknown topic (windows|devices|displays|layers)");
+    }
 }
 
 #define DEFINE_DECO_COLOR(keyname)                                             \
