@@ -421,6 +421,12 @@ int server_init(struct wl_display* display) {
         &server.request_set_cursor_shape
     );
 
+    server.content_type_manager =
+        wlr_content_type_manager_v1_create(display, 1);
+    if (server.content_type_manager == NULL) {
+        log_warn("Content type unavailable");
+    }
+
     wlr_text_input_manager_v3_create(display);
 
     if (!session_lock_init(display)) log_warn("Session lock unavailable");

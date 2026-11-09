@@ -1,5 +1,6 @@
 #include "ipc.h"
 
+#include "background.h"
 #include "decoration.h"
 #include "help.h"
 #include "icon.h"
@@ -18,6 +19,9 @@
 #include <ns-util.h>
 #include <nullspace/keys.h>
 #include <nullspace/layouts.h>
+#include <strings.h>
+#include <wayland-protocols/content-type-v1-enum.h>
+#include <wlr/types/wlr_content_type_v1.h>
 #include <wlr/types/wlr_ext_foreign_toplevel_list_v1.h>
 #ifdef XWAYLAND
 #include <wlr/xwayland.h>
@@ -648,6 +652,16 @@ static int window_pid(const struct Window* w) {
     return (int)pid;
 }
 
+static const char* content_type_name(enum wp_content_type_v1_type t) {
+    switch (t) {
+        case WP_CONTENT_TYPE_V1_TYPE_PHOTO: return "photo";
+        case WP_CONTENT_TYPE_V1_TYPE_VIDEO: return "video";
+        case WP_CONTENT_TYPE_V1_TYPE_GAME: return "game";
+        case WP_CONTENT_TYPE_V1_TYPE_NONE:
+        default: return "none";
+    }
+}
+
 static void
 inspect_window(struct IpcClient* c, const struct Window* w, bool focused) {
     const char* monitor = NULL;
@@ -688,6 +702,33 @@ inspect_window(struct IpcClient* c, const struct Window* w, bool focused) {
 #else
     line_lit(" xwayland 0");
 #endif
+
+    struct wlr_surface* surface = window_wlr_surface(w);
+
+    enum wp_content_type_v1_type ct = WP_CONTENT_TYPE_V1_TYPE_NONE;
+    if (server.content_type_manager != NULL && surface != NULL) {
+        ct = wlr_surface_get_content_type_v1(
+            server.content_type_manager, surface
+        );
+    }
+
+    line_printf(" content_type %s", content_type_name(ct));
+    line_printf(" blur_rule %d", w->blur_enabled ? 1 : 0);
+    line_printf(
+        " fx_surface %d", background_effect_surface_registered(surface)
+    );
+
+    line_printf(" fx_blur %d", background_effect_surface_active(surface));
+    line_printf(
+        " window_blur %d",
+        (w->decoration != NULL && w->decoration->blur_win != NULL) ? 1 : 0
+    );
+
+    line_printf(
+        " shadow %d",
+        (w->decoration != NULL && w->decoration->shadow != NULL) ? 1 : 0
+    );
+
     line_send(c);
 }
 

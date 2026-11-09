@@ -10,10 +10,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <wayland-protocols/content-type-v1-enum.h>
 #include <wayland-server-core.h>
 #include <wayland-server-protocol.h>
 #include <wayland-util.h>
 #include <wlr/types/wlr_compositor.h>
+#include <wlr/types/wlr_content_type_v1.h>
 #include <wlr/types/wlr_scene.h>
 
 #define LOG_TOPIC "fx"
@@ -92,6 +94,17 @@ static void handle_blur_tree_destroy(struct wl_listener* l, void* data) {
     struct BgEffectSurface* bg = wl_container_of(l, bg, blur_tree_destroy);
     wl_list_remove(&bg->blur_tree_destroy.link);
     bg->blur_tree = NULL;
+}
+
+static bool surface_is_media(struct wlr_surface* surface) {
+    if (server.content_type_manager == NULL) return false;
+
+    const enum wp_content_type_v1_type t =
+        wlr_surface_get_content_type_v1(server.content_type_manager, surface);
+
+    return t == WP_CONTENT_TYPE_V1_TYPE_VIDEO
+        || t == WP_CONTENT_TYPE_V1_TYPE_PHOTO
+        || t == WP_CONTENT_TYPE_V1_TYPE_GAME;
 }
 
 static struct wlr_scene_tree* ensure_blur_tree(struct BgEffectSurface* bg) {
@@ -181,6 +194,15 @@ static bool background_compute_effective_region(
 
 static void blur_nodes_update(struct BgEffectSurface* bg) {
     if (bg->surface == NULL) return;
+
+    if (surface_is_media(bg->surface)) {
+        if (!wl_list_empty(&bg->rects)) {
+            log_debug("Removing visuals (media surface)");
+        }
+
+        clear_rects(bg);
+        return;
+    }
 
     int sw = bg->surface->current.width;
     int sh = bg->surface->current.height;
@@ -322,6 +344,7 @@ static const struct ext_background_effect_surface_v1_interface surface_impl = {
 static void
 manager_handle_destroy(struct wl_client* client, struct wl_resource* resource) {
     (void)client;
+
     wl_resource_destroy(resource);
 }
 
@@ -389,6 +412,7 @@ static void manager_bind(
     struct wl_client* client, void* data, uint32_t version, uint32_t id
 ) {
     (void)data;
+
     if (version > 1) version = 1;
 
     struct wl_resource* resource = wl_resource_create(
@@ -404,6 +428,28 @@ static void manager_bind(
     ext_background_effect_manager_v1_send_capabilities(
         resource, EXT_BACKGROUND_EFFECT_MANAGER_V1_CAPABILITY_BLUR
     );
+}
+
+bool background_effect_surface_registered(struct wlr_surface* surface) {
+    if (surface == NULL) return false;
+
+    struct BgEffectSurface* bg;
+    wl_list_for_each(bg, &bg_effect_surfaces, link) {
+        if (bg->surface == surface) return true;
+    }
+
+    return false;
+}
+
+bool background_effect_surface_active(struct wlr_surface* surface) {
+    if (surface == NULL) return false;
+
+    struct BgEffectSurface* bg;
+    wl_list_for_each(bg, &bg_effect_surfaces, link) {
+        if (bg->surface == surface) return !wl_list_empty(&bg->rects);
+    }
+
+    return false;
 }
 
 bool background_effect_init(struct wl_display* display) {

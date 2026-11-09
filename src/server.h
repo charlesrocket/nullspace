@@ -73,6 +73,7 @@ struct Server {
     struct wlr_foreign_toplevel_manager_v1* foreign_toplevel_manager;
     struct wlr_cursor_shape_manager_v1* cursor_shape_manager;
     struct wlr_output_power_manager_v1* output_power_manager;
+    struct wlr_content_type_manager_v1* content_type_manager;
     struct wlr_relative_pointer_manager_v1* relative_pointer_manager;
     struct wlr_pointer_constraints_v1* pointer_constraints;
     struct wlr_idle_notifier_v1* idle_notifier;
