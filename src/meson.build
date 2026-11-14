@@ -1,5 +1,6 @@
 src_files = files(
   'manager.c',
+  'security.c',
   'config.c',
   'log.c',
   'layers.c',

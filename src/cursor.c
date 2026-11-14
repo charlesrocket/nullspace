@@ -10,6 +10,7 @@
 #include "output.h"
 #include "overview.h"
 #include "seat.h"
+#include "security.h"
 #include "server.h"
 #include "session.h"
 #include "window.h"
@@ -21,7 +22,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <sys/_clock_id.h>
 #include <time.h>
 #include <wayland-server-core.h>
 #include <wayland-server-protocol.h>
@@ -275,9 +275,22 @@ static void handle_constraint_set_region(struct wl_listener* l, void* data) {
 static void warp_to_constraint_cursor_hint(void) {
     if (active_constraint == NULL) return;
     if (!active_constraint->current.cursor_hint.enabled) return;
+    if (server.locked) return;
+
+    if (server.seat->pointer_state.focused_surface
+        != active_constraint->surface) {
+        return;
+    }
 
     double sx = active_constraint->current.cursor_hint.x;
     double sy = active_constraint->current.cursor_hint.y;
+
+    int32_t sw = active_constraint->surface->current.width;
+    int32_t sh = active_constraint->surface->current.height;
+    if (sx < 0.0) sx = 0.0;
+    if (sy < 0.0) sy = 0.0;
+    if (sw > 0 && sx > (double)sw) sx = (double)sw;
+    if (sh > 0 && sy > (double)sh) sy = (double)sh;
 
     struct Window* win = NULL;
     struct Window* w;
@@ -362,6 +375,14 @@ static void handle_new_constraint(struct wl_listener* l, void* data) {
     (void)l;
 
     struct wlr_pointer_constraint_v1* constraint = data;
+
+    if (security_check_use(
+            wl_resource_get_client(constraint->resource), PERM_CURSORPOS
+        )
+        != DEC_ALLOW) {
+        wl_resource_destroy(constraint->resource);
+        return;
+    }
 
     struct PointerConstraintTracker* t = calloc(1, sizeof(*t));
     if (t == NULL) return;
@@ -828,10 +849,7 @@ void cursor_handle_touch_up(struct wl_listener* l, void* data) {
     wlr_seat_touch_notify_up(server.seat, ev->time_msec, ev->touch_id);
 }
 
-void cursor_handle_touch_cancel(struct wl_listener* l, void* data) {
-    (void)l;
-    (void)data;
-
+void cursor_touch_cancel_all(void) {
     if (overview_touch_id != -1) {
         overview_touch_id = -1;
         overview_handle_touch_cancel();
@@ -851,6 +869,13 @@ void cursor_handle_touch_cancel(struct wl_listener* l, void* data) {
     wl_list_for_each_safe(tp, tmp, &touch_points, link) {
         touch_point_free(tp);
     }
+}
+
+void cursor_handle_touch_cancel(struct wl_listener* l, void* data) {
+    (void)l;
+    (void)data;
+
+    cursor_touch_cancel_all();
 }
 
 void cursor_handle_touch_down(struct wl_listener* l, void* data) {
@@ -983,7 +1008,7 @@ void cursor_handle_motion(struct wl_listener* l, void* data) {
     double dx = ev->delta_x;
     double dy = ev->delta_y;
 
-    if (!interactive.active && !server.overview_active
+    if (!interactive.active && !server.overview_active && !server.locked
         && active_constraint != NULL) {
         double sx, sy;
         struct wlr_surface* under =
@@ -1005,7 +1030,7 @@ void cursor_handle_motion(struct wl_listener* l, void* data) {
 
     drag_icon_update_position();
 
-    if (server.overview_active) {
+    if (server.overview_active && !server.locked) {
         overview_handle_motion(server.cursor->x, server.cursor->y);
         return;
     }
@@ -1027,7 +1052,7 @@ void cursor_handle_motion_absolute(struct wl_listener* l, void* data) {
     cursor_wake();
     struct wlr_pointer_motion_absolute_event* ev = data;
 
-    if (!interactive.active && !server.overview_active
+    if (!interactive.active && !server.overview_active && !server.locked
         && active_constraint != NULL) {
         double tx, ty;
         wlr_cursor_absolute_to_layout_coords(
@@ -1056,7 +1081,7 @@ void cursor_handle_motion_absolute(struct wl_listener* l, void* data) {
     }
 
     drag_icon_update_position();
-    if (server.overview_active) {
+    if (server.overview_active && !server.locked) {
         overview_handle_motion(server.cursor->x, server.cursor->y);
         return;
     }
@@ -1078,7 +1103,7 @@ void cursor_handle_button(struct wl_listener* l, void* data) {
     cursor_wake();
     struct wlr_pointer_button_event* ev = data;
 
-    if (server.overview_active) {
+    if (server.overview_active && !server.locked) {
         overview_handle_button(ev);
         return;
     }
@@ -1301,6 +1326,7 @@ void cursor_handle_swipe_update(struct wl_listener* l, void* data) {
     if (!config.input_gestures) return;
     struct wlr_pointer_swipe_update_event* ev = data;
 
+    if (server.locked) return;
     if (swipe_forwarded) {
         wlr_pointer_gestures_v1_send_swipe_update(
             server.pointer_gestures, server.seat, ev->time_msec, ev->dx, ev->dy

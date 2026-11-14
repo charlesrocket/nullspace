@@ -48,7 +48,7 @@
 
 #define KEY_MODS_IGNORED    ((uint32_t)(WLR_MODIFIER_CAPS | WLR_MODIFIER_MOD2))
 
-#define SWALLOWED_MAX       16
+#define SWALLOWED_MAX       128
 static uint32_t swallowed_keys[SWALLOWED_MAX];
 static size_t swallowed_len;
 
@@ -545,6 +545,15 @@ static void keyboard_handle_modifiers(struct wl_listener* l, void* data) {
     keymap_notify_layout(kb->wlr_keyboard);
 }
 
+static bool
+is_escape_combo(const xkb_keysym_t* syms, int nsyms, uint32_t mods) {
+    if (mods != CFG_MOD_SUPER) return false;
+    for (int i = 0; i < nsyms; i++)
+        if (syms[i] == XKB_KEY_Escape) return true;
+
+    return false;
+}
+
 static bool is_modifier_sym(xkb_keysym_t s) {
     return (s >= XKB_KEY_Shift_L && s <= XKB_KEY_Hyper_R)
         || s == XKB_KEY_ISO_Level3_Shift || s == XKB_KEY_Mode_switch;
@@ -593,7 +602,7 @@ static void keyboard_handle_key(struct wl_listener* l, void* data) {
     uint32_t mods =
         wlr_keyboard_get_modifiers(kb->wlr_keyboard) & ~KEY_MODS_IGNORED;
 
-    if (server.overview_active) {
+    if (server.overview_active && !server.locked) {
         overview_handle_key(keycode, syms, nsyms, mods);
         swallow_add(ev->keycode);
         return;
@@ -627,12 +636,15 @@ static void keyboard_handle_key(struct wl_listener* l, void* data) {
             return;
         }
 
-        for (int i = 0; i < nsyms; i++) {
-            if (handle_keybinding(syms[i], mods)) handled = true;
-        }
+        if (!server_shortcuts_inhibited()
+            || is_escape_combo(syms, nsyms, mods)) {
+            for (int i = 0; i < nsyms; i++) {
+                if (handle_keybinding(syms[i], mods)) handled = true;
+            }
 
-        if (!handled && layout_sym != XKB_KEY_NoSymbol) {
-            if (handle_keybinding(layout_sym, mods)) handled = true;
+            if (!handled && layout_sym != XKB_KEY_NoSymbol) {
+                if (handle_keybinding(layout_sym, mods)) handled = true;
+            }
         }
     }
 
@@ -650,6 +662,9 @@ static void keyboard_handle_key(struct wl_listener* l, void* data) {
     }
 }
 
+void seat_resize_mode_cancel(void) { resize_mode_exit(); }
+void seat_clear_swallowed_keys(void) { swallowed_len = 0; }
+
 static void keyboard_handle_destroy(struct wl_listener* l, void* data) {
     (void)data;
 
@@ -659,6 +674,8 @@ static void keyboard_handle_destroy(struct wl_listener* l, void* data) {
     wl_list_remove(&kb->destroy.link);
     wl_list_remove(&kb->link);
     free(kb);
+
+    seat_clear_swallowed_keys();
 }
 
 void seat_handle_new_input(struct wlr_input_device* device) {
@@ -752,14 +769,14 @@ void seat_focus(struct Window* window) {
         return;
     }
 
+    if (window != NULL && wlr_seat_keyboard_has_grab(server.seat)) return;
+
     if (prev != NULL) {
         struct Window* pw = seat_window_for_surface(prev);
         if (pw != NULL) window_set_activated(pw, false);
     }
 
     if (window != NULL) {
-        if (wlr_seat_keyboard_has_grab(server.seat)) { return; }
-
         window_set_activated(window, true);
 
         struct wlr_keyboard* kb = wlr_seat_get_keyboard(server.seat);
@@ -784,6 +801,7 @@ void seat_focus(struct Window* window) {
 }
 
 void seat_refocus_after_drag(void) {
+    if (server.locked) return;
     if (server.cursor == NULL) return;
 
     struct wlr_surface* surface = NULL;
@@ -802,6 +820,7 @@ void seat_refocus_after_drag(void) {
 }
 
 void seat_clear_focus(void) {
+    if (server.locked) return;
     struct wlr_surface* prev = server.seat->keyboard_state.focused_surface;
     if (prev != NULL) {
         struct Window* pw = seat_window_for_surface(prev);

@@ -19,7 +19,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/_clock_id.h>
 #include <time.h>
 #include <wayland-server-core.h>
 #include <wayland-util.h>
@@ -1002,6 +1001,7 @@ void deco_create(struct Window* window) {
     deco->title_text =
         text_node_create(deco->tree, DECO_TITLE_FONT, initial_color, 1);
     if (deco->title_text != NULL) {
+        text_node_set_max_width(deco->title_text, DECO_TAB_TEXT_MAX);
         text_node_set_text(deco->title_text, window->title);
     }
 

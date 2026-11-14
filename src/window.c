@@ -928,6 +928,11 @@ static void window_handle_commit(struct wl_listener* l, void* data) {
 
     int32_t w = surf->geometry.width;
     int32_t h = surf->geometry.height;
+    const int32_t MAX_DIM = 16384;
+    if (w > MAX_DIM) w = MAX_DIM;
+    if (h > MAX_DIM) h = MAX_DIM;
+    if (w < 1) w = 1;
+    if (h < 1) h = 1;
 
     if (w > 0 && h > 0) {
         bool resized = window->width != w || window->height != h;

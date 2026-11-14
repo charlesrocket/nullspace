@@ -19,16 +19,11 @@
 
 struct ActivationContext {
     struct wlr_xdg_activation_token_v1* token;
-
     struct wlr_surface* origin_focus;
-    struct wl_listener origin_focus_destroy;
-
-    struct wlr_seat_client* seat_client; // ?NULL
-
-    struct wl_listener token_destroy;
+    struct wl_listener origin_focus_destroy, token_destroy;
 
     int space;
-    bool is_compositor;
+    bool is_compositor, had_focus;
 };
 
 static struct wl_listener new_token_listener;
@@ -94,6 +89,12 @@ seat_client_for_token(struct wlr_xdg_activation_token_v1* token) {
     return NULL;
 }
 
+static bool seat_client_focused(struct wlr_seat_client* sc) {
+    if (sc == NULL || server.seat == NULL) return false;
+    return server.seat->keyboard_state.focused_client == sc
+        || server.seat->pointer_state.focused_client == sc;
+}
+
 static void handle_request_activate(struct wl_listener* l, void* data) {
     (void)l;
 
@@ -103,26 +104,41 @@ static void handle_request_activate(struct wl_listener* l, void* data) {
     struct ActivationContext* ctx = ev->token->data;
     struct Window* window = window_from_surface(ev->surface);
 
+    if (server.locked) {
+        ev->token->data = NULL;
+        context_free(ctx);
+        return;
+    }
+
     bool allowed = false;
+
     if (ctx != NULL) {
         if (ctx->is_compositor) {
             allowed = true;
-        } else if (ctx->seat_client != NULL) {
-            allowed = wlr_seat_client_validate_event_serial(
-                ctx->seat_client, ev->token->serial
-            );
+        } else {
+            struct wlr_seat_client* sc = seat_client_for_token(ev->token);
 
-            if (!allowed) {
+            if (sc != NULL && server.seat != NULL
+                && ev->token->seat == server.seat && ev->token->serial != 0) {
+                if (ctx->had_focus || seat_client_focused(sc)) {
+                    allowed = wlr_seat_client_validate_event_serial(
+                        sc, ev->token->serial
+                    );
+                }
+
+                if (!allowed) {
+                    log_debug(
+                        "Rejected serial=%u for seat_client=%p",
+                        ev->token->serial, (void*)sc
+                    );
+                }
+            } else {
                 log_debug(
-                    "Rejected serial=%u for seat_client=%p", ev->token->serial,
-                    (void*)ctx->seat_client
+                    "Invalid token (seat=%p, serial=%u, surface=%p)",
+                    (void*)ev->token->seat, ev->token->serial,
+                    (void*)ev->token->surface
                 );
             }
-        } else {
-            log_debug(
-                "No seat client for token (surface=%p)",
-                (void*)ev->token->surface
-            );
         }
     }
 
@@ -185,8 +201,7 @@ static void handle_new_token(struct wl_listener* l, void* data) {
         );
     }
 
-    ctx->seat_client = seat_client_for_token(token);
-
+    ctx->had_focus = seat_client_focused(seat_client_for_token(token));
     token->data = ctx;
 
     ctx->token_destroy.notify = handle_token_destroy;

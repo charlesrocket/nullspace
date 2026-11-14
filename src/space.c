@@ -49,6 +49,7 @@ static void handle_commit(struct wl_listener* l, void* data) {
     wl_list_for_each_safe(req, tmp, ev->requests, link) {
         switch (req->type) {
             case WLR_EXT_WORKSPACE_V1_REQUEST_ACTIVATE:
+                if (server.locked) break;
                 if (req->activate.workspace != NULL) {
                     int space = workspace_space(req->activate.workspace);
                     if (space >= 0 && space < SPACE_COUNT) {
@@ -80,6 +81,7 @@ bool ext_workspace_init(struct wl_display* display) {
         return false;
     }
 
+    server.workspace_manager = workspace_manager;
     workspace_group =
         wlr_ext_workspace_group_handle_v1_create(workspace_manager, 0);
     if (workspace_group == NULL) {

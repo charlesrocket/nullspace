@@ -45,6 +45,11 @@
 #define CFG_CMD_F9                   ""
 #define CFG_CMD_F10                  ""
 
+#define CFG_SECURITY_PERMISSIONS     true
+#define CFG_SECURITY_DEFAULT_RULES                                             \
+    "*,screencopy,ask", "*,clipboard,ask", "*,cursorpos,ask",                  \
+        "*,keyboard,ask", "*,pointer,ask"
+
 #define CFG_WINDOW_RULES                                                       \
     "space:2,appid:foot,blur:on", "space:2,appid:Alacritty,blur:on",           \
         "space:2,appid:com.mitchellh.ghostty,blur:on",                         \
@@ -225,8 +230,9 @@ struct Config {
 
     float input_accel_speed, mfact;
 
-    bool smart_gaps, center_overspread, focus_follow, focus_on_activate,
-        center_when_single_stack, input_touchscreen, input_gestures;
+    bool security_permissions, smart_gaps, center_overspread, focus_follow,
+        focus_on_activate, center_when_single_stack, input_touchscreen,
+        input_gestures;
 #ifdef XWAYLAND
     bool xwayland;
 #endif
@@ -237,3 +243,6 @@ extern struct Config config;
 void config_init(void);
 void config_finish(void);
 bool config_default_was_written(void);
+bool config_persist_permission(
+    const char* id, const char* type, const char* mode
+);

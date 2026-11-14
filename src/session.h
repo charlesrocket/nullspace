@@ -4,6 +4,8 @@
 
 struct wl_display;
 struct Output;
+struct wlr_session_lock_manager_v1;
+struct wlr_session_lock_manager_v1* session_lock_get_manager(void);
 
 bool session_lock_init(struct wl_display* display);
 

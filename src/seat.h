@@ -34,3 +34,5 @@ void seat_foreach_input_device(
 );
 
 void seat_set_help_capture(bool on);
+void seat_resize_mode_cancel(void);
+void seat_clear_swallowed_keys(void);

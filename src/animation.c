@@ -3,7 +3,6 @@
 #include "config.h"
 
 #include <stdint.h>
-#include <sys/_clock_id.h>
 #include <time.h>
 
 #define ANIM_BAKED_POINTS 64

@@ -27,6 +27,7 @@ struct Output {
 
 void output_create(struct wlr_output* wlr_output);
 void output_destroy(struct Output* out);
+void output_update_manager_config(void);
 
 struct Output* output_from_wlr_output(struct wlr_output* wlr_output);
 struct Output* output_focused(void);

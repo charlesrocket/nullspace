@@ -462,6 +462,7 @@ static void closing_start(void) {
 }
 
 void overview_enter(void) {
+    if (server.locked) return;
     if (server.overview_active) return;
     if (!ov_tree_ok() || !ov_metrics()) return;
 

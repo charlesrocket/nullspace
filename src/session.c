@@ -1,10 +1,14 @@
 #include "session.h"
 
+#include "config.h"
 #include "cursor.h"
+#include "help.h"
 #include "log.h"
 #include "manager.h"
 #include "output.h"
+#include "overview.h"
 #include "seat.h"
+#include "security.h"
 #include "server.h"
 #include "window.h"
 
@@ -242,6 +246,8 @@ static void release_lock(struct SessionLock* lock, bool unlock) {
     wlr_scene_node_set_enabled(&server.popup_tree->node, true);
     wlr_scene_node_set_enabled(&server.content_tree->node, true);
 
+    security_resume_prompts();
+
     idle_update_inhibit();
     seat_focus(NULL);
     cursor_refresh_focus();
@@ -263,9 +269,16 @@ static void lock_handle_destroy(struct wl_listener* l, void* data) {
 }
 
 static void engage_lock(void) {
+    if (server.overview_active) overview_exit();
+
+    cursor_cancel_drag_state(); // interactive + buttons_down + grab_window
+    cursor_touch_cancel_all();
+    seat_resize_mode_cancel();
+    seat_clear_swallowed_keys();
+    help_hide();
+
     server.locked = true;
 
-    cursor_end_interactive();
     wlr_seat_pointer_end_grab(server.seat);
     wlr_seat_keyboard_end_grab(server.seat);
     wlr_seat_pointer_clear_focus(server.seat);
@@ -274,9 +287,13 @@ static void engage_lock(void) {
     struct Window* focused = window_focused();
     if (focused != NULL) window_set_activated(focused, false);
 
+    cursor_update_active_constraint();
+
     wlr_scene_node_set_enabled(&server.content_tree->node, false);
+    wlr_scene_node_set_enabled(&server.overview_tree->node, false);
     wlr_scene_node_set_enabled(&server.popup_tree->node, false);
     wlr_scene_node_set_enabled(&server.lock_tree->node, true);
+
     session_lock_update_geometry();
     idle_update_inhibit();
 
@@ -343,4 +360,8 @@ bool session_lock_init(struct wl_display* display) {
 
 void session_lock_detach_listeners(void) {
     if (manager != NULL) wl_list_remove(&new_lock_listener.link);
+}
+
+struct wlr_session_lock_manager_v1* session_lock_get_manager(void) {
+    return manager;
 }

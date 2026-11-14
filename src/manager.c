@@ -424,6 +424,11 @@ void wm_assign_new_window_space(struct Window* window, int space) {
 
     window->space = space;
 
+    if (server.locked) {
+        window->space_hidden = (space != out->current_space);
+        return;
+    }
+
     if (space != out->current_space) {
         wm_switch_space_on(out, space);
         return;

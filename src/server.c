@@ -14,6 +14,7 @@
 #include "output.h"
 #include "popup.h"
 #include "seat.h"
+#include "security.h"
 #include "session.h"
 #include "space.h"
 #include "wallpaper.h"
@@ -21,10 +22,19 @@
 
 #include <scenefx/render/fx_renderer/fx_renderer.h>
 #include <scenefx/types/fx/clipped_region.h>
+#include <spawn.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
+#include <sys/signal.h>
+#include <sys/sysctl.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <time.h>
+#include <unistd.h>
 #include <wayland-protocols/cursor-shape-v1-enum.h>
 #include <wayland-server-core.h>
 #include <wayland-util.h>
@@ -32,14 +42,20 @@
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_content_type_v1.h>
 #include <wlr/types/wlr_cursor_shape_v1.h>
-#include <wlr/types/wlr_data_control_v1.h>
 #include <wlr/types/wlr_data_device.h>
+#include <wlr/types/wlr_export_dmabuf_v1.h>
+#include <wlr/types/wlr_ext_data_control_v1.h>
 #include <wlr/types/wlr_ext_foreign_toplevel_list_v1.h>
+#include <wlr/types/wlr_ext_image_capture_source_v1.h>
+#include <wlr/types/wlr_ext_image_copy_capture_v1.h>
 #include <wlr/types/wlr_foreign_toplevel_management_v1.h>
 #include <wlr/types/wlr_fractional_scale_v1.h>
+#include <wlr/types/wlr_gamma_control_v1.h>
 #include <wlr/types/wlr_idle_inhibit_v1.h>
 #include <wlr/types/wlr_idle_notify_v1.h>
+#include <wlr/types/wlr_keyboard_shortcuts_inhibit_v1.h>
 #include <wlr/types/wlr_output.h>
+#include <wlr/types/wlr_output_management_v1.h>
 #include <wlr/types/wlr_output_power_management_v1.h>
 #include <wlr/types/wlr_pointer_constraints_v1.h>
 #include <wlr/types/wlr_primary_selection.h>
@@ -47,24 +63,69 @@
 #include <wlr/types/wlr_relative_pointer_v1.h>
 #include <wlr/types/wlr_scene.h>
 #include <wlr/types/wlr_screencopy_v1.h>
+#include <wlr/types/wlr_security_context_v1.h>
 #include <wlr/types/wlr_server_decoration.h>
+#include <wlr/types/wlr_session_lock_v1.h>
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/types/wlr_text_input_v3.h>
+#include <wlr/types/wlr_virtual_keyboard_v1.h>
+#include <wlr/types/wlr_virtual_pointer_v1.h>
 #include <wlr/types/wlr_xdg_activation_v1.h>
 #include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/util/log.h>
 
-#define LOG_TOPIC "server"
+#define LOG_TOPIC          "server"
+
+#define MAX_SHM_POOL_BYTES (512u * 1024u * 1024u)
+
+struct DeferredDestroy {
+    struct wl_resource* resource; // ?NULL once the client destroyed it
+    struct wl_listener destroy;
+};
+
+static void deferred_destroy_handle(struct wl_listener* l, void* data) {
+    (void)data;
+
+    struct DeferredDestroy* d = wl_container_of(l, d, destroy);
+    wl_list_remove(&d->destroy.link);
+    d->resource = NULL;
+}
+
+static void deferred_destroy_idle(void* data) {
+    struct DeferredDestroy* d = data;
+    if (d->resource != NULL) wl_resource_destroy(d->resource);
+    free(d);
+}
+
+static void defer_resource_destroy(struct wl_resource* resource) {
+    struct DeferredDestroy* d = calloc(1, sizeof(*d));
+    if (d == NULL) {
+        wl_resource_destroy(resource);
+        return;
+    }
+
+    d->resource = resource;
+    d->destroy.notify = deferred_destroy_handle;
+    wl_resource_add_destroy_listener(resource, &d->destroy);
+    wl_event_loop_add_idle(server.event_loop, deferred_destroy_idle, d);
+}
 
 struct Server server = {0};
 
 static struct wl_list inhibitors;
+static struct wl_list shortcuts_inhibitors;
 
 struct Inhibitor {
     struct wlr_idle_inhibitor_v1* inhibitor;
     struct wl_listener destroy;
     struct wl_list link;
+};
+
+struct ShortcutInhibitor {
+    struct wlr_keyboard_shortcuts_inhibitor_v1* wlr_inhibitor;
+    struct wl_listener destroy;
+    struct wl_list link; // shortcuts_inhibitors
 };
 
 struct DragContext {
@@ -78,15 +139,13 @@ static void handle_new_xdg_popup(struct wl_listener* l, void* data);
 static void handle_new_xdg_decoration(struct wl_listener* l, void* data);
 
 static void handle_request_set_selection(struct wl_listener* l, void* data);
-static void
-handle_request_set_primary_selection(struct wl_listener* l, void* data);
-
 static void handle_request_start_drag(struct wl_listener* l, void* data);
 static void handle_start_drag(struct wl_listener* l, void* data);
 static void handle_request_set_cursor(struct wl_listener* l, void* data);
 
 static void handle_output_power_set_mode(struct wl_listener* l, void* data);
 static void handle_new_idle_inhibitor(struct wl_listener* l, void* data);
+static void handle_new_shortcuts_inhibitor(struct wl_listener* l, void* data);
 
 static const char* cursor_shape_name(uint32_t shape) {
     switch (shape) {
@@ -194,6 +253,7 @@ static void handle_request_set_cursor_shape(struct wl_listener* l, void* data) {
 
 static void handle_request_set_cursor(struct wl_listener* l, void* data) {
     (void)l;
+
     struct wlr_seat_pointer_request_set_cursor_event* ev = data;
 
     // No surface focused, so no client owns the cursor.
@@ -210,22 +270,77 @@ static void handle_request_set_selection(struct wl_listener* l, void* data) {
     (void)l;
 
     struct wlr_seat_request_set_selection_event* ev = data;
+    struct wlr_seat_client* fc = server.seat->keyboard_state.focused_client;
+    if (fc == NULL) return;
+    if (!wlr_seat_client_validate_event_serial(fc, ev->serial)) return;
+
     wlr_seat_set_selection(server.seat, ev->source, ev->serial);
 }
 
-static void
-handle_request_set_primary_selection(struct wl_listener* l, void* data) {
+static void handle_relative_pointer_use(struct wl_listener* l, void* data) {
     (void)l;
 
-    struct wlr_seat_request_set_primary_selection_event* ev = data;
-    wlr_seat_set_primary_selection(server.seat, ev->source, ev->serial);
+    struct wlr_relative_pointer_v1* rp = data;
+    if (security_check_use(wl_resource_get_client(rp->resource), PERM_CURSORPOS)
+        != DEC_ALLOW) {
+        defer_resource_destroy(rp->resource);
+    }
+}
+
+static void handle_virtual_keyboard_use(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_virtual_keyboard_v1* vk = data;
+    if (security_check_use(wl_resource_get_client(vk->resource), PERM_KEYBOARD)
+        != DEC_ALLOW) {
+        wl_resource_destroy(vk->resource);
+    }
+}
+
+static void handle_virtual_pointer_use(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_virtual_pointer_v1_new_pointer_event* ev = data;
+    struct wlr_virtual_pointer_v1* vp = ev->new_pointer;
+    if (security_check_use(wl_resource_get_client(vp->resource), PERM_POINTER)
+        != DEC_ALLOW) {
+        wl_resource_destroy(vp->resource);
+    }
+}
+
+static void handle_ext_data_control_use(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_ext_data_control_device_v1* dev = data;
+    if (security_check_use(
+            wl_resource_get_client(dev->resource), PERM_CLIPBOARD
+        )
+        != DEC_ALLOW) {
+        wlr_ext_data_control_device_v1_destroy(dev);
+    }
+}
+
+static void
+handle_image_copy_capture_session_use(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_ext_image_copy_capture_session_v1* session = data;
+    if (security_check_use(
+            wl_resource_get_client(session->resource), PERM_SCREENCOPY
+        )
+        != DEC_ALLOW) {
+        wl_resource_destroy(session->resource);
+    }
 }
 
 int server_init(struct wl_display* display) {
     server.display = display;
     server.event_loop = wl_display_get_event_loop(display);
 
+    wl_display_set_default_max_buffer_size(display, MAX_SHM_POOL_BYTES);
+
     wl_list_init(&inhibitors);
+    wl_list_init(&shortcuts_inhibitors);
 
     server.backend = wlr_backend_autocreate(server.event_loop, &server.session);
     if (server.backend == NULL) {
@@ -257,20 +372,74 @@ int server_init(struct wl_display* display) {
         return -1;
     }
 
-    server.relative_pointer_manager =
-        wlr_relative_pointer_manager_v1_create(display);
+    server.security_context_manager =
+        wlr_security_context_manager_v1_create(display);
 
-    server.pointer_constraints = wlr_pointer_constraints_v1_create(display);
-    if (server.pointer_constraints == NULL || !cursor_constraints_init()) {
-        log_warn("Pointer constraints unavailable");
+    if (server.security_context_manager == NULL) {
+        log_err("Failed to create security-context manager");
+        return -1;
     }
 
-    wlr_subcompositor_create(display);
-    wlr_data_device_manager_create(display);
-    wlr_data_control_manager_v1_create(display);
-    wlr_fractional_scale_manager_v1_create(display, 1);
+    PROTECT(server.security_context_manager, PERM_NONE);
+    wl_display_set_global_filter(display, security_filter_global, NULL);
+
+    server.relative_pointer_manager =
+        wlr_relative_pointer_manager_v1_create(display);
+    if (server.relative_pointer_manager != NULL) {
+        server.rel_pointer_use.notify = handle_relative_pointer_use;
+        wl_signal_add(
+            &server.relative_pointer_manager->events.new_relative_pointer,
+            &server.rel_pointer_use
+        );
+    } else {
+        log_warn("Relative pointer unavailable");
+    }
+
+    server.pointer_constraints = wlr_pointer_constraints_v1_create(display);
+    if (server.pointer_constraints != NULL) {
+        if (!cursor_constraints_init()) {
+            log_warn("Pointer constraints unavailable");
+        }
+    }
+
+    security_sandbox_add(server.compositor->global);
+
+    {
+        struct wlr_subcompositor* s = wlr_subcompositor_create(display);
+        security_sandbox_add(s ? s->global : NULL);
+    }
+
     wlr_primary_selection_v1_device_manager_create(display);
-    wlr_viewporter_create(display);
+
+    {
+        struct wlr_data_device_manager* m =
+            wlr_data_device_manager_create(display);
+        security_sandbox_add(m ? m->global : NULL);
+    }
+
+    server.ext_data_control_manager =
+        wlr_ext_data_control_manager_v1_create(display, 1);
+    if (server.ext_data_control_manager != NULL) {
+        PROTECT(server.ext_data_control_manager, PERM_CLIPBOARD);
+
+        server.ext_dc_use.notify = handle_ext_data_control_use;
+        wl_signal_add(
+            &server.ext_data_control_manager->events.new_device,
+            &server.ext_dc_use
+        );
+    } else {
+        log_warn("ext-data-control manager unavailable");
+    }
+
+    {
+        struct wlr_fractional_scale_manager_v1* f =
+            wlr_fractional_scale_manager_v1_create(display, 1);
+        security_sandbox_add(f ? f->global : NULL);
+    }
+    {
+        struct wlr_viewporter* v = wlr_viewporter_create(display);
+        security_sandbox_add(v ? v->global : NULL);
+    }
 
     struct wlr_server_decoration_manager* kde_deco =
         wlr_server_decoration_manager_create(display);
@@ -282,21 +451,45 @@ int server_init(struct wl_display* display) {
         log_warn("Server-side decorations unavailable");
     }
 
-    wlr_screencopy_manager_v1_create(display);
-
     server.foreign_toplevel_list =
         wlr_ext_foreign_toplevel_list_v1_create(display, 1);
+    PROTECT(server.foreign_toplevel_list, PERM_NONE);
+
     server.foreign_toplevel_manager =
         wlr_foreign_toplevel_manager_v1_create(display);
+    PROTECT(server.foreign_toplevel_manager, PERM_NONE);
 
     server.output_layout = wlr_output_layout_create(display);
-    wlr_xdg_output_manager_v1_create(display, server.output_layout);
+    if (server.output_layout == NULL) {
+        log_err("Failed to create output layout");
+        return -1;
+    }
+
+    server.xdg_output_manager =
+        wlr_xdg_output_manager_v1_create(display, server.output_layout);
+    if (server.xdg_output_manager == NULL) {
+        log_err("Failed to create xdg-output manager");
+        return -1;
+    }
 
     server.scene = wlr_scene_create();
+    if (server.scene == NULL) {
+        log_err("Failed to create scene");
+        return -1;
+    }
+
     server.scene_layout =
         wlr_scene_attach_output_layout(server.scene, server.output_layout);
+    if (server.scene_layout == NULL) {
+        log_err("Failed to attach scene layout");
+        return -1;
+    }
 
     server.content_tree = wlr_scene_tree_create(&server.scene->tree);
+    if (server.content_tree == NULL) {
+        log_err("Failed to create content tree");
+        return -1;
+    }
 
     server.background_tree = wlr_scene_tree_create(server.content_tree);
     server.bottom_tree = wlr_scene_tree_create(server.content_tree);
@@ -319,6 +512,8 @@ int server_init(struct wl_display* display) {
         return -1;
     }
 
+    security_sandbox_add(server.xdg_shell->global);
+
     server.new_xdg_toplevel.notify = handle_new_xdg_toplevel;
     wl_signal_add(
         &server.xdg_shell->events.new_toplevel, &server.new_xdg_toplevel
@@ -328,6 +523,13 @@ int server_init(struct wl_display* display) {
     wl_signal_add(&server.xdg_shell->events.new_popup, &server.new_xdg_popup);
 
     server.xdg_decoration = wlr_xdg_decoration_manager_v1_create(display);
+    if (server.xdg_decoration == NULL) {
+        log_err("Failed to create xdg-decoration manager");
+        return -1;
+    }
+
+    security_sandbox_add(server.xdg_decoration->global);
+
     server.new_xdg_decoration.notify = handle_new_xdg_decoration;
     wl_signal_add(
         &server.xdg_decoration->events.new_toplevel_decoration,
@@ -340,12 +542,24 @@ int server_init(struct wl_display* display) {
         return -1;
     }
 
+    security_sandbox_add(server.seat->global);
+
     server.cursor = wlr_cursor_create();
+    if (server.cursor == NULL) {
+        log_err("Failed to create cursor");
+        return -1;
+    }
+
     wlr_cursor_attach_output_layout(server.cursor, server.output_layout);
 
     uint32_t cursor_size =
         config.cursor_size > 0 ? (uint32_t)config.cursor_size : 24;
+
     server.cursor_mgr = wlr_xcursor_manager_create(NULL, cursor_size);
+    if (server.cursor_mgr == NULL) {
+        log_err("Failed to create xcursor manager");
+        return -1;
+    }
 
     server.cursor_motion.notify = cursor_handle_motion;
     wl_signal_add(&server.cursor->events.motion, &server.cursor_motion);
@@ -420,13 +634,6 @@ int server_init(struct wl_display* display) {
         &server.request_set_selection
     );
 
-    server.request_set_primary_selection.notify =
-        handle_request_set_primary_selection;
-    wl_signal_add(
-        &server.seat->events.request_set_primary_selection,
-        &server.request_set_primary_selection
-    );
-
     server.request_start_drag.notify = handle_request_start_drag;
     wl_signal_add(
         &server.seat->events.request_start_drag, &server.request_start_drag
@@ -448,13 +655,22 @@ int server_init(struct wl_display* display) {
     wl_list_init(&server.outputs);
     wl_list_init(&server.keyboards);
 
-    if (!ext_workspace_init(display)) { log_warn("ext-workspace unavailable"); }
+    if (!ext_workspace_init(display)) {
+        log_warn("ext-workspace unavailable");
+    } else {
+        PROTECT(server.workspace_manager, PERM_NONE);
+    }
 
-    server.layer_shell = wlr_layer_shell_v1_create(display, 4);
+    server.layer_shell = wlr_layer_shell_v1_create(display, 5);
     if (server.layer_shell == NULL) {
         log_err("Failed to create layer-shell global");
         return -1;
     }
+
+    PROTECT(server.layer_shell, PERM_NONE);
+
+    server.output_manager = wlr_output_manager_v1_create(display);
+    PROTECT(server.output_manager, PERM_NONE);
 
     server.new_layer_surface.notify = layers_handle_new_surface;
     wl_signal_add(
@@ -467,6 +683,12 @@ int server_init(struct wl_display* display) {
 
     server.cursor_shape_manager =
         wlr_cursor_shape_manager_v1_create(display, 1);
+    if (server.cursor_shape_manager == NULL) {
+        log_err("Failed to create cursor-shape manager");
+        return -1;
+    }
+
+    security_sandbox_add(server.cursor_shape_manager->global);
 
     server.request_set_cursor_shape.notify = handle_request_set_cursor_shape;
     wl_signal_add(
@@ -475,7 +697,9 @@ int server_init(struct wl_display* display) {
     );
 
     server.pointer_gestures = wlr_pointer_gestures_v1_create(display);
-    if (server.pointer_gestures == NULL) {
+    if (server.pointer_gestures != NULL) {
+        PROTECT(server.pointer_gestures, PERM_NONE);
+    } else {
         log_warn("Pointer gestures unavailable");
     }
 
@@ -485,19 +709,109 @@ int server_init(struct wl_display* display) {
         log_warn("Content type unavailable");
     }
 
-    wlr_text_input_manager_v3_create(display);
+    {
+        struct wlr_text_input_manager_v3* t =
+            wlr_text_input_manager_v3_create(display);
+        security_sandbox_add(t ? t->global : NULL);
+    }
 
-    if (!session_lock_init(display)) log_warn("Session lock unavailable");
+    if (!session_lock_init(display)) {
+        log_warn("Session lock unavailable");
+    } else {
+        struct wlr_session_lock_manager_v1* lock_mgr =
+            session_lock_get_manager();
+        if (lock_mgr != NULL) { PROTECT(lock_mgr, PERM_NONE); }
+    }
 
     server.output_power_manager = wlr_output_power_manager_v1_create(display);
+    if (server.output_power_manager == NULL) {
+        log_err("Failed to create output-power manager");
+        return -1;
+    }
+
+    PROTECT(server.output_power_manager, PERM_NONE);
     server.output_power_set_mode.notify = handle_output_power_set_mode;
     wl_signal_add(
         &server.output_power_manager->events.set_mode,
         &server.output_power_set_mode
     );
 
+    server.ext_image_copy_capture_manager =
+        wlr_ext_image_copy_capture_manager_v1_create(display, 1);
+    PROTECT(server.ext_image_copy_capture_manager, PERM_SCREENCOPY);
+    if (server.ext_image_copy_capture_manager != NULL) {
+        server.ext_capture_session_use.notify =
+            handle_image_copy_capture_session_use;
+        wl_signal_add(
+            &server.ext_image_copy_capture_manager->events.new_session,
+            &server.ext_capture_session_use
+        );
+    }
+
+    server.ext_output_image_capture_source_manager =
+        wlr_ext_output_image_capture_source_manager_v1_create(display, 1);
+    if (server.ext_output_image_capture_source_manager != NULL) {
+        PROTECT(
+            server.ext_output_image_capture_source_manager, PERM_SCREENCOPY
+        );
+    } else {
+        log_warn("Output image capture source manager unavailable");
+    }
+
+    server.virtual_keyboard_manager =
+        wlr_virtual_keyboard_manager_v1_create(display);
+
+    if (server.virtual_keyboard_manager != NULL) {
+        PROTECT(server.virtual_keyboard_manager, PERM_KEYBOARD);
+        server.vk_use.notify = handle_virtual_keyboard_use;
+        wl_signal_add(
+            &server.virtual_keyboard_manager->events.new_virtual_keyboard,
+            &server.vk_use
+        );
+    } else {
+        log_warn("Virtual keyboard unavailable");
+    }
+
+    server.virtual_pointer_manager =
+        wlr_virtual_pointer_manager_v1_create(display);
+    if (server.virtual_pointer_manager != NULL) {
+        PROTECT(server.virtual_pointer_manager, PERM_POINTER);
+        server.vp_use.notify = handle_virtual_pointer_use;
+        wl_signal_add(
+            &server.virtual_pointer_manager->events.new_virtual_pointer,
+            &server.vp_use
+        );
+    } else {
+        log_warn("Virtual pointer unavailable");
+    }
+
+    server.keyboard_shortcuts_inhibit =
+        wlr_keyboard_shortcuts_inhibit_v1_create(display);
+    if (server.keyboard_shortcuts_inhibit == NULL) {
+        log_warn("Keyboard shortcuts inhibit unavailable");
+    } else {
+        PROTECT(server.keyboard_shortcuts_inhibit, PERM_NONE);
+
+        server.new_shortcuts_inhibitor.notify = handle_new_shortcuts_inhibitor;
+        wl_signal_add(
+            &server.keyboard_shortcuts_inhibit->events.new_inhibitor,
+            &server.new_shortcuts_inhibitor
+        );
+    }
+
+    server.gamma_control_manager = wlr_gamma_control_manager_v1_create(display);
+    PROTECT(server.gamma_control_manager, PERM_NONE);
+
     server.idle_notifier = wlr_idle_notifier_v1_create(display);
+    PROTECT(server.idle_notifier, PERM_NONE);
+
     server.idle_inhibit_manager = wlr_idle_inhibit_v1_create(display);
+    if (server.idle_inhibit_manager == NULL) {
+        log_err("Failed to create idle-inhibit manager");
+        return -1;
+    }
+
+    PROTECT(server.idle_inhibit_manager, PERM_NONE);
     server.new_idle_inhibitor.notify = handle_new_idle_inhibitor;
     wl_signal_add(
         &server.idle_inhibit_manager->events.new_inhibitor,
@@ -512,6 +826,8 @@ int server_init(struct wl_display* display) {
         log_err("Failed to create xdg-activation global");
         return -1;
     }
+
+    PROTECT(server.xdg_activation, PERM_NONE);
 
     deco_anim_init(wl_display_get_event_loop(server.display));
     cursor_hide_init(wl_display_get_event_loop(server.display));
@@ -555,7 +871,6 @@ void server_detach_listeners(void) {
     wl_list_remove(&server.cursor_touch_cancel.link);
 
     wl_list_remove(&server.request_set_selection.link);
-    wl_list_remove(&server.request_set_primary_selection.link);
     wl_list_remove(&server.request_start_drag.link);
     wl_list_remove(&server.start_drag.link);
     wl_list_remove(&server.request_set_cursor.link);
@@ -563,6 +878,30 @@ void server_detach_listeners(void) {
 
     wl_list_remove(&server.output_power_set_mode.link);
     wl_list_remove(&server.new_idle_inhibitor.link);
+
+    if (server.rel_pointer_use.link.prev != NULL) {
+        wl_list_remove(&server.rel_pointer_use.link);
+    }
+
+    if (server.vk_use.link.prev != NULL) {
+        wl_list_remove(&server.vk_use.link);
+    }
+
+    if (server.vp_use.link.prev != NULL) {
+        wl_list_remove(&server.vp_use.link);
+    }
+
+    if (server.ext_dc_use.link.prev != NULL) {
+        wl_list_remove(&server.ext_dc_use.link);
+    }
+
+    if (server.ext_capture_session_use.link.prev != NULL) {
+        wl_list_remove(&server.ext_capture_session_use.link);
+    }
+
+    if (server.keyboard_shortcuts_inhibit != NULL) {
+        wl_list_remove(&server.new_shortcuts_inhibitor.link);
+    }
 
     activation_finish();
     cursor_constraints_finish();
@@ -575,6 +914,7 @@ void server_finish(void) {
 
     deco_anim_finish();
     cursor_hide_finish();
+    security_permission_finish();
     seat_finish();
     icon_manager_finish();
     wallpaper_finish();
@@ -665,6 +1005,51 @@ static void handle_new_idle_inhibitor(struct wl_listener* l, void* data) {
     idle_update_inhibit();
 }
 
+static void shortcuts_inhibitor_destroy(struct wl_listener* l, void* data) {
+    (void)data;
+
+    struct ShortcutInhibitor* si = wl_container_of(l, si, destroy);
+    wl_list_remove(&si->destroy.link);
+    wl_list_remove(&si->link);
+    free(si);
+}
+
+static void handle_new_shortcuts_inhibitor(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_keyboard_shortcuts_inhibitor_v1* inhibitor = data;
+
+    struct ShortcutInhibitor* si = calloc(1, sizeof(*si));
+    if (si == NULL) {
+        wl_resource_destroy(inhibitor->resource);
+        return;
+    }
+
+    si->wlr_inhibitor = inhibitor;
+
+    si->destroy.notify = shortcuts_inhibitor_destroy;
+    wl_signal_add(&inhibitor->events.destroy, &si->destroy);
+
+    wl_list_insert(&shortcuts_inhibitors, &si->link);
+
+    wlr_keyboard_shortcuts_inhibitor_v1_activate(inhibitor);
+}
+
+bool server_shortcuts_inhibited(void) {
+    struct wlr_surface* focused = server.seat->keyboard_state.focused_surface;
+    if (focused == NULL) return false;
+
+    struct ShortcutInhibitor* si;
+    wl_list_for_each(si, &shortcuts_inhibitors, link) {
+        if (si->wlr_inhibitor->active
+            && si->wlr_inhibitor->surface == focused) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void server_notify_activity(void) {
     if (server.idle_notifier == NULL) return;
     wlr_idle_notifier_v1_notify_activity(server.idle_notifier, server.seat);
@@ -678,6 +1063,7 @@ static void handle_output_power_set_mode(struct wl_listener* l, void* data) {
             ev->output, ev->mode == ZWLR_OUTPUT_POWER_V1_MODE_ON
         )) {
         wm_mark_layout_dirty();
+        output_update_manager_config();
     }
 }
 

@@ -4,7 +4,9 @@
 #include "input.h"
 #include "log.h"
 #include "nullspace/layouts.h"
+#include "security.h"
 
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -32,6 +34,7 @@
 
 struct Config config;
 static bool initialized, wrote_default;
+static size_t permission_rule_count, permission_spec_count;
 
 static const char* const default_window_rules[] = {CFG_WINDOW_RULES};
 
@@ -299,6 +302,7 @@ static bool append_space_rule(const char* value) {
 }
 
 static void set_defaults(void) {
+    config.security_permissions = CFG_SECURITY_PERMISSIONS;
     config.default_layout = CFG_DEFAULT_LAYOUT;
     config.gaps = CFG_GAPS;
     config.smart_gaps = CFG_SMART_GAPS;
@@ -546,6 +550,50 @@ static void build_binds(void) {
     }
 }
 
+static void parse_permission_rule(const char* value) {
+    permission_spec_count++;
+
+    char* copy = strdup(value);
+    if (copy == NULL) {
+        log_warn("OOM parsing permission rule");
+        return;
+    }
+
+    char* cur = copy;
+    char* id = strsep(&cur, ",");
+    char* type = strsep(&cur, ",");
+    char* mode = cur;
+
+    if (id == NULL || type == NULL || mode == NULL) {
+        log_warn("Bad permission rule '%s' (want ID,TYPE,MODE)", value);
+        free(copy);
+        return;
+    }
+
+    id = ns_trim(id);
+    type = ns_trim(type);
+    mode = ns_trim(mode);
+
+    if (id[0] == '\0' || type[0] == '\0' || mode[0] == '\0') {
+        log_warn("Bad permission rule '%s' (empty field)", value);
+        free(copy);
+        return;
+    }
+
+    if (!security_permission_set(id, type, mode))
+        log_warn("Bad permission rule '%s'", value);
+    else
+        permission_rule_count++;
+
+    free(copy);
+}
+
+static void apply_default_permission_rules(void) {
+    static const char* const defaults[] = {CFG_SECURITY_DEFAULT_RULES};
+    for (size_t i = 0; i < ARRAY_LEN(defaults); i++)
+        parse_permission_rule(defaults[i]);
+}
+
 static void
 parse_key(const char* key, const char* value, bool* seen_window_rule) {
     for (size_t i = 0; i < ARRAY_LEN(string_keys); i++) {
@@ -595,6 +643,10 @@ parse_key(const char* key, const char* value, bool* seen_window_rule) {
         }
 
         if (*value != '\0') append_window_rule(value);
+    } else if (strcmp(key, "security_permissions") == 0) {
+        if (parse_bool(key, value, &b)) config.security_permissions = b;
+    } else if (strcmp(key, "permission") == 0) {
+        parse_permission_rule(value);
     } else if (strcmp(key, "space_rule") == 0) {
         if (*value != '\0') append_space_rule(value);
     } else if (strcmp(key, "kb_rate_hz") == 0) {
@@ -761,6 +813,8 @@ static bool write_default_config(const char* path) {
     ok = ok && w_kv_str(fd, "cmd_f10", config.cmd_f10);
 
     ok = ok && w_str(fd, "\n");
+    ok = ok
+      && w_kv_bool(fd, "security_permissions", config.security_permissions);
     for (size_t i = 0; ok && i < config.window_rule_count; i++)
         ok = w_kv_str(fd, "window_rule", config.window_rules[i]);
 
@@ -817,7 +871,15 @@ static bool write_default_config(const char* path) {
         "#         space_0..space_9, move_to_space_0..move_to_space_9\n"
         "#\n"
         "# window_rule = key:value[,key:value...]\n"
-        "# KEYS:  appid:<regex>  title:<regex>  space:<0-9>  blur:<on|off>\n";
+        "# KEYS:  appid:<regex>  title:<regex>  space:<0-9>  blur:<on|off>\n"
+        "#\n"
+        "# space_rule = id:<0-9>,layout:<name>\n"
+        "# LAYOUTS: vtile vgrid htile hrtile monocle hgrid float\n"
+        "#\n"
+        "# permission = ID,TYPE,MODE\n"
+        "# ID:    /abs/path or *\n"
+        "# TYPES: screencopy clipboard cursorpos keyboard\n"
+        "# MODES: allow ask deny\n";
 
     ok = ok && write_all(fd, footer, sizeof(footer) - 1);
 
@@ -935,6 +997,7 @@ void config_init(void) {
 
     memset(&config, 0, sizeof(config));
     set_defaults();
+    apply_default_permission_rules();
     initialized = true;
 
     char path[PATH_MAX];
@@ -944,6 +1007,15 @@ void config_init(void) {
         log_warn("Cannot determine config path (using built-in defaults)");
 
     build_binds();
+    log_info(
+        "Security permissions: %s", config.security_permissions ? "ON" : "OFF"
+    );
+
+    if (permission_spec_count > 0) {
+        log_info(
+            "Permissions: %zu/%zu", permission_rule_count, permission_spec_count
+        );
+    }
 }
 
 void config_finish(void) {
@@ -959,8 +1031,73 @@ void config_finish(void) {
     free(config.binds);
 
     memset(&config, 0, sizeof(config));
+    permission_rule_count = permission_spec_count = 0;
     wrote_default = false;
     initialized = false;
 }
 
 bool config_default_was_written(void) { return wrote_default; }
+
+bool config_persist_permission(
+    const char* id, const char* type, const char* mode
+) {
+    if (id == NULL || type == NULL || mode == NULL) return false;
+    if (id[0] == '\0' || type[0] == '\0' || mode[0] == '\0') return false;
+
+    if (strcmp(id, "*") == 0) {
+        log_warn("Refusing to persist wildcard permission rule");
+        return false;
+    }
+
+    if (id[0] != '/') {
+        log_warn("Refusing to persist non-absolute id: '%s'", id);
+        return false;
+    }
+
+    if (strpbrk(id, "\n\r") != NULL) {
+        log_warn("Refusing to persist rule with newline in id");
+        return false;
+    }
+
+    size_t ilen = strlen(id);
+    if (isspace((unsigned char)id[0]) || isspace((unsigned char)id[ilen - 1])) {
+        log_warn(
+            "Refusing to persist rule with leading/trailing whitespace in id"
+        );
+
+        return false;
+    }
+
+    char path[PATH_MAX];
+    if (!config_path(path, sizeof(path))) {
+        log_warn("Cannot resolve config path for persistence");
+        return false;
+    }
+
+    int fd = open(path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0600);
+    if (fd < 0) {
+        log_warn("open('%s'): %s", path, strerror(errno));
+        return false;
+    }
+
+    char line[1024];
+    int n = snprintf(
+        line, sizeof(line),
+        "\n# AUTO-ADDED\n"
+        "permission = %s,%s,%s\n",
+        id, type, mode
+    );
+
+    if (n < 0 || (size_t)n >= sizeof(line)) {
+        close(fd);
+        log_warn("Permission rule too long to persist");
+        return false;
+    }
+
+    bool ok = write_all(fd, line, (size_t)n);
+    if (!ok) log_warn("write('%s'): %s", path, strerror(errno));
+    close(fd);
+
+    if (ok) log_info("Persisted permission: %s,%s,%s", id, type, mode);
+    return ok;
+}

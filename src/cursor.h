@@ -48,7 +48,7 @@ bool cursor_is_hidden(void);
 bool cursor_is_interactive(void);
 
 bool cursor_constraints_init(void);
-void cursor_update_active_constraint(void);
 void cursor_constraints_finish(void);
-
+void cursor_update_active_constraint(void);
+void cursor_touch_cancel_all(void);
 void cursor_overview_touch_reset(void);

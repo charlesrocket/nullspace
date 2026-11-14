@@ -13,6 +13,8 @@
 #include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_cursor_shape_v1.h>
 #include <wlr/types/wlr_data_device.h>
+#include <wlr/types/wlr_ext_workspace_v1.h>
+#include <wlr/types/wlr_keyboard_shortcuts_inhibit_v1.h>
 #include <wlr/types/wlr_layer_shell_v1.h>
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_pointer_gestures_v1.h>
@@ -20,6 +22,7 @@
 #include <wlr/types/wlr_viewporter.h>
 #include <wlr/types/wlr_xcursor_manager.h>
 #include <wlr/types/wlr_xdg_decoration_v1.h>
+#include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/types/wlr_xdg_shell.h>
 
 struct wlr_output_power_manager_v1;
@@ -29,6 +32,9 @@ struct wlr_foreign_toplevel_manager_v1;
 struct wlr_idle_inhibit_manager_v1;
 struct wlr_idle_notifier_v1;
 struct wlr_xwayland;
+struct wlr_virtual_keyboard_manager_v1;
+struct wlr_virtual_pointer_manager_v1;
+struct wlr_gamma_control_manager_v1;
 
 struct Window;
 struct Output;
@@ -67,20 +73,33 @@ struct Server {
 
     struct wlr_seat* seat;
 
+    struct wlr_output_manager_v1* output_manager;
+    struct wlr_xdg_output_manager_v1* xdg_output_manager;
+    struct wlr_security_context_manager_v1* security_context_manager;
     struct wlr_content_type_manager_v1* content_type_manager;
-
     struct wlr_output_power_manager_v1* output_power_manager;
+    struct wlr_ext_data_control_manager_v1* ext_data_control_manager;
     struct wlr_idle_inhibit_manager_v1* idle_inhibit_manager;
     struct wlr_idle_notifier_v1* idle_notifier;
     struct wlr_layer_shell_v1* layer_shell;
+    struct wlr_ext_workspace_manager_v1* workspace_manager;
     struct wlr_ext_foreign_toplevel_list_v1* foreign_toplevel_list;
     struct wlr_foreign_toplevel_manager_v1* foreign_toplevel_manager;
     struct wlr_relative_pointer_manager_v1* relative_pointer_manager;
     struct wlr_pointer_constraints_v1* pointer_constraints;
     struct wlr_pointer_gestures_v1* pointer_gestures;
+    struct wlr_virtual_keyboard_manager_v1* virtual_keyboard_manager;
+    struct wlr_virtual_pointer_manager_v1* virtual_pointer_manager;
     struct wlr_cursor_shape_manager_v1* cursor_shape_manager;
     struct wlr_xcursor_manager* cursor_mgr;
     struct wlr_cursor* cursor;
+    struct wlr_gamma_control_manager_v1* gamma_control_manager;
+    struct wlr_ext_image_copy_capture_manager_v1*
+        ext_image_copy_capture_manager;
+    struct wlr_ext_output_image_capture_source_manager_v1*
+        ext_output_image_capture_source_manager;
+    struct wlr_keyboard_shortcuts_inhibit_manager_v1*
+        keyboard_shortcuts_inhibit;
 
 #ifdef XWAYLAND
     struct wlr_xwayland* xwayland;
@@ -89,13 +108,14 @@ struct Server {
     struct wl_listener cursor_motion, cursor_motion_absolute, cursor_button,
         cursor_axis, output_power_set_mode, cursor_frame, new_output, new_input,
         new_idle_inhibitor, new_xdg_toplevel, new_xdg_popup, new_layer_surface,
-        new_xdg_decoration, request_set_selection,
-        request_set_primary_selection, request_set_cursor_shape,
+        new_xdg_decoration, request_set_selection, request_set_cursor_shape,
         request_start_drag, request_set_cursor, start_drag, cursor_swipe_begin,
         cursor_swipe_update, cursor_swipe_end, cursor_pinch_begin,
         cursor_pinch_update, cursor_pinch_end, cursor_hold_begin,
         cursor_hold_end, cursor_touch_down, cursor_touch_up,
-        cursor_touch_motion, cursor_touch_frame, cursor_touch_cancel;
+        cursor_touch_motion, cursor_touch_frame, cursor_touch_cancel,
+        new_shortcuts_inhibitor, rel_pointer_use, vk_use, vp_use, wlr_dc_use,
+        ext_dc_use, ext_capture_session_use;
 
     struct wl_list keyboards, outputs;
 
@@ -116,5 +136,7 @@ int server_init(struct wl_display* display);
 void server_detach_listeners(void);
 void server_finish(void);
 void server_notify_activity(void);
+bool server_shortcuts_inhibited(void);
 
 void idle_update_inhibit(void);
+bool permission_set(const char* id, const char* type, const char* mode);

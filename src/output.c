@@ -5,6 +5,7 @@
 #include "manager.h"
 #include "overview.h"
 #include "seat.h"
+#include "security.h"
 #include "server.h"
 #include "session.h"
 #include "space.h"
@@ -16,13 +17,14 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <sys/_clock_id.h>
 #include <time.h>
 #include <wayland-server-core.h>
 #include <wayland-util.h>
 #include <wlr/types/wlr_foreign_toplevel_management_v1.h>
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_output_layout.h>
+#include <wlr/types/wlr_output_management_v1.h>
+#include <wlr/util/box.h>
 #include <wlr/util/log.h>
 
 #define LOG_TOPIC "output"
@@ -78,7 +80,11 @@ int output_set_power(const char* name, int mode) {
         if (output_set_enabled(o->wlr_output, on)) matched++;
     }
 
-    if (matched > 0) wm_mark_layout_dirty();
+    if (matched > 0) {
+        wm_mark_layout_dirty();
+        output_update_manager_config();
+    }
+
     return matched;
 }
 
@@ -154,6 +160,33 @@ static void output_reassign_windows(struct Output* dying) {
     seat_focus(NULL);
 }
 
+void output_update_manager_config(void) {
+    if (server.output_manager == NULL) { return; }
+
+    struct wlr_output_configuration_v1* out_config =
+        wlr_output_configuration_v1_create();
+    if (out_config == NULL) { return; }
+
+    struct Output* out;
+    wl_list_for_each(out, &server.outputs, link) {
+        if (out->removed || out->wlr_output == NULL) { continue; }
+
+        struct wlr_output_configuration_head_v1* head =
+            wlr_output_configuration_head_v1_create(
+                out_config, out->wlr_output
+            );
+
+        struct wlr_box box;
+        wlr_output_layout_get_box(server.output_layout, out->wlr_output, &box);
+
+        head->state.enabled = !wlr_box_empty(&box);
+        head->state.x = box.x;
+        head->state.y = box.y;
+    }
+
+    wlr_output_manager_v1_set_configuration(server.output_manager, out_config);
+}
+
 void output_create(struct wlr_output* wlr_output) {
     if (!wlr_output_init_render(
             wlr_output, server.allocator, server.renderer
@@ -206,8 +239,16 @@ void output_create(struct wlr_output* wlr_output) {
         server.scene_layout, layout_out, out->scene_output
     );
 
+    if (wlr_output->global != NULL) {
+        security_sandbox_add(wlr_output->global);
+    } else {
+        log_warn(
+            "wl_output global missing for '%s'; sandboxes will not see it",
+            wlr_output->name
+        );
+    }
     output_update_geometry(out);
-
+    output_update_manager_config();
     session_lock_update_geometry();
 
     out->frame.notify = output_handle_frame;
@@ -290,10 +331,13 @@ static void output_handle_request_state(struct wl_listener* l, void* data) {
     if (!wlr_output_commit_state(ev->output, ev->state)) return;
 
     struct Output* out = output_from_wlr_output(ev->output);
-    if (out != NULL) output_update_geometry(out);
+    if (out != NULL) {
+        output_update_geometry(out);
+        output_update_manager_config();
+    }
 
-    session_lock_update_geometry();
     wm_mark_layout_dirty();
+    session_lock_update_geometry();
 }
 
 static void output_handle_destroy(struct wl_listener* l, void* data) {
@@ -307,6 +351,10 @@ void output_destroy(struct Output* out) {
     if (out->removed) return;
     out->removed = true;
     output_reassign_windows(out);
+
+    if (out->wlr_output != NULL) {
+        security_sandbox_remove(out->wlr_output->global);
+    }
 
     if (out->wallpaper != NULL) {
         wallpaper_output_destroy(out->wallpaper);
@@ -328,6 +376,7 @@ void output_destroy(struct Output* out) {
         wlr_output_layout_remove(server.output_layout, out->wlr_output);
     }
 
+    output_update_manager_config();
     session_lock_update_geometry();
     session_lock_outputs_changed();
 
