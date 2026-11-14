@@ -5,6 +5,7 @@ project(
   version: '0.3.0',
   default_options: [
     'c_std=c11',
+    'werror=true',
     'warning_level=3',
   ],
 )
