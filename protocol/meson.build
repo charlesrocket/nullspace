@@ -10,6 +10,13 @@ wlr_output_power_h = custom_target(
   command: [wayland_scanner, 'server-header', '@INPUT@', '@OUTPUT@'],
 )
 
+wlr_output_power_client_h = custom_target(
+  'wlr-output-power-management-unstable-v1-client-protocol.h',
+  input:  wlr_output_power_xml,
+  output: 'wlr-output-power-management-unstable-v1-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+
 wlr_output_power_c = custom_target(
   'wlr-output-power-management-unstable-v1-protocol.c',
   input:  wlr_output_power_xml,
@@ -65,6 +72,29 @@ ext_bg_effect_c = custom_target(
   command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
+controller_xml = files('nullspace-controller-v1.xml')
+
+controller_h = custom_target(
+  'nullspace-controller-v1-protocol.h',
+  input:  controller_xml,
+  output: 'nullspace-controller-v1-protocol.h',
+  command: [wayland_scanner, 'server-header', '@INPUT@', '@OUTPUT@'],
+)
+
+controller_client_h = custom_target(
+  'nullspace-controller-v1-client-protocol.h',
+  input:  controller_xml,
+  output: 'nullspace-controller-v1-client-protocol.h',
+  command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+
+controller_c = custom_target(
+  'nullspace-controller-v1-protocol.c',
+  input:  controller_xml,
+  output: 'nullspace-controller-v1-protocol.c',
+  command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 proto_inc = include_directories('.')
 
 proto_sources = [
@@ -76,4 +106,6 @@ proto_sources = [
   xdg_shell_c,
   ext_bg_effect_h,
   ext_bg_effect_c,
+  controller_h,
+  controller_c,
 ]

@@ -2,8 +2,8 @@
 
 #include "animation.h"
 #include "config.h"
+#include "controller.h"
 #include "decoration.h"
-#include "ipc.h"
 #include "layout/layout.h"
 #include "log.h"
 #include "output.h"
@@ -152,7 +152,7 @@ void wm_set_kb_layout(const char* layout) {
 
     free(wm.kb_layout);
     wm.kb_layout = strdup(layout);
-    ipc_notify_kb_layout();
+    controller_notify_kb_layout();
 }
 
 static void set_layout_impl(enum Layout layout) {
@@ -175,7 +175,7 @@ static void set_layout_impl(enum Layout layout) {
         w->has_target = false;
     }
 
-    if (changed) ipc_notify_layout();
+    if (changed) controller_notify_layout();
     wm_mark_layout_dirty();
 }
 
@@ -301,8 +301,8 @@ void wm_switch_space_on(struct Output* out, int space) {
         seat_update_decorations(NULL);
     }
 
-    ipc_notify_space();
-    ipc_notify_focus();
+    controller_notify_spaces();
+    controller_notify_focus();
     wm_mark_layout_dirty();
     idle_update_inhibit();
 }
@@ -339,7 +339,7 @@ void wm_minimize_window(struct Window* window) {
 
     if (had_kbd_focus) seat_focus(NULL);
 
-    ipc_notify_window_meta(window);
+    controller_notify_window_meta(window);
     wm_mark_layout_dirty();
     idle_update_inhibit();
 }
@@ -377,7 +377,7 @@ void wm_restore_window(struct Window* window) {
     seat_focus(window);
     if (!layouts_is_tiled(wm.layout)) window_raise(window);
 
-    ipc_notify_window_meta(window);
+    controller_notify_window_meta(window);
     wm_mark_layout_dirty();
     idle_update_inhibit();
 }
@@ -402,7 +402,7 @@ void wm_move_window_to_space(struct Window* window, int space) {
 
     window->space = space;
     wm_switch_space_on(window->output, space);
-    ipc_notify_window_meta(window);
+    controller_notify_window_meta(window);
 }
 
 void wm_assign_new_window_space(struct Window* window, int space) {

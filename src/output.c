@@ -1,5 +1,6 @@
 #include "output.h"
 
+#include "layer.h"
 #include "layout/layout.h"
 #include "log.h"
 #include "manager.h"
@@ -351,6 +352,14 @@ void output_destroy(struct Output* out) {
     if (out->removed) return;
     out->removed = true;
     output_reassign_windows(out);
+
+    struct LayerSurface *ls, *tmp_ls;
+    wl_list_for_each_safe(ls, tmp_ls, &wm.layer_surfaces, link) {
+        if (ls->output == out) {
+            ls->output = NULL;
+            wlr_layer_surface_v1_destroy(ls->layer_surface);
+        }
+    }
 
     if (out->wlr_output != NULL) {
         security_sandbox_remove(out->wlr_output->global);

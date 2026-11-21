@@ -1,6 +1,6 @@
 #include "config.h"
+#include "controller.h"
 #include "help.h"
-#include "ipc.h"
 #include "keymap.h"
 #include "log.h"
 #include "manager.h"
@@ -167,9 +167,6 @@ int main(int argc, char* argv[]) {
     if (!xwayland_init(display)) { log_warn("Xwayland is not ready"); }
 #endif
 
-    ipc_init();
-    ipc_attach_event_loop(server.event_loop);
-
     wallpaper_worker_init();
     wm_set_wallpaper_path(wm.wallpaper.path);
 
@@ -191,7 +188,6 @@ int main(int argc, char* argv[]) {
     log_info("Shutting down");
 
     wl_display_destroy_clients(display);
-    ipc_destroy();
     help_finish();
 
 #ifdef XWAYLAND

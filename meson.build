@@ -37,6 +37,7 @@ if get_option('asan')
 endif
 
 wayland_server = dependency('wayland-server')
+wayland_client = dependency('wayland-client')
 wayland_proto = dependency('wayland-protocols')
 wlroots = dependency('wlroots-0.20', include_type: 'system')
 scenefx = dependency('scenefx-0.5', include_type: 'system')

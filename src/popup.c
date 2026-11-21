@@ -1,7 +1,7 @@
 #include "popup.h"
 
 #include "config.h"
-#include "layers.h"
+#include "layer.h"
 #include "output.h"
 #include "server.h"
 #include "session.h"

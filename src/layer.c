@@ -1,4 +1,4 @@
-#include "layers.h"
+#include "layer.h"
 
 #include "manager.h"
 #include "output.h"
@@ -363,7 +363,7 @@ struct LayerSurface* layer_surface_from_wlr_surface(struct wlr_surface* surface
     return NULL;
 }
 
-void layers_handle_new_surface(struct wl_listener* listener, void* data) {
+void layer_handle_new_surface(struct wl_listener* listener, void* data) {
     (void)listener;
 
     struct wlr_layer_surface_v1* layer = data;

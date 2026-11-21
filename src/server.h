@@ -1,8 +1,11 @@
 #pragma once
 
+#include "controller.h"
+
 #include <scenefx/types/wlr_scene.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <wayland-client-core.h>
 #include <wayland-server-core.h>
 #include <wayland-util.h>
 #include <wlr/backend.h>
@@ -100,6 +103,8 @@ struct Server {
         ext_output_image_capture_source_manager;
     struct wlr_keyboard_shortcuts_inhibit_manager_v1*
         keyboard_shortcuts_inhibit;
+
+    struct Controller* nullspace_controller;
 
 #ifdef XWAYLAND
     struct wlr_xwayland* xwayland;

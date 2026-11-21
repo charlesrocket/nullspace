@@ -3,11 +3,12 @@
 #include "activation.h"
 #include "background.h"
 #include "config.h"
+#include "controller.h"
 #include "cursor.h"
 #include "decoration.h"
 #include "icon.h"
 #include "input.h"
-#include "layers.h"
+#include "layer.h"
 #include "layout/layout.h"
 #include "log.h"
 #include "manager.h"
@@ -20,6 +21,7 @@
 #include "wallpaper.h"
 #include "window.h"
 
+#include <nullspace-controller-v1-protocol.h>
 #include <scenefx/render/fx_renderer/fx_renderer.h>
 #include <scenefx/types/fx/clipped_region.h>
 #include <spawn.h>
@@ -672,7 +674,7 @@ int server_init(struct wl_display* display) {
     server.output_manager = wlr_output_manager_v1_create(display);
     PROTECT(server.output_manager, PERM_NONE);
 
-    server.new_layer_surface.notify = layers_handle_new_surface;
+    server.new_layer_surface.notify = layer_handle_new_surface;
     wl_signal_add(
         &server.layer_shell->events.new_surface, &server.new_layer_surface
     );
@@ -818,6 +820,8 @@ int server_init(struct wl_display* display) {
         &server.new_idle_inhibitor
     );
 
+    server.nullspace_controller = controller_create(display);
+    PROTECT(server.nullspace_controller, PERM_NONE);
     seat_init();
     if (!icon_manager_init(display)) log_warn("Toplevel icon unavailable");
 
@@ -920,6 +924,7 @@ void server_finish(void) {
     wallpaper_finish();
     background_effect_finish();
     ext_workspace_finish();
+    controller_destroy(server.nullspace_controller);
 
     if (server.cursor_mgr) wlr_xcursor_manager_destroy(server.cursor_mgr);
     if (server.cursor) wlr_cursor_destroy(server.cursor);

@@ -2,11 +2,11 @@
 
 #include "actions.h"
 #include "config.h"
+#include "controller.h"
 #include "cursor.h"
 #include "decoration.h"
 #include "help.h"
 #include "input.h"
-#include "ipc.h"
 #include "keymap.h"
 #include "layout/layout.h"
 #include "manager.h"
@@ -796,7 +796,7 @@ void seat_focus(struct Window* window) {
     }
 
     seat_update_decorations(window);
-    ipc_notify_focus();
+    controller_notify_focus();
     wm_mark_layout_dirty();
 }
 

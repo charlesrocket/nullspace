@@ -32,6 +32,6 @@ struct LayerSurface {
     bool mapped;
 };
 
-void layers_handle_new_surface(struct wl_listener* listener, void* data);
+void layer_handle_new_surface(struct wl_listener* listener, void* data);
 struct LayerSurface* layer_surface_from_wlr_surface(struct wlr_surface* surface
 );

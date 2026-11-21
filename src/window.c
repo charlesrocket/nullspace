@@ -1,10 +1,10 @@
 #include "window.h"
 
 #include "animation.h"
+#include "controller.h"
 #include "cursor.h"
 #include "decoration.h"
 #include "icon.h"
-#include "ipc.h"
 #include "layout/layout.h"
 #include "log.h"
 #include "manager.h"
@@ -826,7 +826,7 @@ static void window_do_map(struct Window* window) {
         window_raise(window);
     }
 
-    ipc_notify_window_opened(window);
+    controller_notify_window_opened(window);
     idle_update_inhibit();
 }
 
@@ -866,7 +866,7 @@ static void window_do_unmap(struct Window* window) {
     }
 
     wl_list_init(&window->focus_link);
-    ipc_notify_window_closed(window);
+    controller_notify_window_closed(window);
 
     if (had_focus) seat_focus(NULL);
 
@@ -900,7 +900,7 @@ static void window_apply_pending_icon(struct Window* window) {
     window->pending_icon = NULL;
     window->pending_icon_cleared = false;
 
-    if (changed) ipc_notify_window_meta(window);
+    if (changed) controller_notify_window_meta(window);
 }
 
 static void window_handle_commit(struct wl_listener* l, void* data) {
@@ -1031,7 +1031,7 @@ static void window_handle_set_title(struct wl_listener* l, void* data) {
 
     deco_update_title(window);
     foreign_handle_update(window);
-    ipc_notify_window_meta(window);
+    controller_notify_window_meta(window);
 }
 
 static void window_handle_set_app_id(struct wl_listener* l, void* data) {
@@ -1057,7 +1057,7 @@ static void window_handle_set_app_id(struct wl_listener* l, void* data) {
         wlr_foreign_toplevel_handle_v1_set_app_id(window->wlr_handle, new_id);
 
     foreign_handle_update(window);
-    ipc_notify_window_meta(window);
+    controller_notify_window_meta(window);
 }
 
 struct Window* window_from_id(uint64_t id) {
@@ -1724,7 +1724,7 @@ static void xw_handle_set_title(struct wl_listener* l, void* data) {
 
     deco_update_title(window);
     foreign_handle_update(window);
-    ipc_notify_window_meta(window);
+    controller_notify_window_meta(window);
 }
 
 static void xw_handle_set_class(struct wl_listener* l, void* data) {
@@ -1751,7 +1751,7 @@ static void xw_handle_set_class(struct wl_listener* l, void* data) {
     }
 
     foreign_handle_update(window);
-    ipc_notify_window_meta(window);
+    controller_notify_window_meta(window);
 }
 
 void window_create_xwayland(struct wlr_xwayland_surface* xw) {
