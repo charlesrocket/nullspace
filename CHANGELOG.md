@@ -2,6 +2,67 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-11-21
+
+### Bug Fixes
+
+- Use size hints
+- Improve drag/release
+- Drop shadows during resize
+- Broadcast toplevel states
+- Improve reassignments
+- Fix transient parents
+- Resolve slider lag
+- Cast sw double
+- Adjust space threshold
+- Resolve dead pointer after dnd
+- Drop leftover teardown fn
+- Resolve pipe messages
+- Use single fork
+- Resolve ub in `headless_size()`
+- Fix pointer extensions
+- Fix toplevel activation
+- Engage blur
+- Change default xwayland option
+
+### Documentation
+
+- Update build commands
+- Fix `Build` formatting
+- Update header
+- Fix `ov_scale` comment
+
+### Features
+
+- Add `inspect` call
+- Add overview
+- Add `help` panel
+- Implement content type
+- Implement pointer gestures
+- Add touch support
+- Allow touch in mission control
+- Add touch input toggles
+- Inspect devices/displays/layers
+- Implement security layers
+- Switch to controller extension
+
+### Performance
+
+- Optimize animation objects
+
+### Refactor
+
+- Rename server
+- Rename startup fn
+
+### Styling
+
+- Align pointer to the left
+
+### Build
+
+- Fail on warnings
+
 ## [0.2.1] - 2026-11-05
 
 ### Bug Fixes
