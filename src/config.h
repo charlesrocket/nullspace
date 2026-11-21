@@ -197,7 +197,7 @@
 #define CFG_WALLPAPER_BLUR_PASSES          2
 
 #ifdef XWAYLAND
-#define CFG_XWAYLAND true // lazy
+#define CFG_XWAYLAND false // lazy
 #endif
 
 // RUNTIME
