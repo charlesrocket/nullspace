@@ -164,7 +164,9 @@ int main(int argc, char* argv[]) {
     log_info("Display socket is '%s'", socket);
 
 #ifdef XWAYLAND
-    if (!xwayland_init(display)) { log_warn("Xwayland is not ready"); }
+    if (config.xwayland)
+        if (!xwayland_init(display)) log_warn("Xwayland is not ready");
+
 #endif
 
     wallpaper_worker_init();
@@ -191,7 +193,7 @@ int main(int argc, char* argv[]) {
     help_finish();
 
 #ifdef XWAYLAND
-    xwayland_finish();
+    if (config.xwayland) xwayland_finish();
 #endif
 
     server_detach_listeners();
