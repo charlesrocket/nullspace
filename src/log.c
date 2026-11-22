@@ -1,13 +1,17 @@
 #include "log.h"
 
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <wayland-client-core.h>
+#include <wayland-server-core.h>
 #include <wlr/util/log.h>
 
 static enum LogLevel current_level = LOG_INFO;
+static bool verbose_enabled = false;
 
 static const char* const LEVEL_NAMES[] = {
     [LOG_TRACE] = "trace", [LOG_DEBUG] = "debug", [LOG_INFO] = "info",
@@ -42,17 +46,34 @@ static bool parse_level(const char* s, enum LogLevel* out) {
     return false;
 }
 
+static void wl_log_silent(const char* fmt, va_list args) {
+    (void)fmt;
+    (void)args;
+}
+
+static void apply_wlr_level(void) {
+    wlr_log_init(verbose_enabled ? to_wlr(current_level) : WLR_SILENT, NULL);
+}
+
 void log_init(void) {
+    const char* vrb = getenv("NULLSPACE_VERBOSE");
+    verbose_enabled = vrb != NULL && strcmp(vrb, "true") == 0;
+
     const char* env = getenv("NULLSPACE_LOG_LEVEL");
     if (env && *env && !parse_level(env, &current_level))
         current_level = LOG_INFO;
 
-    wlr_log_init(to_wlr(current_level), NULL);
+    if (!verbose_enabled) {
+        wl_log_set_handler_server(wl_log_silent);
+        wl_log_set_handler_client(wl_log_silent);
+    }
+
+    apply_wlr_level();
 }
 
 void log_set_level(enum LogLevel level) {
     current_level = level;
-    wlr_log_init(to_wlr(current_level), NULL);
+    apply_wlr_level();
 }
 
 enum LogLevel log_get_level(void) { return current_level; }
@@ -61,6 +82,7 @@ void log_msg(
     enum LogLevel level, const char* topic, const char* file, int line,
     const char* fmt, ...
 ) {
+    if (!verbose_enabled) return;
     if (level < current_level) return;
 
     char prefix[128] = "";

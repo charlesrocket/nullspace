@@ -54,6 +54,7 @@ pthreads = dependency('threads')
 
 deps = [
   wayland_server,
+  wayland_client,
   scenefx,
   wlroots,
   xkbcommon,
