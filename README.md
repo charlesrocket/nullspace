@@ -29,7 +29,7 @@ meson install -C build
 nullspace-start
 ```
 
-### IPC
+### Controller interface
 ```
 nctl list
 ```
