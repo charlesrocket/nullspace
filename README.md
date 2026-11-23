@@ -29,6 +29,12 @@ meson install -C build
 nullspace-start
 ```
 
+### Environment variables
+
+* `NULLSPACE_VERBOSE` | _`false`_/`true` - debug output toggle
+* `NULLSPACE_LOG_LEVEL` | `debug`/_`info`_/`warn`/`error`/`trace` - logging levels
+* `NULLSPACE_HEADLESS_SIZE` | _`1280x720`_ - headless mode dimensions
+
 ### Controller interface
 ```
 nctl list
