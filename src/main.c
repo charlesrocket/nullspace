@@ -65,6 +65,13 @@ static void startup(void* data) {
         spawn_shell(config.cmd_start);
 }
 
+static void start_topbar(void* data) {
+    (void)data;
+
+    if (spawn_shell("quickshell -c topbar --no-duplicate") == 0)
+        log_info("TopBar started");
+}
+
 static void on_sigchld(int sig) {
     (void)sig;
 
@@ -184,6 +191,7 @@ int main(int argc, char* argv[]) {
     if (config_default_was_written()) help_schedule();
 
     wl_event_loop_add_idle(server.event_loop, startup, NULL);
+    wl_event_loop_add_idle(server.event_loop, start_topbar, NULL);
     log_info("Entering event loop");
     wl_display_run(display);
 
