@@ -43,3 +43,5 @@ nctl list
 ## Contributing
 
 Patches are accepted via [Codeberg](https://codeberg.org/charlesrocket/nullspace) or e-mail.
+
+* [Zulip](https://nullspace.zulipchat.com/)
