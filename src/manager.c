@@ -20,9 +20,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wayland-server-core.h>
 #include <wayland-util.h>
 #include <wlr/types/wlr_foreign_toplevel_management_v1.h>
+#include <wlr/types/wlr_output_layout.h>
+#include <wlr/types/wlr_scene.h>
 #include <wlr/types/wlr_seat.h>
+#include <wlr/types/wlr_xdg_system_bell_v1.h>
+#include <wlr/util/box.h>
 
 #define LOG_TOPIC "wm"
 
@@ -43,12 +48,101 @@ static void apply_space_rules(void) {
     wm.layout = wm.space_layouts[1]; // DEFAULT
 }
 
-void wm_mark_layout_dirty(void) {
-    wm.layout_dirty = true;
+static void schedule_frames(void) {
     struct Output* o;
     wl_list_for_each(o, &server.outputs, link) {
         if (!o->removed) wlr_output_schedule_frame(o->wlr_output);
     }
+}
+
+static struct {
+    struct wlr_scene_rect* rect;
+    struct wlr_output_layout* layout;
+    struct wl_listener ring, destroy;
+    int64_t start_ms;
+    bool active;
+} bell;
+
+static void bell_set_alpha(float a) {
+    wlr_scene_rect_set_color(bell.rect, (float[4]){a, a, a, a});
+}
+
+static void bell_tick(int64_t now) {
+    if (!bell.active) return;
+
+    int64_t elapsed = now - bell.start_ms;
+    if (elapsed >= CFG_BELL_DURATION_MS) {
+        bell.active = false;
+        wlr_scene_node_set_enabled(&bell.rect->node, false);
+        return;
+    }
+
+    float t = 1.0f - (float)elapsed / CFG_BELL_DURATION_MS;
+    bell_set_alpha(CFG_BELL_PEAK_ALPHA * t * t);
+}
+
+static void handle_bell_ring(struct wl_listener* listener, void* data) {
+    (void)listener;
+    (void)data;
+
+    int64_t now = animation_now_ms();
+    if (now - bell.start_ms < CFG_BELL_COOLDOWN_MS) return;
+
+    struct wlr_box box;
+    wlr_output_layout_get_box(bell.layout, NULL, &box);
+    if (wlr_box_empty(&box)) return;
+
+    wlr_scene_rect_set_size(bell.rect, box.width, box.height);
+    wlr_scene_node_set_position(&bell.rect->node, box.x, box.y);
+    wlr_scene_node_raise_to_top(&bell.rect->node);
+    wlr_scene_node_set_enabled(&bell.rect->node, true);
+    bell_set_alpha(CFG_BELL_PEAK_ALPHA);
+
+    bell.start_ms = now;
+    bell.active = true;
+    schedule_frames();
+}
+
+static void handle_bell_destroy(struct wl_listener* listener, void* data) {
+    (void)listener;
+    (void)data;
+
+    wl_list_remove(&bell.ring.link);
+    wl_list_remove(&bell.destroy.link);
+    bell.active = false;
+}
+
+void wm_bell_init(
+    struct wl_display* display, struct wlr_scene_tree* parent,
+    struct wlr_output_layout* layout
+) {
+    struct wlr_xdg_system_bell_v1* b =
+        wlr_xdg_system_bell_v1_create(display, 1);
+    if (b == NULL) {
+        log_warn("Failed to create xdg_system_bell_v1");
+        return;
+    }
+
+    bell.rect = wlr_scene_rect_create(parent, 0, 0, (float[4]){0, 0, 0, 0});
+    if (bell.rect == NULL) {
+        log_warn("Failed to create bell overlay");
+        return;
+    }
+
+    wlr_scene_node_set_enabled(&bell.rect->node, false);
+
+    bell.layout = layout;
+    bell.start_ms = -CFG_BELL_COOLDOWN_MS;
+
+    bell.ring.notify = handle_bell_ring;
+    wl_signal_add(&b->events.ring, &bell.ring);
+    bell.destroy.notify = handle_bell_destroy;
+    wl_signal_add(&b->events.destroy, &bell.destroy);
+}
+
+void wm_mark_layout_dirty(void) {
+    wm.layout_dirty = true;
+    schedule_frames();
 }
 
 void wm_mark_space_urgent_on(struct Output* out, int space) {
@@ -66,6 +160,7 @@ void wm_mark_space_urgent(int space) {
 }
 
 bool wm_animation_active(void) {
+    if (bell.active) return true;
     if (!wm.animations.enabled) return false;
     struct Window* w;
     wl_list_for_each(w, &wm.windows, link) {
@@ -78,8 +173,10 @@ bool wm_animation_active(void) {
 }
 
 void wm_animation_tick_all(void) {
-    if (!wm.animations.enabled) return;
     int64_t now = animation_now_ms();
+    bell_tick(now);
+
+    if (!wm.animations.enabled) return;
     struct Window* w;
     wl_list_for_each(w, &wm.windows, link) {
         if (w->closed || !w->mapped) continue;

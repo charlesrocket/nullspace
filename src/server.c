@@ -842,6 +842,8 @@ int server_init(struct wl_display* display) {
         return -1;
     }
 
+    wm_bell_init(server.display, &server.scene->tree, server.output_layout);
+
     log_info("Initialization completed");
 
     return 0;

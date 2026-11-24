@@ -144,6 +144,10 @@
 #define CFG_DECO_SLIDER_HEIGHT             28
 #define CFG_DECO_FONT                      "Hack Nerd Font Bold 10"
 
+#define CFG_BELL_DURATION_MS 460
+#define CFG_BELL_COOLDOWN_MS 500
+#define CFG_BELL_PEAK_ALPHA  0.4f
+
 #define CFG_ANIMATIONS_ENABLED             true
 
 #define CFG_ANIM_DURATION_MOVE             250
