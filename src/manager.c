@@ -57,8 +57,6 @@ static void schedule_frames(void) {
 
 static struct {
     struct wlr_scene_rect* rect;
-    struct wlr_output_layout* layout;
-    struct wl_listener ring, destroy;
     int64_t start_ms;
     bool active;
 } bell;
@@ -81,15 +79,29 @@ static void bell_tick(int64_t now) {
     bell_set_alpha(CFG_BELL_PEAK_ALPHA * t * t);
 }
 
-static void handle_bell_ring(struct wl_listener* listener, void* data) {
-    (void)listener;
-    (void)data;
+bool wm_bell_init(void) {
+    bell.rect = wlr_scene_rect_create(
+        &server.scene->tree, 0, 0, (float[4]){0, 0, 0, 0}
+    );
+
+    if (bell.rect == NULL) {
+        log_warn("Failed to create system bell overlay");
+        return false;
+    }
+
+    wlr_scene_node_set_enabled(&bell.rect->node, false);
+    bell.start_ms = -CFG_BELL_COOLDOWN_MS;
+    return true;
+}
+
+void wm_bell_ring(void) {
+    if (bell.rect == NULL) return;
 
     int64_t now = animation_now_ms();
     if (now - bell.start_ms < CFG_BELL_COOLDOWN_MS) return;
 
     struct wlr_box box;
-    wlr_output_layout_get_box(bell.layout, NULL, &box);
+    wlr_output_layout_get_box(server.output_layout, NULL, &box);
     if (wlr_box_empty(&box)) return;
 
     wlr_scene_rect_set_size(bell.rect, box.width, box.height);
@@ -100,44 +112,8 @@ static void handle_bell_ring(struct wl_listener* listener, void* data) {
 
     bell.start_ms = now;
     bell.active = true;
+
     schedule_frames();
-}
-
-static void handle_bell_destroy(struct wl_listener* listener, void* data) {
-    (void)listener;
-    (void)data;
-
-    wl_list_remove(&bell.ring.link);
-    wl_list_remove(&bell.destroy.link);
-    bell.active = false;
-}
-
-void wm_bell_init(
-    struct wl_display* display, struct wlr_scene_tree* parent,
-    struct wlr_output_layout* layout
-) {
-    struct wlr_xdg_system_bell_v1* b =
-        wlr_xdg_system_bell_v1_create(display, 1);
-    if (b == NULL) {
-        log_warn("Failed to create xdg_system_bell_v1");
-        return;
-    }
-
-    bell.rect = wlr_scene_rect_create(parent, 0, 0, (float[4]){0, 0, 0, 0});
-    if (bell.rect == NULL) {
-        log_warn("Failed to create bell overlay");
-        return;
-    }
-
-    wlr_scene_node_set_enabled(&bell.rect->node, false);
-
-    bell.layout = layout;
-    bell.start_ms = -CFG_BELL_COOLDOWN_MS;
-
-    bell.ring.notify = handle_bell_ring;
-    wl_signal_add(&b->events.ring, &bell.ring);
-    bell.destroy.notify = handle_bell_destroy;
-    wl_signal_add(&b->events.destroy, &bell.destroy);
 }
 
 void wm_mark_layout_dirty(void) {

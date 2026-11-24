@@ -77,9 +77,7 @@ struct Window* wm_focus_stack_top_except(struct Window* skip);
 bool wm_set_wallpaper_path(const char* path);
 void wm_invalidate_wallpaper(void);
 
-void wm_bell_init(
-    struct wl_display* display, struct wlr_scene_tree* parent,
-    struct wlr_output_layout* layout
-);
+bool wm_bell_init(void);
+void wm_bell_ring(void);
 
 struct Window* wm_restore_last_minimized(void);

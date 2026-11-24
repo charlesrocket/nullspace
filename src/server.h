@@ -43,6 +43,8 @@ struct Window;
 struct Output;
 
 struct Server {
+    struct Controller* nullspace_controller;
+
     struct wl_display* display;
     struct wl_event_loop* event_loop;
 
@@ -72,6 +74,7 @@ struct Server {
 
     struct wlr_xdg_activation_v1* xdg_activation;
     struct wlr_xdg_shell* xdg_shell;
+    struct wlr_xdg_system_bell_v1* system_bell;
     struct wlr_xdg_decoration_manager_v1* xdg_decoration;
 
     struct wlr_seat* seat;
@@ -104,8 +107,6 @@ struct Server {
     struct wlr_keyboard_shortcuts_inhibit_manager_v1*
         keyboard_shortcuts_inhibit;
 
-    struct Controller* nullspace_controller;
-
 #ifdef XWAYLAND
     struct wlr_xwayland* xwayland;
 #endif
@@ -120,7 +121,7 @@ struct Server {
         cursor_hold_end, cursor_touch_down, cursor_touch_up,
         cursor_touch_motion, cursor_touch_frame, cursor_touch_cancel,
         new_shortcuts_inhibitor, rel_pointer_use, vk_use, vp_use, wlr_dc_use,
-        ext_dc_use, ext_capture_session_use;
+        ext_dc_use, ext_capture_session_use, system_bell_ring;
 
     struct wl_list keyboards, outputs;
 

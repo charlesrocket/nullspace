@@ -75,6 +75,7 @@
 #include <wlr/types/wlr_xdg_activation_v1.h>
 #include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/types/wlr_xdg_output_v1.h>
+#include <wlr/types/wlr_xdg_system_bell_v1.h>
 #include <wlr/util/log.h>
 
 #define LOG_TOPIC          "server"
@@ -333,6 +334,13 @@ handle_image_copy_capture_session_use(struct wl_listener* l, void* data) {
         != DEC_ALLOW) {
         wl_resource_destroy(session->resource);
     }
+}
+
+static void handle_system_bell_ring(struct wl_listener* l, void* data) {
+    (void)l;
+    (void)data;
+
+    wm_bell_ring();
 }
 
 int server_init(struct wl_display* display) {
@@ -820,6 +828,19 @@ int server_init(struct wl_display* display) {
         &server.new_idle_inhibitor
     );
 
+    if (wm_bell_init()) {
+        server.system_bell = wlr_xdg_system_bell_v1_create(display, 1);
+        if (server.system_bell != NULL) {
+            PROTECT(server.system_bell, PERM_NONE);
+            server.system_bell_ring.notify = handle_system_bell_ring;
+            wl_signal_add(
+                &server.system_bell->events.ring, &server.system_bell_ring
+            );
+        }
+    }
+
+    if (server.system_bell == NULL) log_warn("System bell unavailable");
+
     server.nullspace_controller = controller_create(display);
     PROTECT(server.nullspace_controller, PERM_NONE);
     seat_init();
@@ -841,8 +862,6 @@ int server_init(struct wl_display* display) {
         log_err("Failed to start wlroots backend");
         return -1;
     }
-
-    wm_bell_init(server.display, &server.scene->tree, server.output_layout);
 
     log_info("Initialization completed");
 
