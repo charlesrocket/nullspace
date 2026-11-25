@@ -702,6 +702,8 @@ static void ctl_set_config(
         return;
     }
 
+    wm_mark_layout_dirty();
+
     struct OneKey ok = {.key = key};
     reply_and_broadcast(res, serial, bc_key, &ok);
 }
