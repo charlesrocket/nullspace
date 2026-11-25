@@ -60,6 +60,7 @@
 #include <wlr/types/wlr_output_management_v1.h>
 #include <wlr/types/wlr_output_power_management_v1.h>
 #include <wlr/types/wlr_pointer_constraints_v1.h>
+#include <wlr/types/wlr_presentation_time.h>
 #include <wlr/types/wlr_primary_selection.h>
 #include <wlr/types/wlr_primary_selection_v1.h>
 #include <wlr/types/wlr_relative_pointer_v1.h>
@@ -493,6 +494,13 @@ int server_init(struct wl_display* display) {
     if (server.scene_layout == NULL) {
         log_err("Failed to attach scene layout");
         return -1;
+    }
+
+    server.presentation = wlr_presentation_create(display, server.backend, 2);
+    if (server.presentation != NULL) {
+        security_sandbox_add(server.presentation->global);
+    } else {
+        log_warn("Presentation-time unavailable");
     }
 
     server.content_tree = wlr_scene_tree_create(&server.scene->tree);
