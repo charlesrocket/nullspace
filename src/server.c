@@ -69,6 +69,7 @@
 #include <wlr/types/wlr_security_context_v1.h>
 #include <wlr/types/wlr_server_decoration.h>
 #include <wlr/types/wlr_session_lock_v1.h>
+#include <wlr/types/wlr_single_pixel_buffer_v1.h>
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/types/wlr_text_input_v3.h>
 #include <wlr/types/wlr_virtual_keyboard_v1.h>
@@ -450,6 +451,14 @@ int server_init(struct wl_display* display) {
     {
         struct wlr_viewporter* v = wlr_viewporter_create(display);
         security_sandbox_add(v ? v->global : NULL);
+    }
+
+    struct wlr_single_pixel_buffer_manager_v1* single_pixel_mgr =
+        wlr_single_pixel_buffer_manager_v1_create(display);
+    if (single_pixel_mgr != NULL) {
+        security_sandbox_add(single_pixel_mgr->global);
+    } else {
+        log_warn("Single-pixel-buffer-v1 unavailable");
     }
 
     struct wlr_server_decoration_manager* kde_deco =
