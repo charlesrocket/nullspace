@@ -71,6 +71,7 @@
 #include <wlr/types/wlr_session_lock_v1.h>
 #include <wlr/types/wlr_single_pixel_buffer_v1.h>
 #include <wlr/types/wlr_subcompositor.h>
+#include <wlr/types/wlr_tearing_control_v1.h>
 #include <wlr/types/wlr_text_input_v3.h>
 #include <wlr/types/wlr_virtual_keyboard_v1.h>
 #include <wlr/types/wlr_virtual_pointer_v1.h>
@@ -824,6 +825,13 @@ int server_init(struct wl_display* display) {
             &server.keyboard_shortcuts_inhibit->events.new_inhibitor,
             &server.new_shortcuts_inhibitor
         );
+    }
+
+    server.tearing_control = wlr_tearing_control_manager_v1_create(display, 1);
+    if (server.tearing_control != NULL) {
+        security_sandbox_add(server.tearing_control->global);
+    } else {
+        log_warn("Tearing control unavailable");
     }
 
     server.gamma_control_manager = wlr_gamma_control_manager_v1_create(display);

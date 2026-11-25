@@ -89,6 +89,7 @@ struct Server {
     struct wlr_idle_inhibit_manager_v1* idle_inhibit_manager;
     struct wlr_idle_notifier_v1* idle_notifier;
     struct wlr_layer_shell_v1* layer_shell;
+    struct wlr_tearing_control_manager_v1* tearing_control;
     struct wlr_presentation* presentation;
     struct wlr_ext_workspace_manager_v1* workspace_manager;
     struct wlr_ext_foreign_toplevel_list_v1* foreign_toplevel_list;

@@ -19,12 +19,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <wayland-protocols/tearing-control-v1-enum.h>
 #include <wayland-server-core.h>
 #include <wayland-util.h>
 #include <wlr/types/wlr_foreign_toplevel_management_v1.h>
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_output_management_v1.h>
+#include <wlr/types/wlr_tearing_control_v1.h>
 #include <wlr/util/box.h>
 #include <wlr/util/log.h>
 
@@ -296,6 +298,26 @@ void output_create(struct wlr_output* wlr_output) {
 #endif
 }
 
+static bool output_wants_tearing(struct Output* out) {
+    if (server.tearing_control == NULL || server.overview_active
+        || server.locked)
+        return false;
+
+    struct Window* w = window_focused();
+    if (w == NULL || w->closed || !w->mapped || !w->fullscreen
+        || w->space_hidden || w->output != out) {
+        return false;
+    }
+
+    struct wlr_surface* s = window_wlr_surface(w);
+    if (s == NULL) return false;
+
+    return wlr_tearing_control_manager_v1_surface_hint_from_surface(
+               server.tearing_control, s
+           )
+        == WP_TEARING_CONTROL_V1_PRESENTATION_HINT_ASYNC;
+}
+
 static void output_handle_frame(struct wl_listener* l, void* data) {
     (void)data;
 
@@ -313,7 +335,27 @@ static void output_handle_frame(struct wl_listener* l, void* data) {
         wm_animation_tick_all();
     }
 
-    const bool committed = wlr_scene_output_commit(out->scene_output, NULL);
+    if (!wlr_scene_output_needs_frame(out->scene_output)) return;
+
+    struct wlr_output_state state;
+    wlr_output_state_init(&state);
+
+    struct wlr_scene_output_state_options opts = {0};
+    if (!wlr_scene_output_build_state(out->scene_output, &state, &opts)) {
+        wlr_output_state_finish(&state);
+        return;
+    }
+
+    if (output_wants_tearing(out)) {
+        state.tearing_page_flip = true;
+        if (!wlr_output_test_state(out->wlr_output, &state)) {
+            state.tearing_page_flip = false;
+        }
+    }
+
+    const bool committed = wlr_output_commit_state(out->wlr_output, &state);
+    wlr_output_state_finish(&state);
+
     if (committed) session_lock_output_committed(out);
 
     struct timespec now;
