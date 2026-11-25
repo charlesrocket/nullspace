@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.1] - 2026-11-25
+
+### Bug Fixes
+
+- Gate debug output
+- Use xwayland check
+- Start topbar in compositor loop
+- Handle system bell
+- Move `system_bell`
+
+### Documentation
+
+- Update `nctl` header
+- Add environment variables
+- Update description
+- Add zulipchat link
+
+### Miscellaneous tasks
+
+- Add icon
+
 ## [0.3.0] - 2026-11-21
 
 ### Bug Fixes
