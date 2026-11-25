@@ -953,6 +953,10 @@ void server_detach_listeners(void) {
         wl_list_remove(&server.new_shortcuts_inhibitor.link);
     }
 
+    if (server.system_bell != NULL) {
+        wl_list_remove(&server.system_bell_ring.link);
+    }
+
     activation_finish();
     cursor_constraints_finish();
     session_lock_detach_listeners();
