@@ -748,6 +748,7 @@ static struct Window* seat_window_for_surface(const struct wlr_surface* surface
 }
 
 void seat_focus(struct Window* window) {
+    if (window != NULL) window = window_modal_target(window);
     if (server.overview_active) return;
     if (server.locked) {
         if (window != NULL) {

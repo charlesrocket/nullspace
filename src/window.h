@@ -24,7 +24,8 @@ struct Window {
     struct wl_listener map, unmap, commit, destroy, request_move,
         wlr_request_activate, wlr_request_close, request_resize,
         request_maximize, request_fullscreen, request_minimize, set_title,
-        set_app_id, ov_scale_commit;
+        set_app_id, ov_scale_commit, dialog_set_modal, dialog_destroy,
+        set_parent;
 
 #ifdef XWAYLAND
     struct wl_listener xw_map, xw_unmap, xw_destroy, xw_request_configure,
@@ -49,6 +50,7 @@ struct Window {
     struct wlr_foreign_toplevel_handle_v1* wlr_handle;
     struct wlr_foreign_toplevel_handle_v1* last_foreign_parent;
     struct wlr_xdg_toplevel* xdg_toplevel;
+    struct wlr_xdg_dialog_v1* xdg_dialog;
 
 #ifdef XWAYLAND
     struct wlr_xwayland_surface* xwayland_surface;
@@ -146,3 +148,8 @@ bool window_is_transient(const struct Window* window);
 struct wlr_surface* window_wlr_surface(const struct Window* window);
 const char* window_title(const struct Window* window);
 const char* window_app_id(const struct Window* window);
+
+void window_dialog_init(struct wl_display* display);
+void window_dialog_finish(void);
+bool window_is_modal(const struct Window* w);
+struct Window* window_modal_target(struct Window* w);

@@ -462,15 +462,17 @@ int server_init(struct wl_display* display) {
         log_warn("Single-pixel-buffer-v1 unavailable");
     }
 
-    struct wlr_server_decoration_manager* kde_deco =
+    struct wlr_server_decoration_manager* sdeco =
         wlr_server_decoration_manager_create(display);
-    if (kde_deco != NULL) {
+    if (sdeco != NULL) {
         wlr_server_decoration_manager_set_default_mode(
-            kde_deco, WLR_SERVER_DECORATION_MANAGER_MODE_SERVER
+            sdeco, WLR_SERVER_DECORATION_MANAGER_MODE_SERVER
         );
     } else {
         log_warn("Server-side decorations unavailable");
     }
+
+    window_dialog_init(display);
 
     server.foreign_toplevel_list =
         wlr_ext_foreign_toplevel_list_v1_create(display, 1);
@@ -958,6 +960,7 @@ void server_detach_listeners(void) {
     }
 
     activation_finish();
+    window_dialog_finish();
     cursor_constraints_finish();
     session_lock_detach_listeners();
 }

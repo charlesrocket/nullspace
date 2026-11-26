@@ -12,6 +12,7 @@
 #include "overview.h"
 #include "rules.h"
 #include "seat.h"
+#include "security.h"
 #include "server.h"
 
 #include <nullspace/layouts.h>
@@ -28,6 +29,7 @@
 #include <wlr/types/wlr_subcompositor.h>
 #include <wlr/types/wlr_xdg_activation_v1.h>
 #include <wlr/types/wlr_xdg_decoration_v1.h>
+#include <wlr/types/wlr_xdg_dialog_v1.h>
 #include <wlr/util/box.h>
 #include <wlr/util/edges.h>
 #include <wlr/util/log.h>
@@ -41,6 +43,8 @@
 #ifdef XWAYLAND
 static void xw_unbind(struct Window* window);
 #endif
+
+static struct wl_listener new_dialog_listener;
 
 static int imin(int a, int b) { return a < b ? a : b; }
 
@@ -326,6 +330,101 @@ struct Window* window_parent(const struct Window* window) {
 
 bool window_is_transient(const struct Window* window) {
     return window_parent(window) != NULL;
+}
+
+bool window_is_modal(const struct Window* w) {
+    if (w == NULL || w->closed) return false;
+#ifdef XWAYLAND
+    if (w->is_xwayland) {
+        return w->xwayland_surface != NULL && w->xwayland_surface->modal;
+    }
+#endif
+    return w->xdg_dialog != NULL && w->xdg_dialog->modal;
+}
+
+struct Window* window_modal_target(struct Window* w) {
+    for (int depth = 0; w != NULL && depth < 16; depth++) {
+        struct Window* next = NULL;
+        struct Window* c;
+        wl_list_for_each_reverse(c, &wm.windows, link) {
+            if (c == w || c->closed || !c->mapped || c->minimized) continue;
+            if (!window_is_modal(c) || window_parent(c) != w) continue;
+            next = c;
+            break;
+        }
+
+        if (next == NULL) break;
+        w = next;
+    }
+
+    return w;
+}
+
+static void dialog_detach(struct Window* w) {
+    if (w->xdg_dialog == NULL) return;
+    wl_list_remove(&w->dialog_set_modal.link);
+    wl_list_remove(&w->dialog_destroy.link);
+    w->xdg_dialog = NULL;
+}
+
+static void dialog_handle_destroy(struct wl_listener* l, void* data) {
+    (void)data;
+
+    struct Window* w = wl_container_of(l, w, dialog_destroy);
+    dialog_detach(w);
+}
+
+static void dialog_handle_set_modal(struct wl_listener* l, void* data) {
+    (void)data;
+
+    struct Window* w = wl_container_of(l, w, dialog_set_modal);
+    if (w->closed || !w->mapped || !window_is_modal(w)) return;
+
+    struct Window* parent = window_parent(w);
+    if (parent != NULL && window_focused() == parent) {
+        seat_focus(w);
+        window_raise(w);
+    }
+}
+
+static void handle_new_dialog(struct wl_listener* l, void* data) {
+    (void)l;
+
+    struct wlr_xdg_dialog_v1* d = data;
+    struct Window* w = window_from_xdg_toplevel(d->xdg_toplevel);
+
+    if (w == NULL || w->closed || w->xdg_dialog != NULL) return;
+
+    w->xdg_dialog = d;
+    w->dialog_set_modal.notify = dialog_handle_set_modal;
+    wl_signal_add(&d->events.set_modal, &w->dialog_set_modal);
+    w->dialog_destroy.notify = dialog_handle_destroy;
+    wl_signal_add(&d->events.destroy, &w->dialog_destroy);
+}
+
+static struct wl_listener new_dialog_listener;
+static bool dialog_initialized;
+
+void window_dialog_init(struct wl_display* display) {
+    if (dialog_initialized) return;
+
+    struct wlr_xdg_wm_dialog_v1* mgr = wlr_xdg_wm_dialog_v1_create(display, 1);
+    if (mgr == NULL) {
+        log_warn("xdg-dialog unavailable");
+        return;
+    }
+
+    security_sandbox_add(mgr->global);
+
+    new_dialog_listener.notify = handle_new_dialog;
+    wl_signal_add(&mgr->events.new_dialog, &new_dialog_listener);
+    dialog_initialized = true;
+}
+
+void window_dialog_finish(void) {
+    if (!dialog_initialized) return;
+    wl_list_remove(&new_dialog_listener.link);
+    dialog_initialized = false;
 }
 
 void window_apply_target(
@@ -868,7 +967,11 @@ static void window_do_unmap(struct Window* window) {
     wl_list_init(&window->focus_link);
     controller_notify_window_closed(window);
 
-    if (had_focus) seat_focus(NULL);
+    if (had_focus) {
+        struct Window* p = window_parent(window);
+        bool ok = p != NULL && p->mapped && !p->minimized && !p->space_hidden;
+        seat_focus(ok ? p : NULL);
+    }
 
     wm_mark_layout_dirty();
     idle_update_inhibit();
@@ -1078,6 +1181,29 @@ struct Window* window_from_scene_node(const struct wlr_scene_node* node) {
     return w;
 }
 
+static void window_handle_set_parent(struct wl_listener* l, void* data) {
+    (void)data;
+
+    struct Window* window = wl_container_of(l, window, set_parent);
+    if (window->closed) return;
+
+    window_sync_foreign_parent(window);
+    if (!window->mapped) return;
+
+    struct Window* parent = window_parent(window);
+    if (parent != NULL) {
+        if (parent->output != NULL) window->output = parent->output;
+        window->space = parent->space;
+        window->space_hidden = parent->space_hidden;
+    }
+
+    window->has_target = false;
+    window_reparent(window, !layouts_is_tiled(wm.layout));
+    window_set_tiled(window, layouts_is_tiled(wm.layout) && parent == NULL);
+    deco_update_for_layout(window);
+    wm_mark_layout_dirty();
+}
+
 void window_icon_set_pending(struct Window* w, struct Icon* icon) {
     if (w == NULL || w->closed) {
         icon_free(icon);
@@ -1106,8 +1232,11 @@ void window_create(struct wlr_xdg_toplevel* xdg_toplevel) {
     window->node_tag.type = NODE_WINDOW;
     window->xdg_toplevel = xdg_toplevel;
     window->output = output_focused();
+    window->set_parent.notify = window_handle_set_parent;
     window->space =
         window->output ? window->output->current_space : WINDOW_SPACE_UNSET;
+
+    wl_signal_add(&xdg_toplevel->events.set_parent, &window->set_parent);
 
     struct wlr_scene_tree* parent = layer_for_layout(wm.layout);
     window->scene_tree =
@@ -1273,6 +1402,7 @@ void window_destroy(struct Window* window) {
         wl_list_remove(&window->request_minimize.link);
         wl_list_remove(&window->set_title.link);
         wl_list_remove(&window->set_app_id.link);
+        wl_list_remove(&window->set_parent.link);
     }
 
     if (window->scene_tree != NULL) {
@@ -1485,6 +1615,9 @@ void window_raise(struct Window* window) {
 
     if (parent != NULL) window_raise_self(parent);
     window_raise_self(window);
+
+    struct Window* m = window_modal_target(window);
+    if (m != window) window_raise_self(m);
 }
 
 void window_reparent(struct Window* window, bool to_float) {
