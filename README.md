@@ -31,9 +31,9 @@ nullspace-start
 
 ### Environment variables
 
-* `NULLSPACE_VERBOSE` | _`false`_/`true` - debug output toggle
-* `NULLSPACE_LOG_LEVEL` | `debug`/_`info`_/`warn`/`error`/`trace` - logging levels
-* `NULLSPACE_HEADLESS_SIZE` | _`1280x720`_ - headless mode dimensions
+* `NULLSPACE_VERBOSE` | _`false`_/`true`
+* `NULLSPACE_LOG_LEVEL` | `debug`/_`info`_/`warn`/`error`/`trace`
+* `NULLSPACE_HEADLESS_SIZE` | _`1280x720`_
 
 ### Controller interface
 ```
