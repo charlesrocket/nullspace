@@ -4,7 +4,7 @@
 #include "config.h"
 #include "controller.h"
 #include "decoration.h"
-#include "layout/layout.h"
+#include "layout/param.h"
 #include "log.h"
 #include "output.h"
 #include "rules.h"

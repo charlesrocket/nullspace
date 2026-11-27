@@ -1,7 +1,7 @@
 #include "vertical.h"
 
 #include "../window.h"
-#include "layout.h"
+#include "param.h"
 
 #include <stddef.h>
 #include <stdint.h>

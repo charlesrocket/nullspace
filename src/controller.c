@@ -7,7 +7,7 @@
 #include "icon.h"
 #include "input.h"
 #include "layer.h"
-#include "layout/layout.h"
+#include "layout/param.h"
 #include "manager.h"
 #include "output.h"
 #include "seat.h"

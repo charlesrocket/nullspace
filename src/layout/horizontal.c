@@ -1,6 +1,6 @@
 #include "horizontal.h"
 
-#include "layout.h"
+#include "param.h"
 
 #include <stdbool.h>
 #include <stdint.h>

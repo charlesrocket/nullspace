@@ -5,7 +5,7 @@
 #include "cursor.h"
 #include "decoration.h"
 #include "icon.h"
-#include "layout/layout.h"
+#include "layout/param.h"
 #include "log.h"
 #include "manager.h"
 #include "output.h"

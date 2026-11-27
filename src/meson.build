@@ -5,7 +5,7 @@ src_files = files(
   'config.c',
   'log.c',
   'layer.c',
-  'layout/layout.c',
+  'layout/param.c',
   'layout/vertical.c',
   'layout/horizontal.c',
   'node/text.c',

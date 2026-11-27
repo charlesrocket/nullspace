@@ -5,7 +5,7 @@
 #include "config.h"
 #include "decoration.h"
 #include "input.h"
-#include "layout/layout.h"
+#include "layout/param.h"
 #include "manager.h"
 #include "output.h"
 #include "overview.h"

@@ -2,7 +2,7 @@
 
 #include "config.h"
 #include "cursor.h"
-#include "layout/layout.h"
+#include "layout/param.h"
 #include "manager.h"
 #include "node/text.h"
 #include "seat.h"
